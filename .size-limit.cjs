@@ -127,9 +127,11 @@ const budgets = [
     // handoffs, the shared load-failure notice whose Retry stays while
     // it loads again, and a card that stays answered once the host accepted
     // its answer. Stopping a reply needs the stopped mark in the bubble and
-    // the loader of the lazy reply controls in the entry: measured with
-    // Node 22's zlib at 39,599 B, the limit is 3% above it, rounded down.
-    limit: "40.786 KB",
+    // the loader of the lazy reply controls in the entry. A long transcript
+    // mounts only a window of its messages, which the first render already
+    // needs: measured with Node 22's zlib at 41,844 B, the limit is 3%
+    // above it, rounded down.
+    limit: "43.099 KB",
     gzip: true,
     brotli: false,
     ignore: [
@@ -317,9 +319,9 @@ const budgets = [
     // focus, transcript and announcement contracts need the space, and it
     // bundles the react entry, so it grows with the react entry above. It
     // also bundles the form session and the form fields. With the reply
-    // stop in the scripted host, measured with Node 22's zlib at 58,845 B;
-    // the limit is 3% above it, rounded down.
-    limit: "60.610 KB",
+    // stop in the scripted host and the transcript's window, measured with
+    // Node 22's zlib at 61,725 B; the limit is 3% above it, rounded down.
+    limit: "63.576 KB",
     gzip: true,
     brotli: false,
     ignore: [

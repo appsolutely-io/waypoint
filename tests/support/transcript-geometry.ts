@@ -56,6 +56,8 @@ export interface Geometry {
 }
 
 const BOX = "wp-transcript";
+const GAP = "[data-transcript-gap]";
+const ROWS = `article, ${GAP}`;
 /**
  * Every transcript box (class `wp-transcript`) gets this layout from its
  * first render on; other elements keep jsdom's.
@@ -66,9 +68,12 @@ export function installGeometry({
 } = {}): Geometry {
   const tops = new WeakMap<Element, number>();
   const isBox = (element: Element) => element.classList.contains(BOX);
-  const rows = (box: Element) => [...box.querySelectorAll("article")];
+  // Messages, and the spacers a windowed transcript puts for the rest.
+  const rows = (box: Element) => [...box.querySelectorAll(ROWS)];
   const height = (row: Element) =>
-    geometry.heights.get(rowKey(row)) ?? defaultHeight;
+    row.matches(GAP)
+      ? parseFloat((row as HTMLElement).style.blockSize) || 0
+      : (geometry.heights.get(rowKey(row)) ?? defaultHeight);
   const scrollHeight = (box: Element) =>
     Math.max(
       geometry.clientHeight,
@@ -163,7 +168,7 @@ export function installGeometry({
       if (isBox(this))
         return DOMRect.fromRect({ y: 0, height: geometry.clientHeight });
       const box = this.closest(`.${BOX}`);
-      if (box && this.matches("article")) {
+      if (box && this.matches(ROWS)) {
         clamp(box);
         let y = -top(box);
         for (const row of rows(box)) {

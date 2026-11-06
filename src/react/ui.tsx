@@ -34,6 +34,7 @@ import type {
 import { excerpt } from "./excerpt";
 import { ExcerptCache, ShownCache } from "./excerpt-cache";
 import { useTranscriptPosition } from "./transcript";
+import { useTranscriptWindow } from "./windowing";
 import { useAnnouncements, useHeldWhileInert } from "./announcements";
 import {
   confirmationOf,
@@ -1416,6 +1417,8 @@ const MessageRow = memo(function MessageRow({
   answered,
   actions,
   rows,
+  posInSet,
+  setSize,
 }: {
   message: Message;
   slots?: Slots;
@@ -1430,6 +1433,9 @@ const MessageRow = memo(function MessageRow({
   // Its actions follow it here (else after the plan).
   actions: boolean;
   rows: RowEvents;
+  // Its place among all messages, while only a window of them is mounted.
+  posInSet?: number;
+  setSize?: number;
 }) {
   const t = context().format;
   const parse = useMemo(() => {
@@ -1446,6 +1452,10 @@ const MessageRow = memo(function MessageRow({
       data-message-id={message.id}
       data-role={message.role}
       aria-busy={writing ? true : undefined}
+      // With only some messages mounted, each says where it stands among
+      // all of them, as the articles of a feed do (WAI-ARIA 1.2, "feed").
+      aria-posinset={posInSet}
+      aria-setsize={setSize}
       // Named by its sender, whatever the bubble renders.
       aria-label={sender}
       // Nothing to show: the bubble is not drawn empty.
@@ -1639,6 +1649,36 @@ function ChatBody({
     messages.length,
     state,
   );
+  const messageIds = useMemo(
+    () => messages.map((message) => message.id),
+    [messages],
+  );
+  const transcriptWindow = useTranscriptWindow(
+    transcript,
+    transcriptContent,
+    messageIds,
+    position.pinned,
+  );
+  // A link to a message the window has not mounted (the page's address
+  // names its anchor) mounts it, then shows it at the top of the box.
+  const revealLinked = () => {
+    const hash = decodeURIComponent(location.hash.slice(1));
+    const linked = hash.startsWith(`${anchorPrefix}-`)
+      ? messageIds.find((id) => anchor(id) === hash)
+      : undefined;
+    if (linked)
+      transcriptWindow.reveal(linked, () => position.toMessage(linked));
+  };
+  const revealLinkedNow = useRef(revealLinked);
+  revealLinkedNow.current = revealLinked;
+  const windowed = transcriptWindow.windowed;
+  useEffect(() => {
+    if (!windowed || typeof location === "undefined") return;
+    const changed = () => revealLinkedNow.current();
+    changed();
+    addEventListener("hashchange", changed);
+    return () => removeEventListener("hashchange", changed);
+  }, [windowed]);
   // F6: the message, outline link or Back to latest that had focus, so its
   // removal can hand focus on within the same shown conversation.
   const transcriptFocus = useRef<
@@ -2288,10 +2328,14 @@ function ChatBody({
                     }
                     onNavigate={(messageId) => {
                       const origin = chatFocus.value.originFor("outline");
-                      focusFor(chatFocus.value, position.toMessage(messageId), {
-                        origin,
-                        owner: chatFocus.value.owner(),
-                      });
+                      const owner = chatFocus.value.owner();
+                      transcriptWindow.reveal(messageId, () =>
+                        focusFor(
+                          chatFocus.value,
+                          position.toMessage(messageId),
+                          { origin, owner },
+                        ),
+                      );
                     }}
                   />
                 ) : null}
@@ -2313,23 +2357,48 @@ function ChatBody({
                           <p>{t("chat.empty")}</p>
                         </Part>
                       ) : null}
-                      {messages.map((message) => (
-                        <MessageRow
-                          key={message.id}
-                          message={message}
-                          slots={slots}
-                          anchorId={anchor(message.id)}
-                          writing={message.id === writingId}
-                          bodyUnavailable={
-                            failedBodies.has(message.id) &&
-                            !message.blocks.length
-                          }
-                          disabled={state.conversationUnavailable}
-                          answered={answeredOf(message)}
-                          actions={message !== actionsAfterPlan}
-                          rows={rows}
-                        />
-                      ))}
+                      {/* One flat list: a row keeps its identity, and so its
+                          focus, as the spacers around it change. */}
+                      {transcriptWindow.segments.flatMap((segment) =>
+                        segment.kind === "gap" ? (
+                          <div
+                            key={`gap-${segment.from}`}
+                            data-transcript-gap=""
+                            aria-hidden="true"
+                            style={{ blockSize: segment.height }}
+                          />
+                        ) : (
+                          messages
+                            .slice(segment.from, segment.to + 1)
+                            .map((message, offset) => (
+                              <MessageRow
+                                key={message.id}
+                                posInSet={
+                                  transcriptWindow.windowed
+                                    ? segment.from + offset + 1
+                                    : undefined
+                                }
+                                setSize={
+                                  transcriptWindow.windowed
+                                    ? messages.length
+                                    : undefined
+                                }
+                                message={message}
+                                slots={slots}
+                                anchorId={anchor(message.id)}
+                                writing={message.id === writingId}
+                                bodyUnavailable={
+                                  failedBodies.has(message.id) &&
+                                  !message.blocks.length
+                                }
+                                disabled={state.conversationUnavailable}
+                                answered={answeredOf(message)}
+                                actions={message !== actionsAfterPlan}
+                                rows={rows}
+                              />
+                            ))
+                        ),
+                      )}
                       {state.pending.map((pending) => (
                         <article
                           key={pending.id}

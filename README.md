@@ -47,6 +47,8 @@ import "@appsolutely-io/waypoint/styles.css";
 
 Omit the skin for neutral controls. `@appsolutely-io/waypoint/skin-default` exports the neutral token values. Importing core requires no UI peer. `/testing` additionally needs React, React DOM and Testing Library; install those only when using that helper.
 
+From 120 messages the transcript mounts only the messages within about 1,200 px of the visible part, with a spacer for each run of the others at their measured heights (a message not yet measured counts as the average of those that were). Each mounted message then has `aria-posinset` and `aria-setsize`, as the articles of a [WAI-ARIA feed](https://www.w3.org/TR/wai-aria-1.2/#feed) do ([feed pattern](https://www.w3.org/WAI/ARIA/apg/patterns/feed/)), so a screen reader says its place among all of them. The transcript still rests pinned at the latest message, Back to latest returns there, the outline and a link to a message's anchor mount the message before showing it, and the message holding focus stays mounted however far the transcript scrolls. Announcements of new messages come from the client, so they do not depend on what is mounted. The trade-off: the browser's find in page searches only the mounted messages, so in a conversation of 120 messages or more, text far from the visible part is found only once it is scrolled near; the outline lists every message.
+
 ## Preview locally
 
 In a checkout of this repository:

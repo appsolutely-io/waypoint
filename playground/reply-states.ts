@@ -49,6 +49,12 @@ const copy = {
       "Order 1042 shipped on Monday [1]. Order 1043 waits for one item that is back in stock on Friday [2].",
     sources: ["Order 1042", "Stock report for week 45"],
     stock: "Checking stock for order 1043…",
+    detailsSummary: "How this was worked out",
+    detailsSteps: [
+      "Read the last 3 orders",
+      "Compared each payment with the order total",
+      "Checked stock for the items still waiting",
+    ],
     answer:
       "This is the local preview's mock host. It streams an answer to every message, so you can watch a reply arrive. Pick a **reply state** in the toolbar to see the others.",
   },
@@ -77,6 +83,12 @@ const copy = {
     cited: "订单 1042 已于周一发货 [1]。订单 1043 还差一件商品，周五到货 [2]。",
     sources: ["订单 1042", "第 45 周库存报告"],
     stock: "正在查询订单 1043 的库存…",
+    detailsSummary: "得出结论的过程",
+    detailsSteps: [
+      "读取最近 3 个订单",
+      "核对每笔付款与订单金额",
+      "查询仍在等待的商品库存",
+    ],
     answer:
       "这是本地预览的模拟服务。它会逐段回复每条消息，方便观察回复的过程。在工具栏中选择**回复状态**可以查看其他状态。",
   },
@@ -149,6 +161,28 @@ export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
           title,
           url: `https://example.test/${at ? "stock/week-45" : "orders/1042"}`,
         })),
+      };
+    case "details":
+      return {
+        content: text.short,
+        blocks: [
+          {
+            type: "details",
+            id: "how",
+            fallback: text.detailsSummary,
+            body: {
+              summary: text.detailsSummary,
+              blocks: [
+                {
+                  type: "list",
+                  id: "how-steps",
+                  fallback: text.detailsSteps.join("; "),
+                  body: { items: text.detailsSteps },
+                },
+              ],
+            },
+          },
+        ],
       };
     case "versions":
     case "done":

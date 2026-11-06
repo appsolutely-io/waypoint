@@ -86,6 +86,15 @@ test("sources are cited inline and listed under the answer", async ({
   );
 });
 
+test("supporting detail sits closed under the answer", async ({ page }) => {
+  await page.goto("/?state=details");
+  const summary = reply(page).getByText("How this was worked out");
+  await expect(summary).toBeVisible();
+  await expect(reply(page).locator("details")).not.toHaveAttribute("open");
+  await summary.click();
+  await expect(reply(page).getByText("Read the last 3 orders")).toBeVisible();
+});
+
 test("a reply that never starts is overdue", async ({ page }) => {
   await page.goto("/?state=overdue");
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "overdue");

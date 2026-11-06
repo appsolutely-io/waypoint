@@ -32,6 +32,7 @@ export type WaypointProtocol =
   | CardAnswer
   | BlockMarkdown
   | BlockCard
+  | BlockDetails
   | BlockList
   | BlockTable
   | BlockForm
@@ -137,6 +138,7 @@ export type CardAnswer =
 export type Block =
   | BlockMarkdown
   | BlockCard
+  | BlockDetails
   | BlockList
   | BlockTable
   | BlockForm
@@ -512,6 +514,23 @@ export interface BlockCard {
   fallback: string;
   body: {
     title: string;
+    blocks: Block[];
+  };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
+  answered?: boolean;
+  answer?: CardAnswer;
+}
+/**
+ * Supporting detail behind a disclosure: closed until the user opens it, so the answer comes first.
+ */
+export interface BlockDetails {
+  type: 'details';
+  id: string;
+  fallback: string;
+  body: {
+    summary: string;
     blocks: Block[];
   };
   /**

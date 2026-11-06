@@ -18,6 +18,14 @@ A message MAY carry `sources`, what the reply drew on: each has an `id`, a `titl
 - A host SHOULD cite each source it lists at least once.
 - A source's `url` MUST be one the user may open. The chat links only addresses its URL policy allows (`isSafeUrl`, with `extraUrlSchemes`); any other source is named without a link.
 
+## Collapsing supporting detail
+
+A `details` block holds what supports the answer but is not the answer: how it was worked out, the rows it read, the caveats. Its body has a `summary`, the words on the disclosure (at most 200 characters), and `blocks`, shown inside it. The chat draws it closed, below the answer, as a native disclosure the user opens and closes.
+
+- A host SHOULD put the answer in the message's text and the detail that supports it in a `details` block, so the answer comes first.
+- A host MUST NOT put anything the user needs to act on only inside a `details` block, since it starts closed.
+- Like every block, it carries a `fallback` for clients that do not know the type.
+
 ## Asking for what is missing
 
 A `form` block asks the user for details inline. Each field MAY carry `value`, what the host already knows for it; the form starts with it and the user may change it before sending.

@@ -93,6 +93,7 @@ export async function runConformance(
     const types = [
       "markdown",
       "card",
+      "details",
       "list",
       "table",
       "form",
@@ -336,6 +337,7 @@ function bodyFor(type: string): unknown {
   const bodies: Record<string, unknown> = {
     markdown: { text: "Readable" },
     card: { title: "Card", blocks: [] },
+    details: { summary: "Details", blocks: [] },
     list: { items: [] },
     table: { columns: [], rows: [] },
     form: { fields: [] },

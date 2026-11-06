@@ -1069,6 +1069,20 @@ function WidgetBody({ block, onReply, disabled }: WidgetProps) {
           ))}
         </section>
       );
+    case "details":
+      return (
+        <details>
+          <summary>{String(body.summary ?? "")}</summary>
+          {((body.blocks as Block[]) ?? []).map((child) => (
+            <Widget
+              key={child.id}
+              block={child}
+              disabled={disabled}
+              onReply={onReply}
+            />
+          ))}
+        </details>
+      );
     case "list":
       return (
         <ul>
@@ -1115,6 +1129,7 @@ export const standardWidgets: readonly WidgetRegistration[] = [
   "markdown",
   "form.fill",
   "card",
+  "details",
   "list",
   "table",
   "form",

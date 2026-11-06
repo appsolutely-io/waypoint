@@ -1102,6 +1102,47 @@
       },
       "required": ["type", "id", "fallback", "body"]
     },
+    "BlockDetails": {
+      "type": "object",
+      "description": "Supporting detail behind a disclosure: closed until the user opens it, so the answer comes first.",
+      "properties": {
+        "type": {
+          "const": "details"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fallback": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "blocks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Block"
+              }
+            }
+          },
+          "required": ["summary", "blocks"]
+        },
+        "answered": {
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
+        }
+      },
+      "required": ["type", "id", "fallback", "body"]
+    },
     "BlockList": {
       "type": "object",
       "properties": {
@@ -1488,6 +1529,9 @@
         },
         {
           "$ref": "#/$defs/BlockCard"
+        },
+        {
+          "$ref": "#/$defs/BlockDetails"
         },
         {
           "$ref": "#/$defs/BlockList"

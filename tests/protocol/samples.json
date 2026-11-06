@@ -340,6 +340,15 @@
       "blocks": []
     }
   },
+  "BlockDetails": {
+    "type": "details",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "summary": "How this was worked out",
+      "blocks": []
+    }
+  },
   "BlockList": {
     "type": "list",
     "id": "block-a",

@@ -6,12 +6,13 @@
 // middle, large), compact, many (60 conversations), threads (the last
 // conversation has a thread),
 // railFails (the conversation list cannot be read), form (a message with a
-// required form field), plan (a plan in the aside) and prose (paragraphs,
+// required form field), plan (a plan in the aside), reference (an antd
+// button outside the chat, at the host's size) and prose (paragraphs,
 // a soft break, indented code, a wide image, a wide table and a task
 // list), quote (a block quote holding a table), theme (a host `theme`
 // with its own muted colour) and norail (no conversation list).
 import { createRoot } from "react-dom/client";
-import { ConfigProvider, theme } from "antd";
+import { Button, ConfigProvider, theme } from "antd";
 import {
   createWaypointClient,
   type Conversation,
@@ -225,6 +226,11 @@ createRoot(document.getElementById("root")!).render(
       }}
     >
       {chat}
+      {/* An antd button outside the chat, at the host's size: the height
+          the skin's buttons keep. */}
+      {params.get("reference") ? (
+        <Button data-reference="">Reference</Button>
+      ) : null}
     </ConfigProvider>
   ) : (
     chat

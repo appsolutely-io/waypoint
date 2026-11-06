@@ -566,11 +566,23 @@
   accent-color: var(--wp-accent);
 }
 /* antd keeps button labels on one line at a fixed height; with enlarged
-   text that pushes the chat sideways, so labels wrap inside the chat. */
+   text that pushes the chat sideways, so labels wrap inside the chat. The
+   fixed height stays as the minimum: the skin passes antd's control height
+   (in px, unitless), the small and large sizes are 0.75 and 1.25 of it as
+   antd derives them, and a target is never under 24px (44px for a coarse
+   pointer, below). */
 .waypoint .ant-btn {
+  --wp-target: 24px;
   max-inline-size: 100%;
   block-size: auto;
+  min-block-size: max(var(--wp-target), var(--wp-btn, 0) * 1px);
   white-space: normal;
+}
+.waypoint .ant-btn-sm {
+  min-block-size: max(var(--wp-target), var(--wp-btn, 0) * 0.75px);
+}
+.waypoint .ant-btn-lg {
+  min-block-size: max(var(--wp-target), var(--wp-btn, 0) * 1.25px);
 }
 @media (pointer: coarse) {
   .waypoint button,
@@ -583,6 +595,9 @@
   .waypoint .ant-btn {
     min-block-size: 44px;
     min-inline-size: 44px;
+  }
+  .waypoint .ant-btn {
+    --wp-target: 44px;
   }
 }
 .waypoint .wp-sr {

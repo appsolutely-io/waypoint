@@ -168,6 +168,7 @@ A pre-release, published under the `next` dist-tag.
 
 ### Fixed
 
+- antd skin buttons keep antd's height for the host's size (32px by default) and still wrap a long label; the chat's wrapping rule had removed that height, so they were drawn 24px tall.
 - A loaded conversation is published to subscribers before the tool and plan frames held for it start; in form mode their refusals no longer arrive while the snapshot still shows no conversation.
 - A failed load of the stream read handlers is reported once per attempt, not once per read frame it held; a retry that fails again is reported again.
 - The read-only Keep review that `keepChangesReview` returns to every caller is frozen.

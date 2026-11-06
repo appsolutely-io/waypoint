@@ -14,9 +14,11 @@ import {
   useMemo,
   useRef,
   useSyncExternalStore,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import type {
+  ButtonProps,
   DrawerProps,
   PrimitiveComponents,
   PartProps,
@@ -392,17 +394,32 @@ function Textarea({
     />
   );
 }
-export const antdPrimitives: PrimitiveComponents = {
-  button: ({ children, onPress, disabled, label, ...attributes }) => (
+// antd gives a button a fixed height for its size; the chat lets a long
+// label wrap instead (styles.css), and keeps that height as the minimum.
+// The theme's control height is passed in px without the unit; the small
+// and large heights follow from it as antd derives them.
+function SkinButton({
+  children,
+  onPress,
+  disabled,
+  label,
+  ...attributes
+}: ButtonProps) {
+  const { token } = antdTheme.useToken();
+  return (
     <Button
       disabled={disabled}
       onClick={onPress}
       aria-label={label}
+      style={{ "--wp-btn": token.controlHeight } as CSSProperties}
       {...attributes}
     >
       {children}
     </Button>
-  ),
+  );
+}
+export const antdPrimitives: PrimitiveComponents = {
+  button: SkinButton,
   textarea: Textarea,
   input: ({
     value,

@@ -187,6 +187,33 @@ for (const size of ["small", "middle", "large"])
       }
     });
 
+for (const size of ["small", "middle", "large"])
+  for (const compact of ["", "1"])
+    test(`CK-S3 antd buttons keep the host's ${size}${compact ? " compact" : ""} control height`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await open(
+        page,
+        `skin=antd&antdSize=${size}&compact=${compact}&reference=1`,
+      );
+      const reference = await page
+        .locator("[data-reference]")
+        .evaluate((element) => element.getBoundingClientRect().height);
+      const heights = await page
+        .locator(".waypoint .ant-btn")
+        .evaluateAll((elements) =>
+          elements
+            .map((element) => element.getBoundingClientRect().height)
+            .filter((height) => height > 0),
+        );
+      expect(heights.length).toBeGreaterThan(0);
+      // Never under the 24 px target, whatever the host's size.
+      expect(Math.min(...heights)).toBeGreaterThanOrEqual(
+        Math.max(24, reference) - 0.5,
+      );
+    });
+
 test.describe("a coarse pointer", () => {
   test.use({
     isMobile: true,

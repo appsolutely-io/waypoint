@@ -1,5 +1,6 @@
 import { runFormFillConformance } from "./form-fill";
 import { runPlanConformance } from "./plans";
+import { namesAppliedAnswer } from "./card-answer";
 import type { Conversation, Problem } from "../protocol/generated";
 import { SUPPORTED_PROTOCOLS } from "../protocol/index";
 import type { ConformanceConfig, ConformanceResult } from "./index";
@@ -205,16 +206,7 @@ export async function runConformance(
       // An answer the host names is optional, and the one it applied: the
       // fields `CardAnswer` requires of an action, in any key order, beside
       // any others the schema allows.
-      (card.answer === undefined ||
-        Object.entries({
-          kind: "action",
-          clientReplyId: "card-answer-a",
-          blockId: "card-answer-choice",
-          actionId: "accept",
-        }).every(
-          ([key, value]) =>
-            (card.answer as Record<string, unknown>)[key] === value,
-        ))
+      namesAppliedAnswer(card.answer)
     );
   });
   await check("agreement binding", async () => {

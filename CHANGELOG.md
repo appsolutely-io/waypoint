@@ -26,6 +26,7 @@
 ### Fixed
 
 - A card answer whose call failed outright, with no outcome, no longer keeps its reply id held back from the alert, which hid any later problem reported with that id.
+- `waypoint-conformance` fails a card whose `answer` is `null` or not an object without throwing inside the check.
 
 ## 0.1.1-next.0 - 2026-11-06
 

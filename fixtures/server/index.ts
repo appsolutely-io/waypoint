@@ -60,6 +60,8 @@ export type FixtureFault =
   | "wrong-answer"
   // Names the card's `answer` as something other than an answer object.
   | "malformed-answer"
+  // Names the card's `answer` as null.
+  | "null-answer"
   // Names the applied answer with its keys in another order (as Postgres
   // `jsonb` stores them): still a conforming host.
   | "reordered-answer"
@@ -561,13 +563,18 @@ export async function createFixtureServer(options: {
           const faults: Record<string, unknown> = {
             "wrong-answer": { ...answer, actionId: "other" },
             "malformed-answer": "accept",
+            "null-answer": null,
             "reordered-answer": Object.fromEntries(
               Object.entries(answer).reverse(),
             ),
             "extended-answer": { ...answer, appliedAt: 1 },
           };
-          card.answer = (faults[options.fault ?? ""] ??
-            answer) as Block["answer"];
+          // A fault's answer may be null, so it is looked up by key.
+          card.answer = (
+            options.fault && options.fault in faults
+              ? faults[options.fault]
+              : answer
+          ) as Block["answer"];
         }
         replies.set(key, { body: text, result: { id: `reply-${++next}` } });
       }

@@ -14,6 +14,7 @@ for (const fault of [
   "second-answer",
   "wrong-answer",
   "malformed-answer",
+  "null-answer",
 ] as const)
   it(`HTTP protocol ${fault ?? "clean"}`, async () => {
     const host = await createFixtureServer({ testMode: true, fault });

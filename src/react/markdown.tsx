@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
@@ -128,8 +128,63 @@ export function closeOpenMarkdown(text: string): string {
     if ((outside.split(marker).length - 1) % 2) closing = marker + closing;
   return text + closing;
 }
+// One word segmenter per language, made on first use.
+const segmenters = new Map<string, Intl.Segmenter>();
+/**
+ * Where the next animation frame of a reply being written shows it up to:
+ * past whole words only, more of them the further the display is behind,
+ * so it keeps up without showing single characters. Word boundaries come
+ * from `Intl.Segmenter`, in the chat's language.
+ */
+export function nextReveal(text: string, from: number, lang?: string): number {
+  if (from >= text.length) return text.length;
+  let segmenter = segmenters.get(lang ?? "");
+  if (!segmenter)
+    segmenters.set(
+      lang ?? "",
+      (segmenter = new Intl.Segmenter(lang, { granularity: "word" })),
+    );
+  const segments = [...segmenter.segment(text.slice(from))];
+  const words = segments.filter((segment) => segment.isWordLike).length;
+  let wanted = Math.max(1, Math.floor(words / 8));
+  // Up to the end of the last whole word; what follows the last word (a
+  // full stop, a space) comes with the rest.
+  for (const segment of segments)
+    if (segment.isWordLike && --wanted === 0 && words > 1)
+      return from + segment.index + segment.segment.length;
+  return text.length;
+}
+const reducedMotion = () =>
+  typeof matchMedia === "function" &&
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
+// The part of a reply being written that is shown so far: it grows a few
+// words per animation frame, and is the whole text once the reply ends or
+// under reduced motion.
+function useReveal(text: string, live: boolean, lang?: string) {
+  const [count, setCount] = useState(() =>
+    live ? nextReveal(text, 0, lang) : text.length,
+  );
+  const shown = useRef("");
+  // Text that no longer continues what was shown starts again.
+  const at = !live
+    ? text.length
+    : text.startsWith(shown.current)
+      ? Math.min(count, text.length)
+      : 0;
+  shown.current = text.slice(0, at);
+  useEffect(() => {
+    if (!live || at >= text.length) return;
+    const frame = requestAnimationFrame(() =>
+      setCount(nextReveal(text, at, lang)),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [live, at, text, lang]);
+  return shown.current;
+}
 interface MarkdownProps {
   text: string;
+  /** The chat's language, for the word boundaries of a reply being written. */
+  lang?: string;
   /** The reply is still being written: open markers are closed for display. */
   writing?: boolean;
   images?: MarkdownImagePolicy;
@@ -192,15 +247,21 @@ export default function Markdown(props: MarkdownProps) {
     [],
   );
   const { text, extraSchemes } = props;
+  const reduced = reducedMotion();
+  const shown = useReveal(text, !!props.writing && !reduced, props.lang);
   return (
-    <div className="wp-markdown">
+    <div
+      className="wp-markdown"
+      // Under reduced motion a reply fades in instead of typing out.
+      data-fade={props.writing && reduced ? "" : undefined}
+    >
       <ReactMarkdown
         skipHtml
         remarkPlugins={[gfm]}
         urlTransform={(url) => (isSafeUrl(url, extraSchemes) ? url : undefined)}
         components={components}
       >
-        {props.writing ? closeOpenMarkdown(text) : text}
+        {props.writing ? closeOpenMarkdown(shown) : text}
       </ReactMarkdown>
     </div>
   );

@@ -709,6 +709,13 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/* Under reduced motion a reply being written fades in rather than typing
+   out: a change of opacity only, nothing moves. */
+@keyframes wp-fade-in {
+  from {
+    opacity: 0.4;
+  }
+}
 /* A message's actions and the reply's controls sit in one wrapping row. */
 .waypoint [data-part="messageActions"] [role="group"],
 .waypoint [data-version-walk],
@@ -731,5 +738,8 @@
     transition-duration: 0s !important;
     animation-duration: 0s !important;
     animation-iteration-count: 1 !important;
+  }
+  .waypoint .wp-markdown[data-fade] {
+    animation: wp-fade-in 240ms ease-out !important;
   }
 }

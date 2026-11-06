@@ -950,6 +950,7 @@ function StockMarkdown({ text, writing }: { text: string; writing?: boolean }) {
       <Rendered
         text={text}
         writing={writing}
+        lang={provider.lang}
         images={provider.markdownImages}
         extraSchemes={provider.extraUrlSchemes}
         scrollLabel={t("chat.scrollRegion")}

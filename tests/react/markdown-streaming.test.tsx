@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // While a reply is written, markers it has opened but not yet closed are
 // closed for display, so no raw syntax flashes before its end arrives.
-import { it, expect, afterEach } from "vitest";
+import { it, expect, afterEach, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import Markdown, { closeOpenMarkdown } from "../../src/react/markdown";
 afterEach(cleanup);
@@ -19,9 +19,12 @@ it.each([
   expect(closeOpenMarkdown(text)).toBe(closed);
 });
 
-it("renders an open bold as bold while writing, never as raw stars", () => {
+it("renders an open bold as bold while writing, never as raw stars", async () => {
   const { container } = render(<Markdown text="Here is **bold" writing />);
-  expect(container.querySelector("strong")?.textContent).toBe("bold");
+  expect(container.textContent).not.toContain("**");
+  await vi.waitFor(() =>
+    expect(container.querySelector("strong")?.textContent).toBe("bold"),
+  );
   expect(container.textContent).not.toContain("**");
 });
 

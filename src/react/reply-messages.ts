@@ -11,7 +11,10 @@ export type ReplyMessageKey =
   | "chat.message.editLabel"
   | "chat.message.resend"
   | "chat.message.good"
-  | "chat.message.bad";
+  | "chat.message.bad"
+  | "chat.message.previous"
+  | "chat.message.next"
+  | "chat.message.version";
 export type ReplyCatalogue = Readonly<Record<ReplyMessageKey, string>>;
 export const replyEnglish: ReplyCatalogue = {
   "chat.reply.stop": "Stop",
@@ -25,6 +28,9 @@ export const replyEnglish: ReplyCatalogue = {
   "chat.message.resend": "Send",
   "chat.message.good": "Good response",
   "chat.message.bad": "Bad response",
+  "chat.message.previous": "Previous version",
+  "chat.message.next": "Next version",
+  "chat.message.version": "Version {index} of {count}",
 };
 export const replySimplifiedChinese: ReplyCatalogue = {
   "chat.reply.stop": "停止",
@@ -38,4 +44,7 @@ export const replySimplifiedChinese: ReplyCatalogue = {
   "chat.message.resend": "发送",
   "chat.message.good": "回答有帮助",
   "chat.message.bad": "回答没有帮助",
+  "chat.message.previous": "上一个版本",
+  "chat.message.next": "下一个版本",
+  "chat.message.version": "第 {index} 个版本，共 {count} 个",
 };

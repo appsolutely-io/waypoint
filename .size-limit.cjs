@@ -246,9 +246,9 @@ const budgets = [
   {
     name: "lazy message actions",
     path: "dist/message-actions-*.js",
-    // Copy, Regenerate, Edit and feedback: 1,211 B measured, plus 3%,
-    // rounded down.
-    limit: "1.247 KB",
+    // Copy, Regenerate, Edit, feedback and the version walk: 1,399 B
+    // measured, plus 3%, rounded down.
+    limit: "1.440 KB",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],
@@ -364,8 +364,8 @@ module.exports = withSharedChunks(budgets, {
     {
       name: "lazy reply messages",
       source: "src/react/reply-messages.ts",
-      // 336 B measured.
-      limit: "346 B",
+      // 441 B measured.
+      limit: "454 B",
       gzip: true,
       brotli: false,
       ignore: ["react", "react-dom", "./chunk-*"],

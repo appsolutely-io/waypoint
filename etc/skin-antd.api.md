@@ -2349,7 +2349,7 @@ export interface ReplyMessage {
 }
 
 // @public (undocumented)
-export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting" | "chat.message.actions" | "chat.message.copy" | "chat.message.copied" | "chat.message.regenerate" | "chat.message.edit" | "chat.message.editLabel" | "chat.message.resend" | "chat.message.good" | "chat.message.bad";
+export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting" | "chat.message.actions" | "chat.message.copy" | "chat.message.copied" | "chat.message.regenerate" | "chat.message.edit" | "chat.message.editLabel" | "chat.message.resend" | "chat.message.good" | "chat.message.bad" | "chat.message.previous" | "chat.message.next" | "chat.message.version";
 
 // @public
 export type ReplyOutcome = {

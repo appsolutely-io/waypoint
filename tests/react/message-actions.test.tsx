@@ -217,3 +217,62 @@ it("a host part replaces the default actions", async () => {
   ).toBeNull();
   client.dispose();
 });
+
+it("walks a reply's versions in place as ‹ 2/3 ›", async () => {
+  const select = vi.fn(async () => {});
+  const client = await chat({
+    versions: { regenerate: async () => {}, edit: async () => {}, select },
+    shown: [
+      messages[0]!,
+      { ...messages[1]!, versionIndex: 2, versionCount: 3 },
+    ],
+  });
+  const reply = within(actionsOf("a1"));
+  const previous = await reply.findByRole("button", {
+    name: "Previous version",
+  });
+  expect(previous.textContent).toBe("‹");
+  expect(reply.getByText("2/3")).toBeTruthy();
+  expect(reply.getByText("Version 2 of 3")).toBeTruthy();
+  await userEvent.click(reply.getByRole("button", { name: "Next version" }));
+  await waitFor(() =>
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({ messageId: "a1", index: 3 }),
+    ),
+  );
+  client.dispose();
+});
+
+it("keeps the walk's ends focusable but inert", async () => {
+  const select = vi.fn(async () => {});
+  const client = await chat({
+    versions: { regenerate: async () => {}, edit: async () => {}, select },
+    shown: [
+      messages[0]!,
+      { ...messages[1]!, versionIndex: 1, versionCount: 2 },
+    ],
+  });
+  const reply = within(actionsOf("a1"));
+  const previous = await reply.findByRole("button", {
+    name: "Previous version",
+  });
+  expect(previous.getAttribute("aria-disabled")).toBe("true");
+  await userEvent.click(previous);
+  expect(select).not.toHaveBeenCalled();
+  expect(reply.queryByText("1/1")).toBeNull();
+  client.dispose();
+});
+
+it("shows no walk for a single version", async () => {
+  const client = await chat({
+    versions: {
+      regenerate: async () => {},
+      edit: async () => {},
+      select: async () => {},
+    },
+  });
+  const reply = within(actionsOf("a1"));
+  await reply.findByRole("button", { name: "Regenerate" });
+  expect(reply.queryByRole("button", { name: "Previous version" })).toBeNull();
+  client.dispose();
+});

@@ -1,6 +1,6 @@
 # Message versions
 
-The chat's default `messageActions` part offers Copy, and Regenerate and Edit when the client has a `versions` port. A host that wants other controls, or another look, passes its own part, which replaces the defaults. The library supplies the pieces they need and keeps them safe to call.
+The chat's default `messageActions` part offers Copy, and Regenerate, Edit and the "‹ 2/3 ›" version walk when the client has a `versions` port. A host that wants other controls, or another look, passes its own part, which replaces the defaults. The library supplies the pieces they need and keeps them safe to call.
 
 ## The port
 

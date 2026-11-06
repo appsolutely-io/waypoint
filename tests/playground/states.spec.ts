@@ -47,6 +47,22 @@ test("a stopped reply keeps its text and is marked stopped", async ({
   expect(await reply(page).textContent()).toBe(text);
 });
 
+test("a reply's versions are walked in place", async ({ page }) => {
+  await page.goto("/?state=versions");
+  await expect(reply(page)).toContainText("2/3");
+  await reply(page).getByRole("button", { name: "Next version" }).click();
+  await expect(reply(page)).toContainText("3/3");
+});
+
+test("a finished reply can be copied and rated", async ({ page }) => {
+  await page.goto("/?state=done");
+  await expect(reply(page).getByRole("button", { name: "Copy" })).toBeVisible();
+  await reply(page).getByRole("button", { name: "Good response" }).click();
+  await expect(
+    reply(page).getByRole("button", { name: "Good response" }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
 test("a reply that never starts is overdue", async ({ page }) => {
   await page.goto("/?state=overdue");
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "overdue");

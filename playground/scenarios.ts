@@ -6,7 +6,7 @@ import {
 } from "../src/index";
 import { createFormSession } from "../src/core/form-session";
 import type { HttpRequest } from "../src/conformance/index";
-import type { Flow } from "../src/protocol/generated";
+import type { Conversation, Flow } from "../src/protocol/generated";
 import type { View } from "./state";
 import type { FixtureTurn } from "../fixtures/server/index";
 
@@ -165,6 +165,18 @@ export async function createPreview(
   // The mock host answers every message: a reply state's own turn when one
   // was just scripted, otherwise a short streamed answer.
   let scripted = false;
+  let version = 2;
+  const withVersions = (value: Conversation): Conversation =>
+    replyState !== "versions"
+      ? value
+      : {
+          ...value,
+          messages: value.messages.map((message, at) =>
+            at === value.messages.length - 1 && message.role === "assistant"
+              ? { ...message, versionIndex: version, versionCount: 3 }
+              : message,
+          ),
+        };
   const script = async (turn: FixtureTurn) => {
     const result = await request("/__conformance/script", {
       method: "POST",
@@ -185,9 +197,25 @@ export async function createPreview(
         return transport.send(reply, ...rest);
       },
       read: async (...args) =>
-        localizeConversation(await transport.read(...args), locale),
+        withVersions(
+          localizeConversation(await transport.read(...args), locale),
+        ),
     },
     formSession: form,
+    // The mock host keeps every rating and three versions of the reply in
+    // the versions state; choosing one only changes which is shown.
+    feedback: { send: () => {} },
+    ...(replyState === "versions"
+      ? {
+          versions: {
+            edit: () => {},
+            regenerate: () => {},
+            select: ({ index }: { index: number }) => {
+              version = index;
+            },
+          },
+        }
+      : {}),
     platform: {
       clock: {
         now: Date.now,

@@ -5,7 +5,7 @@ import { useContext, useEffect, useId, useRef, useState } from "react";
 import type { FocusOrigin } from "./focus";
 import { ChatFocusContext, focusFor } from "./chat-focus";
 import type { Message } from "../protocol/generated";
-import type { WaypointClient } from "../core/client";
+import { versionWalk, type WaypointClient } from "../core/client";
 import { addMessages } from "./i18n";
 import { replyEnglish, replySimplifiedChinese } from "./reply-messages";
 import { context } from "./ui";
@@ -100,8 +100,38 @@ export function MessageActions({
       {t(label === "good" ? "chat.message.good" : "chat.message.bad")}
     </B>
   );
+  const walk = client.canChangeVersions() ? versionWalk(message) : null;
+  // An end of the walk stays focusable and does nothing.
+  const step = (to: number | null, label: "previous" | "next") => (
+    <B
+      label={t(
+        label === "previous" ? "chat.message.previous" : "chat.message.next",
+      )}
+      aria-disabled={busy || to === null}
+      onPress={() => {
+        if (to !== null) act(() => client.selectVersion(message.id, to));
+      }}
+    >
+      {label === "previous" ? "‹" : "›"}
+    </B>
+  );
   return (
     <div role="group" aria-label={t("chat.message.actions")}>
+      {walk ? (
+        <span data-version-walk="">
+          {step(walk.previous, "previous")}
+          <span aria-hidden="true">
+            {walk.index}/{walk.count}
+          </span>
+          <span className="wp-sr-only">
+            {t("chat.message.version", {
+              index: walk.index,
+              count: walk.count,
+            })}
+          </span>
+          {step(walk.next, "next")}
+        </span>
+      ) : null}
       <B
         onPress={() =>
           void navigator.clipboard?.writeText(message.content).then(

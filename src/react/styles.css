@@ -709,6 +709,19 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/* A message's actions and the reply's controls sit in one wrapping row. */
+.waypoint [data-part="messageActions"] [role="group"],
+.waypoint [data-version-walk],
+.waypoint [data-reply-controls] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wp-space1);
+}
+/* Previous points the way the reading goes back. */
+.waypoint[dir="rtl"] [data-version-walk] > button {
+  transform: scaleX(-1);
+}
 /* Reduced motion: nothing inside the chat animates, generated effects such
    as a skin's click wave included; state still changes, at once. */
 @media (prefers-reduced-motion: reduce) {

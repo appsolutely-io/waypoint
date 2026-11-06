@@ -10,6 +10,7 @@ export const choices = {
     "streaming",
     "done",
     "stopped",
+    "versions",
     "overdue",
     "reply-failed",
     "reply-unavailable",

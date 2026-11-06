@@ -8,6 +8,7 @@ A pre-release, published under the `next` dist-tag.
 
 - The `/hooks` entry: `usePlanView` (the plan view and its presses, including the hold on a Stop or Decline until the client shows it) and `useBlockReply` (one answer per card, freed again when the client refuses it), with `useWaypointSnapshot`, `planView` and their types. It needs React and nothing that needs a DOM, a stylesheet or a skin, so a React Native UI gets the same behaviour as the chat. The `/react` entry exports the same hooks. `npm run test:native` checks both the core's and the hooks' graphs, in CI too.
 - `planLabels` on the provider names a plan step's resource and fields in the host's words (`PlanLabels`); without a label the step list says "Change 1" or "Value 1" instead of the internal key. Catalogue: new keys `chat.stepName` and `chat.fieldName`.
+- Part data is typed: `PartProps<N>` gives each part `PartData[N]` (`PartDataMap`, `PartMessage`, `PartPending`, `PartStep`), and the README lists what each part receives.
 - Size budgets for each lazy chunk the React chunks share (block messages, value formatting, the guarded submit) and for the lazy frame decoder; the size check finds shared chunks through the build's ESM metafile (`dist/metafile-esm.json`, not packed) and refuses a build with an ESM browser output no budget measures.
 
 - Plan protocol and host adoption guide, complete adapter upgrade signatures, and a documented quality backlog.
@@ -52,6 +53,7 @@ A pre-release, published under the `next` dist-tag.
 - While the host's confirmation is shown, the plan's step list leaves out each step's before and after values, which the confirmation already lists, so each change is shown once (`PlanDiagramProps.changesShown`). The step list names steps and fields by `planLabels`, never by their internal keys.
 - `motionFast` and `motionSlow` are used: the neutral skin's button hover uses `motionFast` and the writing dot `motionSlow`, and the antd skin maps them to `motionDurationFast` and `motionDurationSlow` (`motion` stays `motionDurationMid`).
 - **Breaking:** the `space3` and `space4` tokens are removed; nothing drew with them. See Upgrading.
+- **Breaking:** `PartProps.data`, `Slots` and the provider's `parts` are typed per part, and `PlanDiagramProps.view` is `PlanView | null` instead of `unknown`. See Upgrading.
 - **Breaking:** the `/testing` entry re-exports the React entry's public types instead of every type of the module the React chunks share: the type-only names `ActionButton`, `clientOf`, `context`, `ContextValue`, `HOST_KEYS`, `LoadFailure`, `OVERLAY_KEYS`, `Part`, `problemAction`, `useColorScheme` and `useRefresh` are gone, and `ConversationRail`, `FieldAdornment`, `FormFillFields`, `FormFillPopup`, `isSafeUrl`, `PrivateAttachmentPort`, `useFormFill` and their props types are added.
 - **Breaking:** the conversation list's failure alert says `chat.conversationsFailed` ("Your conversations could not be loaded.") instead of `chat.failure`. Catalogue: new key `chat.conversationsFailed`.
 - A load failure's busy status ("Loading" while its Retry runs) is a status region beside the alert instead of inside it.
@@ -101,6 +103,7 @@ A pre-release, published under the `next` dist-tag.
 ### Upgrading
 
 - A theme that sets `space3` or `space4` drops them: they were never read. A stylesheet that used `--wp-space3` or `--wp-space4` uses its own length (they were `1rem` and `1.5rem`).
+- A slot or part typed `(props: PartProps) => …` keeps working; one that read `props.data` as `Record<string, unknown>` reads its typed fields instead (`PartProps<"stepRow">`, `PartData`). A `PlanDiagram` caller passes a `PlanView` (or nothing) as `view`.
 - A custom catalogue and a host `format` add the keys `chat.stepName` ("Change {index}") and `chat.fieldName` ("Value {index}").
 - A custom catalogue (for example one typed `Record<keyof typeof english, string>`) and a host `format` add the key `chat.conversationsFailed` ("Your conversations could not be loaded.").
 - Code that named `ActionButton`, `clientOf`, `context`, `ContextValue`, `HOST_KEYS`, `LoadFailure`, `OVERLAY_KEYS`, `Part`, `problemAction`, `useColorScheme` or `useRefresh` from `/testing` stops using them: they are type-only and not exported by any public entry. Every type the React entry exports is still available from `/testing`.

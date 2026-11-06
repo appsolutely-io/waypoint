@@ -1700,19 +1700,111 @@ export interface Outcome {
     version?: string;
 }
 
+// @public
+export type PartData = {
+    [N in PartName]: N extends keyof PartDataMap ? PartDataMap[N] : undefined;
+};
+
+// @public
+export interface PartDataMap {
+    // (undocumented)
+    bubble: {
+        message: PartMessage & {
+            content: string;
+            blocks: BlockSummary[];
+        };
+    } | {
+        pending: PartPending;
+    };
+    // (undocumented)
+    composer: {
+        sending: boolean;
+    };
+    // (undocumented)
+    confirmation: {
+        confirmation: ConfirmationRecord;
+    };
+    // (undocumented)
+    confirmBar: {
+        view: PlanView;
+        actions: ActionEntry[];
+    };
+    // (undocumented)
+    failedSendControls: {
+        pending: PartPending;
+    };
+    // (undocumented)
+    messageActions: {
+        message: PartMessage;
+    };
+    // (undocumented)
+    planNode: {
+        view: PlanView;
+    };
+    // (undocumented)
+    recoveryActions: {
+        actions: ActionEntry[];
+    };
+    // (undocumented)
+    recoveryPanel: {
+        view: PlanView;
+    };
+    // (undocumented)
+    stepRow: {
+        step: PartStep;
+    };
+    // (undocumented)
+    stepStatusRow: {
+        step: StepStatus;
+    };
+    // (undocumented)
+    stepUpPrompt: {
+        stepUpCount: number;
+    };
+    // (undocumented)
+    widgetFrame: {
+        block: BlockSummary;
+    };
+}
+
+// @public
+export interface PartMessage {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    role: Message["role"];
+    // (undocumented)
+    status?: Message["status"];
+    // (undocumented)
+    versionCount?: number;
+    // (undocumented)
+    versionIndex?: number;
+}
+
 // @public (undocumented)
 export type PartName = "bubble" | "composer" | "transcript" | "replyRow" | "stepRow" | "planNode" | "widgetFrame" | "confirmBar" | "confirmation" | "topBar" | "rail" | "flowTabs" | "quotaStrip" | "failedSendControls" | "emptyState" | "messageActions" | "extraPanels" | "actionBar" | "stepUpPrompt" | "fieldAdornment" | "recoveryPanel" | "stepStatusRow" | "recoveryActions";
 
 // @public (undocumented)
 export const partNames: readonly PartName[];
 
+// @public
+export interface PartPending {
+    // (undocumented)
+    content: string;
+    // (undocumented)
+    failure: {
+        code: Problem["code"];
+    } | null;
+    // (undocumented)
+    id: string;
+}
+
 // @public (undocumented)
-export interface PartProps {
+export interface PartProps<N extends PartName = PartName> {
     "aria-disabled"?: boolean;
     // (undocumented)
     children?: ReactNode;
-    // (undocumented)
-    data?: Readonly<Record<string, unknown>>;
+    data?: PartData[N];
     describedBy?: string;
     // (undocumented)
     disabled?: boolean;
@@ -1729,6 +1821,9 @@ export interface PartProps {
     // (undocumented)
     value?: string;
 }
+
+// @public
+export type PartStep = Pick<Step, "id" | "operation" | "resource" | "view" | "tier" | "undo" | "stepUp">;
 
 // @public (undocumented)
 export interface PatchFlow {
@@ -1777,8 +1872,7 @@ export interface PlanDiagramProps {
     record: PlanRecord;
     // (undocumented)
     slots?: Slots;
-    // (undocumented)
-    view?: unknown;
+    view?: PlanView | null;
 }
 
 // @public (undocumented)
@@ -2363,7 +2457,9 @@ export const simplifiedChinese: Record<keyof typeof english, string>;
 export type Skin = Partial<Omit<WaypointProviderProps, "client" | "children">>;
 
 // @public (undocumented)
-export type Slots = Partial<Record<PartName, (props: PartProps) => ReactNode>>;
+export type Slots = {
+    [N in PartName]?: (props: PartProps<N>) => ReactNode;
+};
 
 // @public (undocumented)
 export const standardWidgets: readonly WidgetRegistration[];
@@ -2746,7 +2842,9 @@ export interface WaypointProviderProps {
     markdownImages?: MarkdownImagePolicy;
     messageExcerpt?: (message: Message) => string | undefined;
     // (undocumented)
-    parts?: Partial<Record<PartName, ComponentType<PartProps>>>;
+    parts?: {
+        [N in PartName]?: ComponentType<PartProps<N>>;
+    };
     planLabels?: PlanLabels;
     // (undocumented)
     primitives?: Partial<PrimitiveComponents>;

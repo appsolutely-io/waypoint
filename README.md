@@ -99,6 +99,26 @@ Every client owns its state, listeners, streams and send failures. Providers cha
 
 A slot or replacement receives presentation props and callbacks. The client remains the behavior owner. Answering a card answers the whole card and disables it in place. Widget types unknown to the client show their fallback with update guidance and cannot submit a reply. Tokens are scoped to the instance root, never the document root.
 
+### Part data
+
+Each part receives a copy of its own data as `data`, typed by its name (`PartData`, `PartDataMap`; `PartProps<"stepRow">` for one part). Parts not listed receive none.
+
+| Part                 | `data`                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `bubble`             | `{ message }` (`id`, `role`, `content`, `status`, `versionIndex`, `versionCount`, `blocks`) or `{ pending }` for a message being sent |
+| `messageActions`     | `{ message }` (`id`, `role`, `status`, `versionIndex`, `versionCount`)                                                                |
+| `widgetFrame`        | `{ block }` (`id`, `type`, `answered`)                                                                                                |
+| `failedSendControls` | `{ pending }` (`id`, `content`, `failure`: `{ code }` or `null`)                                                                      |
+| `composer`           | `{ sending }`                                                                                                                         |
+| `confirmBar`         | `{ view, actions }`: the plan view and the actions the bar shows                                                                      |
+| `confirmation`       | `{ confirmation }`: the host's confirmation record                                                                                    |
+| `planNode`           | `{ view }`                                                                                                                            |
+| `stepRow`            | `{ step }` (`id`, `operation`, `resource`, `view`, `tier`, `undo`, `stepUp`)                                                          |
+| `stepUpPrompt`       | `{ stepUpCount }`                                                                                                                     |
+| `recoveryPanel`      | `{ view }`                                                                                                                            |
+| `stepStatusRow`      | `{ step }`: one step's status in the plan view                                                                                        |
+| `recoveryActions`    | `{ actions }`                                                                                                                         |
+
 `FlowSource` defaults to favourites, most-used, recent, presets, in that order, and initially chooses the first nonempty tab. An explicit selection survives subsequent reads. The source owns favourite status and usage; the client does not infer them. `load` optionally returns a parsed `Flow` matching `schema.json`. Both YAML and JSON paths use `validateFlowDocument`; `bindFlow` binds parameters, and `run` asks the host for a proposal. This path never bypasses confirmation or executes arbitrary flow requests directly.
 
 The runner sends the confirmed canonical method, path and body unchanged, adds `Waypoint-Step`, and retains `If-Match`. A transient `stepUpCode` is supplied separately to the application's request adapter; add it only to the outgoing write's verification field, never to the stored canonical request or logs. Outcomes and undo requests come from the server. Stop inhibits local dispatch and reads the recorded outcomes; protected plans additionally submit a fenced terminal intent. Neither Stop nor interruption automatically requests Undo. A heartbeat or browser loss needs authoritative readback; forward writes are never automatically retried. Scheduled plans are handed to the application's scheduling adapter and never run browser writes.

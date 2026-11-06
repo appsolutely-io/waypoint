@@ -1,5 +1,9 @@
 import { MODAL_SELECTOR } from "./dialog-selectors";
-import type { BlockFormFill } from "../protocol/generated";
+import type {
+  BlockFormFill,
+  ConfirmationRecord,
+  Step,
+} from "../protocol/generated";
 import { ConversationRail } from "./conversation-rail";
 import type {
   ConversationSource,
@@ -74,7 +78,7 @@ import { usePlanView, type KeepSheet } from "./recovery";
 import { ClientContext, clientOf, useWaypointSnapshot } from "./headless";
 import { useBlockReply } from "./block-reply";
 export { clientOf, useWaypointSnapshot };
-import type { ActionEntry, ActionId, PlanView } from "./plan-view";
+import type { ActionEntry, ActionId, PlanView, StepStatus } from "./plan-view";
 import type { BlockSummary } from "./plan-view";
 import type { MarkdownImagePolicy } from "./markdown";
 export type { MarkdownImagePolicy } from "./markdown";
@@ -162,7 +166,57 @@ export type PartName =
   | "recoveryPanel"
   | "stepStatusRow"
   | "recoveryActions";
-export interface PartProps {
+/** A message as a bubble or its actions see it. */
+export interface PartMessage {
+  id: string;
+  role: Message["role"];
+  status?: Message["status"];
+  versionIndex?: number;
+  versionCount?: number;
+}
+/** A message still being sent, or not sent. */
+export interface PartPending {
+  id: string;
+  content: string;
+  failure: { code: Problem["code"] } | null;
+}
+/** A plan step as its row sees it. */
+export type PartStep = Pick<
+  Step,
+  "id" | "operation" | "resource" | "view" | "tier" | "undo" | "stepUp"
+>;
+/**
+ * The data each part is given, by part name: a copy, field by field, never
+ * the host's or the client's own objects. A part with `undefined` is given
+ * none; it draws from its children and props alone.
+ */
+export interface PartDataMap {
+  bubble:
+    | {
+        message: PartMessage & {
+          content: string;
+          blocks: BlockSummary[];
+        };
+      }
+    | { pending: PartPending };
+  widgetFrame: { block: BlockSummary };
+  messageActions: { message: PartMessage };
+  composer: { sending: boolean };
+  failedSendControls: { pending: PartPending };
+  confirmBar: { view: PlanView; actions: ActionEntry[] };
+  confirmation: { confirmation: ConfirmationRecord };
+  planNode: { view: PlanView };
+  stepRow: { step: PartStep };
+  stepUpPrompt: { stepUpCount: number };
+  recoveryPanel: { view: PlanView };
+  stepStatusRow: { step: StepStatus };
+  recoveryActions: { actions: ActionEntry[] };
+}
+/** Each part's data, `undefined` for a part that is given none. */
+export type PartData = {
+  [N in PartName]: N extends keyof PartDataMap ? PartDataMap[N] : undefined;
+};
+export interface PartProps<N extends PartName = PartName> {
   children?: ReactNode;
   value?: string;
   onChange?: (value: string) => void;
@@ -175,8 +229,8 @@ export interface PartProps {
   onKeyDown?: React.KeyboardEventHandler<HTMLTextAreaElement>;
   /** Ids of the text that describes the field (the composer's hints). */
   describedBy?: string;
-  // Typed, sanitized data for a replacement part (see the part data table).
-  data?: Readonly<Record<string, unknown>>;
+  /** The part's own data (see `PartData`); absent while there is none. */
+  data?: PartData[N];
 }
 export interface InputProps {
   value: string;
@@ -270,7 +324,7 @@ export interface WaypointProviderProps {
   /** Display names for the plan steps' resources and fields. */
   planLabels?: PlanLabels;
   children?: ReactNode;
-  parts?: Partial<Record<PartName, ComponentType<PartProps>>>;
+  parts?: { [N in PartName]?: ComponentType<PartProps<N>> };
   primitives?: Partial<PrimitiveComponents>;
   widgets?: readonly WidgetRegistration[];
   renderers?: { markdown?: ComponentType<{ text: string }> };
@@ -607,7 +661,9 @@ export function useFlows(client?: WaypointClient) {
     run: store!.runFlow,
   };
 }
-export type Slots = Partial<Record<PartName, (props: PartProps) => ReactNode>>;
+export type Slots = {
+  [N in PartName]?: (props: PartProps<N>) => ReactNode;
+};
 export const partNames: readonly PartName[] = [
   "bubble",
   "composer",
@@ -808,16 +864,19 @@ function pendingSummary(pending: {
     failure: pending.failure ? { code: pending.failure.code } : null,
   };
 }
-export function Part({
+export function Part<N extends PartName>({
   name,
   slots,
   children,
   ...props
-}: { name: PartName; slots?: Slots } & PartProps) {
+}: { name: N; slots?: Slots } & PartProps<N>) {
   const provider = useContext(Context);
-  const Replacement = provider?.parts?.[name];
-  const content = slots?.[name] ? (
-    slots[name]!({ ...props, children })
+  const Replacement = provider?.parts?.[name] as
+    ComponentType<PartProps<N>> | undefined;
+  const slot = slots?.[name] as
+    ((props: PartProps<N>) => ReactNode) | undefined;
+  const content = slot ? (
+    slot({ ...props, children } as PartProps<N>)
   ) : Replacement ? (
     <Replacement {...props}>{children}</Replacement>
   ) : (
@@ -1136,7 +1195,8 @@ export function PlanDiagram(props: PlanDiagramProps) {
 export interface PlanDiagramProps {
   record: PlanRecord;
   slots?: Slots;
-  view?: unknown;
+  /** The plan's view; each step's node is given it. */
+  view?: PlanView | null;
   /**
    * The host's confirmation beside the steps already lists each change;
    * the steps then leave their before and after values out.

@@ -250,9 +250,9 @@ const budgets = [
   {
     name: "lazy message actions",
     path: "dist/message-actions-*.js",
-    // Copy, Regenerate, Edit, feedback and the version walk: 1,399 B
-    // measured, plus 3%, rounded down.
-    limit: "1.440 KB",
+    // Copy, Regenerate, Edit, feedback and the version walk, and saying
+    // when Copy fails: 1,463 B measured, plus 3%, rounded down.
+    limit: "1.506 KB",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],

@@ -1725,6 +1725,72 @@ function ChatBody({
       ? state.problem?.confirmation?.reason
       : undefined;
   const replaced = changed !== undefined && changed !== record?.token;
+  // Wide, the plan has its own column after the conversation. Narrow, it
+  // is read where it is decided: after the messages, before the composer,
+  // as a region of the conversation rather than a top-level aside.
+  const PlanRegion = narrow ? "section" : "aside";
+  const planPanel =
+    enabled("plans") && plan ? (
+      <PlanRegion aria-label={t("chat.plan")} data-plan="">
+        <PlanDiagram record={plan} slots={slots} view={planView} />
+        <Part
+          name="confirmBar"
+          slots={slots}
+          data={
+            planView
+              ? {
+                  view: planView,
+                  actions: planView.actions.filter((entry) =>
+                    planView.status
+                      ? entry.id === "confirm"
+                      : entry.id === "confirm" || entry.id === "stop",
+                  ),
+                }
+              : undefined
+          }
+        >
+          {plan.state === "awaiting-confirmation" && !planView?.readOnly ? (
+            <Part
+              name="confirmation"
+              slots={slots}
+              data={record && { confirmation: record }}
+            >
+              <Suspense fallback={null}>
+                <LazyConfirmation
+                  record={record}
+                  planId={plan.id}
+                  entry={
+                    confirmEntry &&
+                    (confirming
+                      ? { ...confirmEntry, available: false, busy: true }
+                      : confirmEntry)
+                  }
+                  onConfirm={() => record && confirmShown(record.token)}
+                  refusal={refusal}
+                  override={provider.problemText && problem}
+                  replaced={replaced}
+                />
+              </Suspense>
+            </Part>
+          ) : null}
+          {!planView?.status && stopEntry ? (
+            <ActionButton
+              action={stopEntry}
+              onPress={onStop ?? (() => client.stopPlan())}
+            />
+          ) : null}
+        </Part>
+        {planView?.status ? (
+          <RecoveryPanel
+            view={planView}
+            onPress={recovery.press}
+            slots={slots}
+            sheet={recovery.sheet}
+            hide={["confirm"]}
+          />
+        ) : null}
+      </PlanRegion>
+    ) : null;
   return (
     <ChatFocusContext.Provider value={chatFocus.value}>
       <section
@@ -2086,6 +2152,7 @@ function ChatBody({
                 {heldRow === "none" ? null : <p>{t(`reply.${heldRow}`)}</p>}
               </div>
             </Part>
+            {narrow ? planPanel : null}
             {enabled("flows") ? (
               <Part name="flowTabs" slots={slots}>
                 <nav aria-label={t("chat.flows")}>
@@ -2354,68 +2421,7 @@ function ChatBody({
               ) : null}
             </div>
           </main>
-          {enabled("plans") && plan ? (
-            <aside aria-label={t("chat.plan")}>
-              <PlanDiagram record={plan} slots={slots} view={planView} />
-              <Part
-                name="confirmBar"
-                slots={slots}
-                data={
-                  planView
-                    ? {
-                        view: planView,
-                        actions: planView.actions.filter((entry) =>
-                          planView.status
-                            ? entry.id === "confirm"
-                            : entry.id === "confirm" || entry.id === "stop",
-                        ),
-                      }
-                    : undefined
-                }
-              >
-                {plan.state === "awaiting-confirmation" &&
-                !planView?.readOnly ? (
-                  <Part
-                    name="confirmation"
-                    slots={slots}
-                    data={record && { confirmation: record }}
-                  >
-                    <Suspense fallback={null}>
-                      <LazyConfirmation
-                        record={record}
-                        planId={plan.id}
-                        entry={
-                          confirmEntry &&
-                          (confirming
-                            ? { ...confirmEntry, available: false, busy: true }
-                            : confirmEntry)
-                        }
-                        onConfirm={() => record && confirmShown(record.token)}
-                        refusal={refusal}
-                        override={provider.problemText && problem}
-                        replaced={replaced}
-                      />
-                    </Suspense>
-                  </Part>
-                ) : null}
-                {!planView?.status && stopEntry ? (
-                  <ActionButton
-                    action={stopEntry}
-                    onPress={onStop ?? (() => client.stopPlan())}
-                  />
-                ) : null}
-              </Part>
-              {planView?.status ? (
-                <RecoveryPanel
-                  view={planView}
-                  onPress={recovery.press}
-                  slots={slots}
-                  sheet={recovery.sheet}
-                  hide={["confirm"]}
-                />
-              ) : null}
-            </aside>
-          ) : null}
+          {narrow ? null : planPanel}
           {extraPanels ? <Part name="extraPanels" slots={slots} /> : null}
         </div>
       </section>

@@ -38,6 +38,10 @@
 .waypoint main {
   min-inline-size: 0;
 }
+/* In the conversation (narrow), the plan stands apart from what follows. */
+.waypoint main > [data-plan] {
+  margin-block-end: var(--wp-space);
+}
 .waypoint [data-part] {
   color: var(--wp-foreground);
   transition: color var(--wp-motion) var(--wp-easing);

@@ -47,6 +47,7 @@ A pre-release, published under the `next` dist-tag.
 ### Changed
 
 - A reply that is still streaming in says so: its message is `aria-busy` and shows "Writing" under its text with a pulsing dot (still under reduced motion), and the reply row, a polite status, says "Writing" once. `replyRow` returns `writing` while the last message is an assistant message being written, and never `overdue` for it.
+- At narrow widths (under 40rem of the chat) the plan is shown after the messages and before the composer, as a region named "Plan" in the conversation, instead of after the composer; wide, it keeps its own column.
 - **Breaking:** the `/testing` entry re-exports the React entry's public types instead of every type of the module the React chunks share: the type-only names `ActionButton`, `clientOf`, `context`, `ContextValue`, `HOST_KEYS`, `LoadFailure`, `OVERLAY_KEYS`, `Part`, `problemAction`, `useColorScheme` and `useRefresh` are gone, and `ConversationRail`, `FieldAdornment`, `FormFillFields`, `FormFillPopup`, `isSafeUrl`, `PrivateAttachmentPort`, `useFormFill` and their props types are added.
 - **Breaking:** the conversation list's failure alert says `chat.conversationsFailed` ("Your conversations could not be loaded.") instead of `chat.failure`. Catalogue: new key `chat.conversationsFailed`.
 - A load failure's busy status ("Loading" while its Retry runs) is a status region beside the alert instead of inside it.

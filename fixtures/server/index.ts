@@ -28,6 +28,7 @@ export type FixtureFault =
   | "refetch"
   | "binding"
   | "shared-answer"
+  | "second-answer"
   | FormFault;
 export async function createFixtureServer(options: {
   testMode: boolean;
@@ -41,6 +42,8 @@ export async function createFixtureServer(options: {
   const protectedPlans = createProtectedFixture();
   const forms = createFormFixture(options.fault);
   const conversations = new Map<string, Conversation>();
+  // Applied card answers by conversation and reply id, with their body.
+  const replies = new Map<string, { body: string; result: { id: string } }>();
   // Each agreement keeps the answer it was issued with.
   const agreements = new Map<string, { protocol: string }>();
   // Live event streams and the agreement each was opened under; ending an
@@ -349,6 +352,31 @@ export async function createFixtureServer(options: {
           createdAt: Date.now(),
         });
       send(200, message);
+      return;
+    }
+    if (match?.[2] === "replies") {
+      // One answer per card: a replay of the applied request gets its
+      // first response; the same id with another body, or another answer
+      // to an answered card, is refused and changes nothing.
+      const key = JSON.stringify([conversation.id, body.clientReplyId]);
+      const text = JSON.stringify(body);
+      const seen = replies.get(key);
+      const card = conversation.messages
+        .flatMap((message) => message.blocks)
+        .find((block) => block.id === body.blockId);
+      if (
+        seen
+          ? seen.body !== text
+          : card?.answered && options.fault !== "second-answer"
+      ) {
+        send(409, { id: String(body.clientReplyId), code: "refused" });
+        return;
+      }
+      if (!seen) {
+        if (card) card.answered = true;
+        replies.set(key, { body: text, result: { id: `reply-${++next}` } });
+      }
+      send(200, replies.get(key)!.result);
       return;
     }
     send(200, { ...conversation, protocol: answered });

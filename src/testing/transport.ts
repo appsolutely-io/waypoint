@@ -15,9 +15,21 @@ export interface ScriptedTurn {
   problem?: Problem;
   events?: TransportEvent[];
 }
+// Whether a message's block is, or holds, the block a reply answers.
+const holds = (block: Block, id: string): boolean =>
+  block.id === id ||
+  ((block.body as { blocks?: Block[] } | null)?.blocks ?? []).some((child) =>
+    holds(child, id),
+  );
+/**
+ * A scripted host. Like a real one it deduplicates by reply id, refuses the
+ * same id with another body, and holds one answer per card: the first
+ * answer it applies marks the card answered, and any other answer to that
+ * card is refused (`refused`).
+ */
 export function createScriptedTransport(now: () => number = Date.now) {
   const listeners = new Map<string, Set<(event: TransportEvent) => void>>();
-  const replies = new Map<string, { id: string }>();
+  const replies = new Map<string, { body: string; result: { id: string } }>();
   const conversations = new Map<string, Conversation>();
   const turns: ScriptedTurn[] = [];
   let next = 0;
@@ -40,11 +52,24 @@ export function createScriptedTransport(now: () => number = Date.now) {
     read: async (id) => structuredClone(conversation(id)),
     send: async (reply: Reply, id: string) => {
       const key = JSON.stringify([id, reply.clientReplyId]);
+      const body = JSON.stringify({ ...reply, protocol: undefined });
       const existing = replies.get(key);
-      if (existing) return existing;
+      const conflict = { id: reply.clientReplyId, code: "refused" } as const;
+      if (existing) {
+        if (existing.body !== body) throw conflict;
+        return existing.result;
+      }
+      const value = conversation(id);
+      const card =
+        "blockId" in reply
+          ? value.messages
+              .flatMap((message) => message.blocks)
+              .find((block) => holds(block, reply.blockId))
+          : undefined;
+      if (card?.answered) throw conflict;
       const turn = turns.shift();
       if (turn?.problem) throw turn.problem;
-      const value = conversation(id);
+      if (card) card.answered = true;
       if (reply.kind === "message")
         value.messages.push({
           id: `message-${++next}`,
@@ -64,7 +89,7 @@ export function createScriptedTransport(now: () => number = Date.now) {
         });
       for (const event of turn?.events ?? []) emit(id, event);
       const result = { id: `reply-${++next}` };
-      replies.set(key, result);
+      replies.set(key, { body, result });
       return result;
     },
     subscribe: (id, listener) => {

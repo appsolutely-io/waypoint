@@ -139,6 +139,58 @@ export async function runConformance(
       (message) => message.content === "Authoritative after drop",
     );
   });
+  await check("one answer per card", async () => {
+    await post("/__conformance/script", {
+      turns: [
+        {
+          blocks: [
+            {
+              type: "buttons",
+              id: "card-answer",
+              fallback: "Answer",
+              body: {
+                actions: [
+                  { id: "accept", label: "Accept" },
+                  { id: "decline", label: "Decline" },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    await post(`/conversations/${id}/messages`, {
+      clientMessageId: "card-answer",
+      content: "Request",
+    });
+    const answer = (clientReplyId: string, actionId: string) =>
+      post(`/conversations/${id}/replies`, {
+        kind: "action",
+        clientReplyId,
+        blockId: "card-answer",
+        actionId,
+      });
+    const refused = (r: { status: number; body: unknown }) =>
+      r.status === 409 && (r.body as Problem).code === "refused";
+    const first = await answer("card-answer-a", "accept");
+    const replay = await answer("card-answer-a", "accept");
+    // The same id with another body, and another answer under a new id.
+    const changed = await answer("card-answer-a", "decline");
+    const other = await answer("card-answer-b", "decline");
+    const read = await config.request(`/conversations/${id}`, { headers });
+    const card = (read.body as Conversation).messages
+      .flatMap((message) => message.blocks)
+      .find((block) => block.id === "card-answer");
+    return (
+      first.status >= 200 &&
+      first.status < 300 &&
+      replay.status === first.status &&
+      JSON.stringify(replay.body) === JSON.stringify(first.body) &&
+      refused(changed) &&
+      refused(other) &&
+      card?.answered === true
+    );
+  });
   await check("agreement binding", async () => {
     const bound = await post("/negotiate", {
       supported: SUPPORTED_PROTOCOLS,

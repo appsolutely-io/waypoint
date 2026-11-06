@@ -11,6 +11,7 @@ for (const fault of [
   "refetch",
   "binding",
   "shared-answer",
+  "second-answer",
 ] as const)
   it(`HTTP protocol ${fault ?? "clean"}`, async () => {
     const host = await createFixtureServer({ testMode: true, fault });

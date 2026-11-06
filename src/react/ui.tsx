@@ -73,7 +73,7 @@ import {
 import { isSafeUrl } from "./urls";
 import { usePlanView, type KeepSheet } from "./recovery";
 import { ClientContext, clientOf, useWaypointSnapshot } from "./headless";
-import { useBlockReply } from "./block-reply";
+import { cardReplyId, useBlockReply } from "./block-reply";
 import type { PlanLabels } from "./step-name";
 export type { PlanLabels } from "./step-name";
 export { clientOf, useWaypointSnapshot };
@@ -1368,6 +1368,10 @@ function ChatBody({
   // when the card is open, or on to the composer when it is answered.
   const pressedAnswer = useRef<Element | null>(null);
   const answeredElsewhere = useRef<Problem | null>(null);
+  // Card answers sent here, by reply id, until the read after them settles:
+  // a problem one of them caused waits for that read, so the alert says
+  // only what it shows.
+  const checking = useRef(new Set<string>());
   const [settledCards, settleCard] = useState(0);
   const [confirming, setConfirming] = useState(false);
   // The token this window found replaced at its press.
@@ -1736,7 +1740,11 @@ function ChatBody({
     (block: Block, messageId: string) =>
     (reply: Pick<Reply, "kind"> & Record<string, unknown>) => {
       const pressed = deepActiveElement(document);
+      const id = cardReplyId(state.conversationId, messageId, block.id, reply);
+      checking.current.add(id);
       void answerCard(block, reply, messageId).then((outcome) => {
+        // A press on a locked card leaves the answer in flight its own.
+        if (outcome) checking.current.delete(id);
         const now = client.getSnapshot();
         // Refused, and the read after it shows the card answered: it was
         // answered elsewhere (another tab, an earlier page), which the
@@ -1765,12 +1773,13 @@ function ChatBody({
         removed: pressed,
       });
   }, [settledCards]);
-  const problem = state.problem
-    ? state.problem === answeredElsewhere.current
-      ? { text: t("chat.problem.answered") || t("chat.failure") }
-      : (provider.problemText?.(state.problem) ??
-        defaultProblemText(state.problem, t))
-    : null;
+  const problem =
+    state.problem && !checking.current.has(state.problem.id)
+      ? (provider.problemText?.(state.problem) ??
+        (state.problem === answeredElsewhere.current
+          ? { text: t("chat.problem.answered") || t("chat.failure") }
+          : defaultProblemText(state.problem, t)))
+      : null;
   const plan = state.plan;
   const planView = recovery.view;
   const confirmEntry = planView?.actions.find(

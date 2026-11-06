@@ -34,6 +34,8 @@ export interface CardHostOptions {
   fail?: (read: number) => boolean;
   // Whether reads name the applied answer in the card's `answer`.
   answer?: boolean;
+  // Holds this read (1-based, across clients) until the promise settles.
+  hold?: (read: number) => Promise<void> | undefined;
 }
 export function createCardHost(options: CardHostOptions = {}) {
   const block: Block = { ...question };
@@ -58,11 +60,12 @@ export function createCardHost(options: CardHostOptions = {}) {
   const applied: string[] = [];
   const sent: string[] = [];
   let reads = 0;
-  const read = () => {
-    reads++;
-    if (options.fail?.(reads))
+  const read = async () => {
+    const number = ++reads;
+    await options.hold?.(number);
+    if (options.fail?.(number))
       return Promise.reject(new TypeError("Failed to fetch"));
-    return options.hang?.(reads)
+    return options.hang?.(number)
       ? new Promise<Conversation>(() => {})
       : Promise.resolve(structuredClone(conversation));
   };

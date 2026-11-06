@@ -226,6 +226,106 @@ it("an answer refused because the card was answered elsewhere says so instead of
   here.dispose();
   elsewhere.dispose();
 });
+// A host whose next read waits until `release`, and what the alert region
+// said over time.
+const heldRead = () => {
+  let holding = false;
+  let release = () => {};
+  let started = () => {};
+  const held = new Promise<void>((resolve) => (started = resolve));
+  return {
+    hold: () => {
+      if (!holding) return undefined;
+      holding = false;
+      started();
+      return new Promise<void>((resolve) => (release = resolve));
+    },
+    next: () => (holding = true),
+    held,
+    release: () => release(),
+  };
+};
+const alertHistory = () => {
+  const alert = document.querySelector("[data-announcement]")!;
+  const said: string[] = [];
+  const observer = new MutationObserver(() => said.push(alert.textContent!));
+  observer.observe(alert, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+  return { alert, said, stop: () => observer.disconnect() };
+};
+it("an answer refused because the card was answered elsewhere never announces the generic refusal", async () => {
+  const read = heldRead();
+  const host = createCardHost({ hold: read.hold });
+  const here = host.client();
+  const elsewhere = host.client();
+  await Promise.all([here.ready, elsewhere.ready]);
+  await elsewhere.replyOutcome(answerElsewhere("accept"));
+  render(<WaypointChat client={here} />);
+  const decline = await screen.findByRole("button", { name: "Decline" });
+  const history = alertHistory();
+  read.next();
+  fireEvent.click(decline);
+  await read.held;
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  // Quiet while the read after the refusal is in flight.
+  expect(history.alert.textContent).toBe("");
+  read.release();
+  await screen.findByText("This question was already answered.");
+  history.stop();
+  expect(history.said.length).toBeGreaterThan(0);
+  expect(
+    history.said.filter((text) =>
+      text.includes("The site refused this request."),
+    ),
+  ).toEqual([]);
+  here.dispose();
+  elsewhere.dispose();
+});
+it("a host's problemText words an answer refused because the card was answered elsewhere", async () => {
+  const host = createCardHost();
+  const here = host.client();
+  const elsewhere = host.client();
+  await Promise.all([here.ready, elsewhere.ready]);
+  await elsewhere.replyOutcome(answerElsewhere("accept"));
+  render(
+    <WaypointChat
+      client={here}
+      problemText={(problem) => ({ text: `Host: ${problem.code}` })}
+    />,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Decline" }));
+  await screen.findByText("Host: refused");
+  here.dispose();
+  elsewhere.dispose();
+});
+it("a refused answer on a card that stays open is announced once the read after it settles", async () => {
+  const read = heldRead();
+  const host = createCardHost({
+    hold: read.hold,
+    refuse: () => ({ error: { id: "p", code: "refused" } }),
+  });
+  const client = host.client();
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  const accept = await screen.findByRole("button", { name: "Accept" });
+  const history = alertHistory();
+  read.next();
+  fireEvent.click(accept);
+  await read.held;
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(history.alert.textContent).toBe("");
+  read.release();
+  await screen.findByText("The site refused this request.");
+  history.stop();
+  client.dispose();
+});
 for (const [name, answer, actionId, text] of [
   ["names the answer the host applied", true, "accept", "Answered: Accept"],
   ["says answered when the host names no answer", false, "accept", "Answered"],

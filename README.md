@@ -124,7 +124,7 @@ function PlanActions({ client }) {
 }
 ```
 
-Each language is its own entry (`/messages/en`, `/messages/zh-Hans`), so a host ships only the text it shows; a host with its own wording passes its own catalogue. A key the catalogue lacks throws in development and shows the key itself in production. `stepName(t, planLabels, step)` names a plan step the way the web chat does.
+Each language is its own entry (`/messages/en`, `/messages/zh-Hans`), so a host ships only the text it shows; a host with its own wording passes its own catalogue. A key the catalogue lacks throws in development and shows the key itself in production. `stepName(t, planLabels, step)` names a plan step the way the web chat does. `problemView(problem)` gives a problem's words (`key`), its one action (`retry` or `refresh`) and the `code` and `id` the chat shows behind "Details"; `replyRowView(snapshot.replyState, { canStop: client.canStopReply() })` gives the reply row's words and its buttons (Stop, Keep waiting, Retry), each wired to the client method of the same name (`retry` is `retryReply()`).
 
 ### Part data
 

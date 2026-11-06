@@ -1731,11 +1731,28 @@ export interface Problem {
     retryAfter?: number;
 }
 
+// @public
+export const problemAction: (problem: Problem) => "retry" | "refresh" | undefined;
+
 // @public (undocumented)
 export type ProblemCatalogue = Readonly<Record<ProblemMessageKey, string>>;
 
 // @public (undocumented)
 export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered" | "chat.problem.details" | "chat.problem.code" | "chat.problem.reference";
+
+// @public (undocumented)
+export interface ProblemView {
+    action?: "retry" | "refresh";
+    code: Problem["code"];
+    // (undocumented)
+    id: string;
+    key: MessageKey;
+}
+
+// @public
+export function problemView(problem: Problem, options?: {
+    answeredElsewhere?: boolean;
+}): ProblemView;
 
 // @public
 export interface ReaderRequestContext {
@@ -1976,6 +1993,22 @@ export function replyRow(input: {
     streamLost?: boolean;
     activityAt?: number;
 }): ReplyState;
+
+// @public (undocumented)
+export interface ReplyRowAction {
+    // (undocumented)
+    id: "keepWaiting" | "retry" | "stop";
+    // (undocumented)
+    labelKey: MessageKey;
+}
+
+// @public
+export function replyRowView(state: ReplyState, options?: {
+    canStop?: boolean;
+}): {
+    key?: MessageKey;
+    actions: ReplyRowAction[];
+};
 
 // @public (undocumented)
 export type ReplyState = "none" | "writing" | "unavailable" | "failed" | "overdue";

@@ -8,6 +8,12 @@ export type { KeepSheet } from "../react/recovery";
 export { useBlockReply, cardReplyId } from "../react/block-reply";
 export type { BlockAnswer, BlockReply } from "../react/block-reply";
 export { planView, keepSheet } from "../react/plan-view";
+export {
+  problemView,
+  problemAction,
+  replyRowView,
+} from "../react/problem-view";
+export type { ProblemView, ReplyRowAction } from "../react/problem-view";
 export type { FormatMessage, MessageValues } from "../react/i18n";
 export type {
   ActionEntry,

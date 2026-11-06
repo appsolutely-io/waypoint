@@ -88,6 +88,7 @@ import type { MarkdownImagePolicy } from "./markdown";
 export type { MarkdownImagePolicy } from "./markdown";
 type MarkdownModule = typeof import("./markdown");
 import { lazyChunk, useChunk } from "./chunks";
+import { problemAction, problemView } from "./problem-view";
 // The stock renderer's chunk, shared by every message: loaded once on first
 // use, and tried again after a failure when a message body next asks or a
 // Retry is pressed.
@@ -983,59 +984,12 @@ function Markdown(props: {
     <StockMarkdown {...props} />
   );
 }
-// The client's default words for each problem code (a host's
-// `problemText` replaces them).
-const PROBLEM_TEXT: Partial<Record<Problem["code"], MessageKey>> = {
-  "sign-in": "chat.problem.signIn",
-  retryable: "chat.problem.retryable",
-  "rate-limited": "chat.problem.rateLimited",
-  refused: "chat.problem.refused",
-  closed: "chat.problem.closed",
-  full: "chat.problem.full",
-  declined: "chat.problem.declined",
-  unavailable: "chat.problem.unavailable",
-  "step-up-cancelled": "chat.problem.stepUp",
-  "invalid-read": "chat.problem.invalid",
-  "invalid-plan": "chat.problem.invalid",
-  "plan-changed": "chat.planChanged",
-  "update-required": "chat.update",
-  mismatch: "chat.problem.mismatch",
-  "agreement-expired": "chat.problem.agreement",
-  "in-doubt": "chat.problem.inDoubt",
-  replaced: "chat.problem.replaced",
-  "needs-attention": "chat.problem.needsAttention",
-  stopped: "chat.stopped",
-};
-/** The one action a default problem text offers. */
-export const problemAction = (
-  problem: Problem,
-): "retry" | "refresh" | undefined =>
-  problem.code === "replaced"
-    ? "refresh"
-    : [
-          "retryable",
-          "rate-limited",
-          "unavailable",
-          "agreement-expired",
-        ].includes(problem.code)
-      ? "retry"
-      : undefined;
+export { problemAction };
 export function defaultProblemText(
   problem: Problem,
   format: FormatMessage,
 ): { text: string; action?: ReactNode } {
-  // A read that failed for now names the conversation, not the site; one
-  // that found the conversation gone keeps its own text.
-  const readFailed =
-    problem.id === "conversation-read" &&
-    (problem.code === "unavailable" || problem.code === "retryable");
-  const text = format(
-    problem.id === "conversation-unavailable"
-      ? "chat.conversationUnavailable"
-      : readFailed
-        ? "chat.conversationReadFailed"
-        : (PROBLEM_TEXT[problem.code] ?? "chat.failure"),
-  );
+  const text = format(problemView(problem).key);
   // Until the problem messages have loaded, the generic failure text.
   return { text: text || format("chat.failure") };
 }

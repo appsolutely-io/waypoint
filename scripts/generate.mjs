@@ -20,20 +20,23 @@ if (process.argv.includes("--check")) {
 } else await writeFile(file, types);
 
 // Each language's catalogue for hosts that draw their own UI: the text of
-// every key the plan view, cards and problems return, as one frozen object
-// per language, generated from the catalogues the web chat loads, so a host
-// imports only its own language. Form-fill text is not included: the
+// every key the plan view, cards, problems and reply row return, and the
+// message actions, as one frozen object per language, generated from the
+// catalogues the web chat loads, so a host imports only its own language. Form-fill text is not included: the
 // renderer-neutral hooks return no form keys.
 const { tsImport } = await import("tsx/esm/api");
 const { format } = await import("prettier");
 const load = (path) => tsImport(path, import.meta.url);
-const [core, recovery, confirmation, block, problem] = await Promise.all([
-  load("../src/react/i18n.ts"),
-  load("../src/react/recovery-messages.ts"),
-  load("../src/react/confirmation-messages.ts"),
-  load("../src/react/block-messages.ts"),
-  load("../src/react/problem-messages.ts"),
-]);
+const [core, recovery, confirmation, block, problem, reply] = await Promise.all(
+  [
+    load("../src/react/i18n.ts"),
+    load("../src/react/recovery-messages.ts"),
+    load("../src/react/confirmation-messages.ts"),
+    load("../src/react/block-messages.ts"),
+    load("../src/react/problem-messages.ts"),
+    load("../src/react/reply-messages.ts"),
+  ],
+);
 const locales = {
   en: [
     core.english,
@@ -41,6 +44,7 @@ const locales = {
     confirmation.confirmationEnglish,
     block.blockEnglish,
     problem.problemEnglish,
+    reply.replyEnglish,
   ],
   "zh-Hans": [
     core.simplifiedChinese,
@@ -48,6 +52,7 @@ const locales = {
     confirmation.confirmationSimplifiedChinese,
     block.blockSimplifiedChinese,
     problem.problemSimplifiedChinese,
+    reply.replySimplifiedChinese,
   ],
 };
 for (const [locale, catalogues] of Object.entries(locales)) {

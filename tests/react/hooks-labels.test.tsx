@@ -29,6 +29,10 @@ import {
   problemSimplifiedChinese,
 } from "../../src/react/problem-messages";
 import { english, simplifiedChinese } from "../../src/react/i18n";
+import {
+  replyEnglish,
+  replySimplifiedChinese,
+} from "../../src/react/reply-messages";
 import { config } from "../support/client";
 afterEach(() => {
   cleanup();
@@ -108,6 +112,7 @@ it("each locale entry has the text of every key the plan view, cards and problem
         confirmationEnglish,
         blockEnglish,
         problemEnglish,
+        replyEnglish,
       ),
     ],
     [
@@ -119,6 +124,7 @@ it("each locale entry has the text of every key the plan view, cards and problem
         confirmationSimplifiedChinese,
         blockSimplifiedChinese,
         problemSimplifiedChinese,
+        replySimplifiedChinese,
       ),
     ],
   ] as const;

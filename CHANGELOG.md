@@ -14,6 +14,7 @@
 - A `form` block's field may carry `value`: the form in the reply starts from it.
 - A step's `Outcome` may carry `reason` (the host's plain words for why it failed) and `retryable`; the plan's steps show both under a failed step ("It can be tried again", "It cannot be tried again"). The reference fixture sends them for a refused step.
 - A problem the chat shows has its code and reference ("Error code: refused", "Reference: …") behind a "Details" disclosure under the alert, outside it, so the alert says only the plain words.
+- `/hooks` exports `problemView` (a problem's message key, its one action, and its code and id) and `replyRowView` (the reply row's message key and buttons), the choices the web chat makes, so a React Native UI words problems and the reply row the same way. The locale entries now hold the reply row's and the message actions' text.
 - The `details` block (`BlockDetails`: `summary` and nested `blocks`) holds what supports an answer behind a native disclosure, closed until the user opens it, so the answer comes first.
 - An overdue reply offers "Keep waiting" and "Retry". `client.keepWaiting()` puts the reply row back to `writing` until another 15 seconds pass without progress; `client.retryReply()` does the same and reads the conversation again, so a retry never sends the message twice. `replyRow` takes `heldUntil` for a reply being written as well.
 

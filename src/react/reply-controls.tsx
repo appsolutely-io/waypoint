@@ -5,6 +5,7 @@ import { useContext, useId, useState } from "react";
 import type { ReplyState, ToolStep, WaypointClient } from "../core/client";
 import { ChatFocusContext, focusFor } from "./chat-focus";
 import { addMessages } from "./i18n";
+import { replyRowView } from "./problem-view";
 import { replyEnglish, replySimplifiedChinese } from "./reply-messages";
 import { context } from "./ui";
 
@@ -60,6 +61,7 @@ export function ReplyControls({
   const B = primitives.button;
   const focus = useContext(ChatFocusContext);
   const steps = client.getSnapshot().toolSteps;
+  const { actions } = replyRowView(row, { canStop: client.canStopReply() });
   // The pressed button goes away: focus moves on to the composer.
   const then = (action: () => unknown) => () => {
     const origin = focus?.originFor("reply-wait");
@@ -69,20 +71,25 @@ export function ReplyControls({
   return (
     <>
       {steps.length ? <ToolSteps steps={steps} /> : null}
-      {row === "overdue" ? (
+      {actions.length ? (
         <div data-reply-controls="">
-          <B onPress={then(() => client.keepWaiting())}>
-            {t("chat.reply.keepWaiting")}
-          </B>
-          <B onPress={then(() => client.retryReply())}>{t("chat.retry")}</B>
-        </div>
-      ) : row === "failed" || row === "unavailable" ? (
-        <div data-reply-controls="">
-          <B onPress={then(() => client.retryReply())}>{t("chat.retry")}</B>
-        </div>
-      ) : row === "writing" && client.canStopReply() ? (
-        <div data-reply-controls="">
-          <B onPress={() => void client.stopReply()}>{t("chat.reply.stop")}</B>
+          {actions.map((action) => (
+            <B
+              key={action.id}
+              onPress={
+                // Stop keeps its place while the reply goes on.
+                action.id === "stop"
+                  ? () => void client.stopReply()
+                  : then(() =>
+                      action.id === "retry"
+                        ? client.retryReply()
+                        : client.keepWaiting(),
+                    )
+              }
+            >
+              {t(action.labelKey)}
+            </B>
+          ))}
         </div>
       ) : null}
     </>

@@ -158,9 +158,11 @@ const budgets = [
     path: "dist/hooks/index.js",
     // The renderer-neutral hooks with the client code they import: keys
     // only, no strings and no formatter (those are `messages` and a
-    // locale); React is the host's. Measured with Node 22's zlib: 4,991 B.
-    // The limit is 3% above an earlier 4,923 B, rounded down.
-    limit: "5.07 kB",
+    // locale); React is the host's. Measured with Node 22's zlib: 5,451 B,
+    // with problemView and replyRowView, which a native UI needs to word a
+    // problem and the reply row as the web chat does. The limit is 3% above
+    // it, rounded down.
+    limit: "5.614 kB",
     gzip: true,
     brotli: false,
     ignore: ["react"],
@@ -177,18 +179,19 @@ const budgets = [
   {
     name: "messages en",
     path: "dist/messages/en/index.js",
-    // English text of every key the hooks return. Measured (4,853 B), plus
-    // 3%, rounded down; 4,886 B now.
-    limit: "4.998 kB",
+    // English text of every key the hooks return, the reply row's and the
+    // message actions' included (replyRowView returns them). Measured with
+    // Node 22's zlib: 5,195 B; the limit is 3% above it, rounded down.
+    limit: "5.35 kB",
     gzip: true,
     brotli: false,
   },
   {
     name: "messages zh-Hans",
     path: "dist/messages/zh-Hans/index.js",
-    // Simplified Chinese text of the same keys. Measured (5,711 B), plus 3%,
-    // rounded down; 5,745 B now.
-    limit: "5.882 kB",
+    // Simplified Chinese text of the same keys. Measured with Node 22's
+    // zlib: 6,092 B; the limit is 3% above it, rounded down.
+    limit: "6.274 kB",
     gzip: true,
     brotli: false,
   },

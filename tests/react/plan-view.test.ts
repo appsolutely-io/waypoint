@@ -547,9 +547,14 @@ describe("Table A: actions", () => {
       schedule: true,
       labelKey: "chat.confirmation.schedule",
     });
+    // The plain label stands alone; the counted one takes the count.
     expect(action({ plan: initial }, "confirm")).toMatchObject({
       labelKey: "chat.confirmation.apply",
+      countedLabelKey: "chat.confirmation.applyCount",
       labelValues: { count: initial.confirmation!.items.length },
+    });
+    expect(action({ plan: scheduled }, "confirm")).toMatchObject({
+      countedLabelKey: "chat.confirmation.scheduleCount",
     });
     const bare = { ...initial } as PlanRecord;
     delete bare.confirmation;

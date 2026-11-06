@@ -17,9 +17,9 @@ export interface ActionEntry {
     available: boolean;
     // (undocumented)
     busy?: boolean;
+    countedLabelKey?: MessageKey;
     // (undocumented)
     id: ActionId;
-    // (undocumented)
     labelKey: MessageKey;
     labelValues?: Record<string, number>;
     // (undocumented)
@@ -542,7 +542,7 @@ export interface ConfirmationItem {
 }
 
 // @public (undocumented)
-export type ConfirmationMessageKey = "chat.confirmation.heading" | "chat.confirmation.apply" | "chat.confirmation.schedule" | "chat.confirmation.unavailable" | "chat.confirmation.expired" | "chat.confirmation.used" | "chat.confirmation.changed" | "chat.confirmation.mismatch" | "chat.confirmation.irreversible" | "chat.confirmation.before" | "chat.confirmation.after" | "chat.confirmation.refresh" | "chat.confirmation.verifications" | "chat.confirmation.expires" | "chat.confirmation.showAll";
+export type ConfirmationMessageKey = "chat.confirmation.heading" | "chat.confirmation.apply" | "chat.confirmation.schedule" | "chat.confirmation.applyCount" | "chat.confirmation.scheduleCount" | "chat.confirmation.unavailable" | "chat.confirmation.expired" | "chat.confirmation.used" | "chat.confirmation.changed" | "chat.confirmation.mismatch" | "chat.confirmation.irreversible" | "chat.confirmation.before" | "chat.confirmation.after" | "chat.confirmation.refresh" | "chat.confirmation.verifications" | "chat.confirmation.expires" | "chat.confirmation.showAll";
 
 // @public
 export function confirmationOf(plan: PlanRecord | null | undefined, conversationId: string | undefined): ConfirmationRecord | undefined;

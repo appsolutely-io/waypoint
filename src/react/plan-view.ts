@@ -46,8 +46,15 @@ export type ActionId =
   | "continue";
 export interface ActionEntry {
   id: ActionId;
+  /** The label; it takes no values. */
   labelKey: MessageKey;
-  /** The values `labelKey` takes: the number of changes, for Confirm. */
+  /**
+   * A label that also says how many changes there are ("Apply 2 changes"),
+   * formatted with `labelValues`; Confirm has one. Without it, or without
+   * the values, `labelKey` alone names the action ("Apply these changes").
+   */
+  countedLabelKey?: MessageKey;
+  /** The values `countedLabelKey` takes: the number of changes. */
   labelValues?: Record<string, number>;
   available: boolean;
   reasonKey?: MessageKey;
@@ -316,8 +323,15 @@ function confirmEntry(
       ? ("chat.confirmation.expired" as MessageKey)
       : undefined,
   );
-  // Named by how many changes it applies: "Apply 2 changes".
-  const named = { ...confirm, labelValues: { count: record.items.length } };
+  // Named by how many changes it applies: "Apply 2 changes"; the plain
+  // label stays for a UI that passes no count.
+  const named = {
+    ...confirm,
+    countedLabelKey: (record.schedule
+      ? "chat.confirmation.scheduleCount"
+      : "chat.confirmation.applyCount") as MessageKey,
+    labelValues: { count: record.items.length },
+  };
   return record.schedule ? { ...named, schedule: true } : named;
 }
 

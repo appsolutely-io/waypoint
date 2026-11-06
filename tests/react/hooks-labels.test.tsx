@@ -148,3 +148,32 @@ it("a missing key fails loudly in development and is the key itself in productio
   vi.stubEnv("NODE_ENV", "production");
   expect(t("chat.stop")).toBe("chat.stop");
 });
+
+// Confirm's label: `labelKey` alone is the plain words, so a UI that passes
+// no values keeps working; `countedLabelKey` with `labelValues` counts.
+for (const [locale, catalogue, plain, counted] of [
+  ["en", en, "Apply these changes", "Apply 2 changes"],
+  ["zh-Hans", zhHans, "应用这些修改", "应用 2 项修改"],
+] as const)
+  it(`Confirm is named without labelValues, and counted with them (${locale})`, () => {
+    const t = createFormatter(locale, catalogue);
+    const two = {
+      ...plan,
+      confirmation: {
+        ...plan.confirmation!,
+        items: [
+          { label: "Order 1043: status", before: "Waiting", after: "Ready" },
+          { label: "Order 1044: note", before: "", after: "Refunded" },
+        ],
+      },
+    } as PlanRecord;
+    const view = hooks.planView({
+      plan: two,
+      conversationId: "conversation-a",
+      capabilities: ["plans"],
+      now: 0,
+    } as never);
+    const confirm = view!.actions.find((entry) => entry.id === "confirm")!;
+    expect(t(confirm.labelKey)).toBe(plain);
+    expect(t(confirm.countedLabelKey!, confirm.labelValues)).toBe(counted);
+  });

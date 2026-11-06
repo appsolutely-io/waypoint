@@ -740,7 +740,10 @@ export function ActionButton({
         aria-busy={action.busy ? true : undefined}
         onPress={action.available ? () => onPress(action.id) : undefined}
       >
-        {label ?? t(action.labelKey, action.labelValues)}
+        {label ??
+          (action.countedLabelKey && action.labelValues
+            ? t(action.countedLabelKey, action.labelValues)
+            : t(action.labelKey))}
       </B>
       {action.reasonKey ? (
         <span id={reason} data-reason={action.id}>

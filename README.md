@@ -118,7 +118,9 @@ function PlanActions({ client }) {
       disabled={!entry.available}
       onPress={() => press(entry.id)}
     >
-      {t(entry.labelKey, entry.labelValues)}
+      {entry.countedLabelKey && entry.labelValues
+        ? t(entry.countedLabelKey, entry.labelValues)
+        : t(entry.labelKey)}
     </Button>
   ));
 }

@@ -3,6 +3,8 @@ export type ConfirmationMessageKey =
   | "chat.confirmation.heading"
   | "chat.confirmation.apply"
   | "chat.confirmation.schedule"
+  | "chat.confirmation.applyCount"
+  | "chat.confirmation.scheduleCount"
   | "chat.confirmation.unavailable"
   | "chat.confirmation.expired"
   | "chat.confirmation.used"
@@ -20,9 +22,11 @@ export type ConfirmationCatalogue = Readonly<
 >;
 export const confirmationEnglish: ConfirmationCatalogue = {
   "chat.confirmation.heading": "Review these changes",
-  "chat.confirmation.apply":
+  "chat.confirmation.apply": "Apply these changes",
+  "chat.confirmation.schedule": "Schedule these changes",
+  "chat.confirmation.applyCount":
     "{count, plural, =0 {Apply these changes} one {Apply # change} other {Apply # changes}}",
-  "chat.confirmation.schedule":
+  "chat.confirmation.scheduleCount":
     "{count, plural, =0 {Schedule these changes} one {Schedule # change} other {Schedule # changes}}",
   "chat.confirmation.unavailable":
     "This plan can't be confirmed in this app. Ask the site administrator to update it.",
@@ -45,9 +49,11 @@ export const confirmationEnglish: ConfirmationCatalogue = {
 };
 export const confirmationSimplifiedChinese: ConfirmationCatalogue = {
   "chat.confirmation.heading": "请核对以下修改",
-  "chat.confirmation.apply":
+  "chat.confirmation.apply": "应用这些修改",
+  "chat.confirmation.schedule": "安排执行这些修改",
+  "chat.confirmation.applyCount":
     "{count, plural, =0 {应用这些修改} other {应用 # 项修改}}",
-  "chat.confirmation.schedule":
+  "chat.confirmation.scheduleCount":
     "{count, plural, =0 {安排执行这些修改} other {安排执行 # 项修改}}",
   "chat.confirmation.unavailable":
     "此应用无法确认这个计划。请联系网站管理员更新应用。",

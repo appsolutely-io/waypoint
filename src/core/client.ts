@@ -437,7 +437,11 @@ export interface WaypointClient {
    * turns overdue again only after another 15 seconds without progress.
    */
   keepWaiting(): void;
-  /** Waits again and reads the conversation again (`refresh()`). */
+  /**
+   * Waits again and reads the conversation again (`refresh()`). A failed
+   * reply is asked for again instead (`regenerate`) when a `versions` port
+   * is given: a new version, with the failed one kept.
+   */
   retryReply(): Promise<void>;
   /**
    * Loads and validates a flow's document, to ask for its parameters, and
@@ -2489,6 +2493,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       update({});
     },
     retryReply() {
+      const last = state.conversation?.messages.at(-1);
+      if (
+        state.replyState === "failed" &&
+        last?.role === "assistant" &&
+        config.versions
+      )
+        return client.regenerate(last.id);
       client.keepWaiting();
       return client.refresh().then(() => {});
     },

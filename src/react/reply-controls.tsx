@@ -1,5 +1,6 @@
 // The reply's steps and controls: a lazy chunk, loaded when a reply is
-// first written, overdue or reading on the host's behalf.
+// first written, overdue, failed or unavailable, or reading on the host's
+// behalf.
 import { useContext, useId, useState } from "react";
 import type { ReplyState, ToolStep, WaypointClient } from "../core/client";
 import { ChatFocusContext, focusFor } from "./chat-focus";
@@ -73,6 +74,10 @@ export function ReplyControls({
           <B onPress={then(() => client.keepWaiting())}>
             {t("chat.reply.keepWaiting")}
           </B>
+          <B onPress={then(() => client.retryReply())}>{t("chat.retry")}</B>
+        </div>
+      ) : row === "failed" || row === "unavailable" ? (
+        <div data-reply-controls="">
           <B onPress={then(() => client.retryReply())}>{t("chat.retry")}</B>
         </div>
       ) : row === "writing" && client.canStopReply() ? (

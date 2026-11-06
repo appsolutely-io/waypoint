@@ -102,6 +102,9 @@ test("a reply the host ends with a failed message says it failed", async ({
   await page.goto("/?state=reply-ended-failed");
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "failed");
   await expect(replyRow(page)).toHaveText("Reply failed");
+  await expect(
+    page.getByRole("button", { name: "Retry", exact: true }),
+  ).toBeVisible();
 });
 
 for (const state of ["reply-failed", "reply-unavailable"] as const)
@@ -111,6 +114,9 @@ for (const state of ["reply-failed", "reply-unavailable"] as const)
       "data-reply-state",
       state.slice("reply-".length),
     );
+    await expect(
+      page.getByRole("button", { name: "Retry", exact: true }),
+    ).toBeVisible();
   });
 
 for (const state of problemStates)

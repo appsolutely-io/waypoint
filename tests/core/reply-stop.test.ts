@@ -295,3 +295,15 @@ it("keeps a stopped reply stopped when the host's end says completed", async () 
   expect(shown().status).toBe("stopped");
   client.dispose();
 });
+
+it("keeps the text of a stopped reply when a read still says writing", async () => {
+  // A host that keeps writing after the stop: its text does not grow under
+  // the Stopped mark.
+  const { client, hold, shown } = await setup(["reply-stop"]);
+  await client.stopReply();
+  hold({ content: "The first order shipped on Monday" });
+  await client.refresh();
+  expect(shown().status).toBe("stopped");
+  expect(shown().content).toBe("The first order");
+  client.dispose();
+});

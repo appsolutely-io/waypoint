@@ -1079,15 +1079,17 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         setStatus(id, mark.read);
       }
   };
-  // Replies the user stopped, each with the id of its stop request: a read
-  // that still says the host is writing shows them stopped, and text that
-  // arrives for them is dropped. A new version of the message is a new
-  // attempt, with its own stop.
-  const stopped = new Map<string, string>();
-  const withStops = (message: Message): Message =>
-    stopped.has(message.id) && message.status === "writing"
-      ? { ...message, status: "stopped" }
+  // Replies the user stopped, each with the id of its stop request and the
+  // text it had then: a read that still says the host is writing shows them
+  // stopped with that text, and text that arrives for them is dropped. A
+  // new version of the message is a new attempt, with its own stop.
+  const stopped = new Map<string, { replyId: string; content: string }>();
+  const withStops = (message: Message): Message => {
+    const stop = stopped.get(message.id);
+    return stop && message.status === "writing"
+      ? { ...message, status: "stopped", content: stop.content }
       : message;
+  };
   const withMarks = (conversation: Conversation, token: number) => ({
     ...conversation,
     messages: shownWithMarks(conversation, token).map(withStops),
@@ -2529,7 +2531,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       const message = stoppable();
       if (!message || !client.canStopReply()) return Promise.resolve();
       const replyId = config.platform.ids();
-      stopped.set(message.id, replyId);
+      stopped.set(message.id, { replyId, content: message.content });
       setStatus(message.id, "stopped");
       return later((actions) => actions.stopReply(message.id, replyId));
     },

@@ -37,7 +37,7 @@ A `form` block asks the user for details inline. Each field MAY carry `value`, w
 
 A client offers the `reply-stop` capability; a host that implements stopping echoes it in its negotiation answer. Only then does the chat show Stop while a reply is written.
 
-Stop is an ordinary reply, `{ "kind": "stop", "clientReplyId": "…", "messageId": "…" }`, sent to the conversation's replies route (`ReplyStop` in the schema). The client marks the reply `stopped` at once and drops any text that still arrives for it.
+Stop is an ordinary reply, `{ "kind": "stop", "clientReplyId": "…", "messageId": "…" }`, sent to the conversation's replies route (`ReplyStop` in the schema). The client marks the reply `stopped` at once and drops any text that still arrives for it: on the stream, and in a read that still says the host is writing it, which shows the text the reply had when it was stopped.
 
 A stop's `clientReplyId` names one attempt at the reply: the version of the message being written when the user pressed Stop. The client repeats that id only when it repeats that request. Once a new version of the message is asked for (`regenerate`, see [message versions](message-versions.md)) or starts on the stream (`message.start`), a stop of it is a new request with a new `clientReplyId`, for the same `messageId`.
 

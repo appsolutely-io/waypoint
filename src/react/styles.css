@@ -243,6 +243,29 @@
 .waypoint [role="alert"] {
   color: var(--wp-danger);
 }
+/* A reply still streaming in says so under its text, with a dot that
+   pulses (still under reduced motion); the reply row says it once. */
+.waypoint [data-writing] {
+  display: block;
+  color: var(--wp-muted);
+  font-size: var(--wp-font-size-sm);
+}
+.waypoint [data-writing]::before {
+  content: "";
+  display: inline-block;
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  margin-inline-end: var(--wp-space1);
+  border-radius: 50%;
+  background: var(--wp-accent);
+  animation: wp-writing calc(var(--wp-motion-slow) * 4) var(--wp-easing)
+    infinite alternate;
+}
+@keyframes wp-writing {
+  to {
+    opacity: 0.25;
+  }
+}
 /* A message still being sent, or not sent, says so under its bubble. */
 .waypoint [data-pending-status] {
   margin-block: 0 var(--wp-space1);

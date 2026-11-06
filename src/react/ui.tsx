@@ -1881,6 +1881,10 @@ function ChatBody({
                           tabIndex={-1}
                           data-message-id={message.id}
                           data-role={message.role}
+                          // Still streaming in: what it says is not final.
+                          aria-busy={
+                            message.status === "writing" ? true : undefined
+                          }
                           // Named by its sender, whatever the bubble renders.
                           aria-label={t(
                             message.role === "user"
@@ -1922,6 +1926,13 @@ function ChatBody({
                             <BodyOf.Provider value={message.id}>
                               <Markdown text={message.content} />
                             </BodyOf.Provider>
+                            {/* Seen in the bubble; said once, by the reply
+                                row. */}
+                            {message.status === "writing" ? (
+                              <span data-writing="" aria-hidden="true">
+                                {t("reply.writing")}
+                              </span>
+                            ) : null}
                             {message.blocks.map((block) => (
                               <Part
                                 key={block.id}

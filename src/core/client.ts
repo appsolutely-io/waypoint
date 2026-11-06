@@ -2924,6 +2924,14 @@ export function replyRow(input: {
   failed?: boolean;
 }): ReplyState {
   const last = input.messages.at(-1);
+  // A reply streaming in is being written for as long as it streams; it
+  // was never late, so it is never overdue.
+  if (
+    last?.role === "assistant" &&
+    last.status === "writing" &&
+    !input.pending.some((row) => !row.failure)
+  )
+    return "writing";
   if (last?.role !== "user" && !input.pending.some((row) => !row.failure))
     return "none";
   if (input.pending.some((row) => !row.failure)) return "writing";

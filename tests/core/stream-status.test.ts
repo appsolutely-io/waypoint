@@ -446,3 +446,35 @@ describe("a reply being written never outlasts what ended it", () => {
     h.client.dispose();
   });
 });
+
+describe("a reply that stops arriving", () => {
+  it("is overdue 15 seconds after its last text, and writing again when text comes", async () => {
+    const h = harness();
+    h.host.messages = [{ ...h.shown("u", "Question"), role: "user" }];
+    await h.ready();
+    h.start("m");
+    h.delta("m", "Part");
+    await flush();
+    expect(h.client.getSnapshot().replyState).toBe("writing");
+    await h.manual.advance(14000);
+    expect(h.client.getSnapshot().replyState).toBe("writing");
+    await h.manual.advance(1000);
+    expect(h.client.getSnapshot().replyState).toBe("overdue");
+    h.delta("m", " more");
+    await flush();
+    expect(h.client.getSnapshot().replyState).toBe("writing");
+    h.client.dispose();
+  });
+  it("a reply read while streaming, with no text after, is overdue 15 seconds after it was read", async () => {
+    const h = harness();
+    h.host.messages = [
+      { ...h.shown("u", "Question"), role: "user" },
+      h.shown("m", "Part", "writing"),
+    ];
+    await h.ready();
+    expect(h.client.getSnapshot().replyState).toBe("writing");
+    await h.manual.advance(15000);
+    expect(h.client.getSnapshot().replyState).toBe("overdue");
+    h.client.dispose();
+  });
+});

@@ -2359,6 +2359,7 @@ export function replyRow(input: {
     unavailable?: boolean;
     failed?: boolean;
     streamLost?: boolean;
+    activityAt?: number;
 }): ReplyState;
 
 // @public (undocumented)

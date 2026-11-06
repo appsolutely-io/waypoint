@@ -17,11 +17,27 @@ const streaming = {
   status: "writing" as const,
 };
 
-it("a reply still streaming in is being written, however long it takes", () => {
+it("a reply streaming in is being written while its text keeps arriving", () => {
   for (const now of [2000, 60000, 600000])
-    expect(replyRow({ messages: [user, streaming], pending: [], now })).toBe(
-      "writing",
-    );
+    expect(
+      replyRow({
+        messages: [user, streaming],
+        pending: [],
+        now,
+        activityAt: now - 14999,
+      }),
+    ).toBe("writing");
+});
+
+it("a reply whose text stopped arriving 15 seconds ago is overdue", () => {
+  expect(
+    replyRow({
+      messages: [user, streaming],
+      pending: [],
+      now: 61000,
+      activityAt: 46000,
+    }),
+  ).toBe("overdue");
 });
 
 it("a finished or failed reply leaves the row empty", () => {

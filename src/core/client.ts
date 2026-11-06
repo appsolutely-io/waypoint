@@ -538,6 +538,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   let formRetry:
     { key: string; request: ReturnType<FormSession["begin"]> } | undefined;
   let replyTimer: unknown;
+  // When each reply being written last showed it was: its start, its text,
+  // or the first time a read showed it being written.
+  const replyActivity = new Map<string, number>();
   // Scopes replace the ad-hoc tokens: the client scope is aborted on dispose,
   // and the conversation scope, its child, on every navigation. Effects check
   // the signal of the scope that produced them where they land.
@@ -609,6 +612,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       config.platform.clock.clearTimeout(replyTimer);
       replyTimer = undefined;
     }
+    const now = config.platform.clock.now();
+    const latest = state.conversation?.messages.at(-1);
+    const streaming =
+      latest?.role === "assistant" && latest.status === "writing";
+    if (!streaming) replyActivity.clear();
+    else if (!replyActivity.has(latest.id)) replyActivity.set(latest.id, now);
+    const activityAt = streaming ? replyActivity.get(latest.id) : undefined;
     state = {
       ...state,
       planReadOnly: readOnly(state.plan),
@@ -620,8 +630,18 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         unavailable: state.conversation?.replyStatus === "unavailable",
         failed: state.conversation?.replyStatus === "failed",
         streamLost: state.streamUnavailable,
+        activityAt,
       }),
     };
+    // A reply that stops arriving turns overdue on its own.
+    if (state.replyState === "writing" && activityAt !== undefined) {
+      const delay = activityAt + REPLY_STALL_MS - now;
+      if (delay > 0)
+        replyTimer = config.platform.clock.setTimeout(() => {
+          replyTimer = undefined;
+          update({});
+        }, delay);
+    }
     const last = state.conversation?.messages.at(-1);
     if (state.replyState === "writing" && last?.role === "user") {
       const delay =
@@ -1272,6 +1292,11 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const shown =
       "messageId" in frame &&
       state.conversation?.messages.find((m) => m.id === frame.messageId);
+    if (
+      frame.type === "text.delta" ||
+      (frame.type === "message.start" && frame.role === "assistant")
+    )
+      replyActivity.set(frame.messageId, config.platform.clock.now());
     if (frame.type === "text.delta") {
       // A reply that went on after its mark was dropped is written again.
       const again = mark && mark.binding === stream && !mark.status;
@@ -2914,6 +2939,8 @@ const PROBLEM_CODES: readonly Problem["code"][] = [
   "plan-changed",
   "agreement-expired",
 ];
+/** A reply with nothing new for this long is overdue. */
+const REPLY_STALL_MS = 15000;
 export function replyRow(input: {
   messages: readonly Message[];
   pending: readonly PendingSend[];
@@ -2925,6 +2952,8 @@ export function replyRow(input: {
   failed?: boolean;
   /** The stream that would carry the rest of the reply gave up. */
   streamLost?: boolean;
+  /** When the reply being written last showed it was. */
+  activityAt?: number;
 }): ReplyState {
   const last = input.messages.at(-1);
   // A reply streaming in is being written while it streams. What the host
@@ -2937,7 +2966,9 @@ export function replyRow(input: {
   ) {
     if (input.unavailable || input.streamLost) return "unavailable";
     if (input.failed) return "failed";
-    return "writing";
+    return input.now >= (input.activityAt ?? last.createdAt) + REPLY_STALL_MS
+      ? "overdue"
+      : "writing";
   }
   if (last?.role !== "user" && !input.pending.some((row) => !row.failure))
     return "none";

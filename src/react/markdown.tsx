@@ -316,6 +316,7 @@ export default function Markdown(props: MarkdownProps) {
               href={href}
               rel="noreferrer noopener"
               target="_blank"
+              data-wp-cite=""
               aria-label={current.current.sourceNames?.item(
                 cited,
                 source.title,

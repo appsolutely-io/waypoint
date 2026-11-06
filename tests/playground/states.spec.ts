@@ -265,6 +265,31 @@ test.describe("on a phone", () => {
     );
     expect(await words()).toBe(closed);
   });
+  test("an inline citation is a 44 by 44 target without moving the text", async ({
+    page,
+  }) => {
+    await page.goto("/?state=sources");
+    const cite = reply(page).locator("a[data-wp-cite]").first();
+    await expect(cite).toBeVisible();
+    const box = (await cite.boundingBox())!;
+    // The link itself stays inline text, as tall as the line.
+    expect(box.height).toBeLessThan(30);
+    const hits = await cite.evaluate((link) => {
+      const rect = link.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      return [
+        [x - 21, y],
+        [x + 21, y],
+        [x, y - 21],
+        [x, y + 21],
+      ].map(([px, py]) => {
+        const hit = document.elementFromPoint(px!, py!);
+        return !!hit && (hit === link || link.contains(hit));
+      });
+    });
+    expect(hits).toEqual([true, true, true, true]);
+  });
   for (const skin of ["neutral", "antd"])
     test(`every control of a reply's form is 44 by 44: ${skin}`, async ({
       page,

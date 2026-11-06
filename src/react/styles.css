@@ -614,6 +614,20 @@
   .waypoint .ant-btn {
     --wp-target: 44px;
   }
+  /* An inline citation is a few characters wide: its touch area grows to
+     44 by 44 around it, and the text it sits in does not move. */
+  .waypoint a[data-wp-cite] {
+    position: relative;
+  }
+  .waypoint a[data-wp-cite]::after {
+    content: "";
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    inline-size: max(100%, 44px);
+    block-size: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
 }
 .waypoint .wp-sr {
   position: absolute;

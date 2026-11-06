@@ -35,7 +35,9 @@ export interface OnDemandContext {
   stopped(planId: string): boolean;
   // A new version of the message was asked for: a stop of the version
   // before it no longer describes the reply.
-  versionAsked(messageId: string): void;
+  // Called as a new version is asked for; the function it returns once the
+  // host has answered.
+  versionAsking(messageId: string): () => void;
   refusedPending(planId: string): boolean;
   // A plan shown but not controllable here: nothing is sent for it.
   readOnly(planId: string): boolean;
@@ -120,12 +122,18 @@ export function createOnDemand(context: OnDemandContext) {
     },
     // Asks the host to stop writing a reply the client already shows
     // stopped. The reply id is that version's stop, so a repeat of it is a
-    // replay and the stop of a later version is a new request.
-    async stopReply(messageId: string, clientReplyId: string) {
+    // replay and the stop of a later version is a new request. Naming the
+    // version keeps a stop that arrives late off the version after it.
+    async stopReply(
+      messageId: string,
+      clientReplyId: string,
+      versionIndex: number | undefined,
+    ) {
       await context.sendReply(undefined, {
         kind: "stop",
         clientReplyId,
         messageId,
+        ...(versionIndex !== undefined && { versionIndex }),
       });
     },
     // Edits, regenerates or selects a message version, once per identical
@@ -172,6 +180,10 @@ export function createOnDemand(context: OnDemandContext) {
         messageId,
         clientReplyId: attempt.id,
       };
+      const asked =
+        operation === "regenerate"
+          ? context.versionAsking(messageId)
+          : undefined;
       attempt.active = (async () => {
         context.emit({
           type: "reply",
@@ -185,7 +197,7 @@ export function createOnDemand(context: OnDemandContext) {
             await config.versions!.regenerate(input);
           else await config.versions!.select({ ...input, index: index! });
           versionAttempts.delete(key);
-          if (operation === "regenerate") context.versionAsked(messageId);
+          asked?.();
           if (!scope.aborted) await context.refresh();
         } catch (error) {
           if (!scope.aborted) report(asProblem(error, input.clientReplyId));

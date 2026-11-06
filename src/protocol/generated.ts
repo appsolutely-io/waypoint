@@ -838,6 +838,10 @@ export interface ReplyStop {
   protocol: string;
   clientReplyId: string;
   messageId: string;
+  /**
+   * The version of the message the stop is for, numbered as the message's `versionIndex` (1 for a message with one version). A host ignores a stop for a version it is not writing. Optional: without it, the stop is for the version being written when it arrives.
+   */
+  versionIndex?: number;
 }
 export interface ManifestEntry {
   id: string;

@@ -105,6 +105,7 @@ it("keeps the partial text, marks it stopped at once and asks the host once", as
       protocol: "1.0",
       clientReplyId: expect.any(String),
       messageId: "a",
+      versionIndex: 1,
     },
   ]);
   expect(shown().status).toBe("stopped");
@@ -266,6 +267,7 @@ it.each([
     const stops = sent.filter((reply) => reply.kind === "stop");
     expect(stops).toHaveLength(2);
     expect(stops[0]!.clientReplyId).not.toBe(stops[1]!.clientReplyId);
+    expect(stops.map((stop) => stop.versionIndex)).toEqual([1, 2]);
     expect(client.getSnapshot().conversation!.messages.at(-1)!.status).toBe(
       "stopped",
     );
@@ -306,4 +308,231 @@ it("keeps the text of a stopped reply when a read still says writing", async () 
   expect(shown().status).toBe("stopped");
   expect(shown().content).toBe("The first order");
   client.dispose();
+});
+
+// A stop names the version it is for, so a host that receives it late, once
+// the next version is being written, leaves that one alone.
+async function regenerating(options: {
+  // The host handles a stop when it arrives, or not yet.
+  handles: boolean;
+  // The regenerate request answers when this resolves.
+  answered?: Promise<void>;
+}) {
+  const sent: Reply[] = [];
+  const arrive: Array<() => void> = [];
+  let listener: ((event: TransportEvent) => void) | undefined;
+  let stored: Message = { ...writing, versionIndex: 1, versionCount: 1 };
+  let sequence = 100;
+  const frame = (value: Record<string, unknown>) =>
+    listener!({
+      type: "frame",
+      frame: {
+        protocol: "1.0",
+        sequence: ++sequence,
+        messageId: "a",
+        ...value,
+      } as never,
+    });
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    versions: {
+      edit: async () => {},
+      select: async () => {},
+      regenerate: async () => {
+        stored = {
+          ...stored,
+          content: "",
+          status: "writing",
+          versionIndex: 2,
+          versionCount: 2,
+        };
+        frame({ type: "message.start", role: "assistant" });
+        await options.answered;
+      },
+    },
+    transport: {
+      ...base.transport,
+      negotiate: async () => ({
+        protocol: "1.0",
+        capabilities: ["reply-stop"],
+      }),
+      read: async (): Promise<Conversation> => ({
+        protocol: "1.0",
+        id: "conversation-a",
+        title: "Chat",
+        messages: [
+          { id: "u", role: "user", content: "Hi", blocks: [], createdAt: 0 },
+          stored,
+        ],
+      }),
+      send: (reply) => {
+        sent.push(reply);
+        if (reply.kind !== "stop" || !options.handles)
+          return Promise.resolve({ id: reply.clientReplyId });
+        // The stop travels on its own request and may arrive late. The
+        // host stops only the version the stop names.
+        return new Promise((resolve) =>
+          arrive.push(() => {
+            if (
+              stored.status === "writing" &&
+              (reply.versionIndex === undefined ||
+                reply.versionIndex === stored.versionIndex)
+            )
+              stored = { ...stored, status: "stopped" };
+            resolve({ id: reply.clientReplyId });
+          }),
+        );
+      },
+      subscribe: (_id, next) => {
+        listener = next;
+        return () => {};
+      },
+    },
+  });
+  await client.ready;
+  await flush();
+  const shown = () => client.getSnapshot().conversation!.messages.at(-1)!;
+  const write = (text: string) => {
+    if (stored.status === "writing")
+      stored = { ...stored, content: stored.content + text };
+    frame({ type: "text.delta", text });
+  };
+  return {
+    client,
+    sent,
+    shown,
+    write,
+    frame,
+    host: () => stored,
+    hold: (value: Partial<Message>) => {
+      stored = { ...stored, ...value };
+    },
+    arrive: () => arrive.shift()!(),
+  };
+}
+
+it("a stop that reaches the host after Regenerate leaves the new version writing", async () => {
+  const { client, sent, shown, write, host, arrive } = await regenerating({
+    handles: true,
+  });
+  const stopping = client.stopReply();
+  await flush();
+  await client.regenerate("a");
+  await flush();
+  arrive();
+  await stopping;
+  write("A new answer");
+  await client.refresh();
+  expect(host().status).toBe("writing");
+  expect(shown().status).toBe("writing");
+  expect(shown().content).toBe("A new answer");
+  expect(sent.find((reply) => reply.kind === "stop")).toMatchObject({
+    versionIndex: 1,
+  });
+  client.dispose();
+});
+
+it("keeps a stop of the new version when Regenerate answers after it started", async () => {
+  let answer!: () => void;
+  const answered = new Promise<void>((resolve) => (answer = resolve));
+  const { client, sent, shown, write } = await regenerating({
+    handles: false,
+    answered,
+  });
+  await client.stopReply();
+  const asking = client.regenerate("a");
+  await flush();
+  write("A new");
+  await client.stopReply();
+  answer();
+  await asking;
+  await flush();
+  write(" answer");
+  expect(shown().status).toBe("stopped");
+  expect(shown().content).toBe("A new");
+  expect(sent.filter((reply) => reply.kind === "stop").at(-1)).toMatchObject({
+    versionIndex: 2,
+  });
+  client.dispose();
+});
+
+it("shows a newer version being written although this tab stopped the one before", async () => {
+  // Another tab regenerated, and this one never saw the new version start.
+  const { client, shown, hold, write } = await regenerating({
+    handles: false,
+  });
+  await client.stopReply();
+  hold({
+    status: "writing",
+    content: "A new",
+    versionIndex: 2,
+    versionCount: 2,
+  });
+  await client.refresh();
+  expect(shown().status).toBe("writing");
+  expect(shown().content).toBe("A new");
+  write(" answer");
+  expect(shown().content).toBe("A new answer");
+  client.dispose();
+});
+
+it("names the version that started on the stream before any read shows it", async () => {
+  // Another tab regenerated; reads still say the version before ended.
+  const { client, sent, frame, hold } = await regenerating({ handles: false });
+  hold({ status: "completed" });
+  await client.refresh();
+  frame({ type: "message.start", role: "assistant" });
+  await client.stopReply();
+  expect(sent.at(-1)).toMatchObject({ kind: "stop", versionIndex: 2 });
+  client.dispose();
+});
+
+it("names no version when it cannot tell which one started", async () => {
+  // Without a versions port, the client does not know how the host numbers
+  // a reply that starts again, so its stop holds for whichever is written.
+  const { client, sent, frame, hold } = await setup(["reply-stop"]);
+  hold({ status: "completed" });
+  frame({ type: "message.end", status: "completed" });
+  await flush();
+  frame({ type: "message.start", role: "assistant" });
+  await client.stopReply();
+  expect(sent.at(-1)).toEqual({
+    kind: "stop",
+    protocol: "1.0",
+    clientReplyId: expect.any(String),
+    messageId: "a",
+  });
+  client.dispose();
+});
+
+it("the scripted host leaves a reply writing when a stop names another version", async () => {
+  const { createScriptedTransport } =
+    await import("../../src/testing/transport");
+  const host = createScriptedTransport(() => 5);
+  host.enqueue({ content: "Half an answer", writing: true });
+  const message = {
+    kind: "message",
+    protocol: "1.0",
+    clientReplyId: "m",
+    clientMessageId: "m",
+    content: "Hi",
+  } as const;
+  await host.transport.send(message, "c");
+  const id = (await host.transport.read("c")).messages.at(-1)!.id;
+  const stop = { kind: "stop", protocol: "1.0", messageId: id } as const;
+  await host.transport.send(
+    { ...stop, clientReplyId: "s1", versionIndex: 2 },
+    "c",
+  );
+  expect((await host.transport.read("c")).messages.at(-1)!.status).toBe(
+    "writing",
+  );
+  await host.transport.send(
+    { ...stop, clientReplyId: "s2", versionIndex: 1 },
+    "c",
+  );
+  expect((await host.transport.read("c")).messages.at(-1)!.status).toBe(
+    "stopped",
+  );
 });

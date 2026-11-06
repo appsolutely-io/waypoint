@@ -19,6 +19,18 @@ it("a stop is a reply naming the message being written", () => {
   expect(valid("Reply")({ ...stop, messageId: undefined })).toBe(false);
 });
 
+it("a stop may name the version it is for", () => {
+  const stop = {
+    kind: "stop",
+    protocol: "1.0",
+    clientReplyId: "stop-a",
+    messageId: "a",
+  };
+  expect(valid("Reply")({ ...stop, versionIndex: 2 })).toBe(true);
+  expect(valid("Reply")({ ...stop, versionIndex: 0 })).toBe(false);
+  expect(valid("Reply")({ ...stop, versionIndex: 1.5 })).toBe(false);
+});
+
 it("a stopped reply is a message status and a way a reply ends", () => {
   const message = {
     id: "a",

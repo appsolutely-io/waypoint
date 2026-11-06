@@ -27,7 +27,7 @@ const holds = (block: Block, id: string): boolean =>
   );
 /**
  * A scripted host. A `stop` ends the reply being written as `stopped` and
- * keeps its text. Like a real one it deduplicates by reply id, refuses the
+ * keeps its text; a stop that names another version changes nothing. Like a real one it deduplicates by reply id, refuses the
  * same id with another body, and holds one answer per card: the first
  * answer it applies marks the card answered and names it in the card's
  * `answer`, and any other answer to that card is refused (`refused`).
@@ -77,7 +77,12 @@ export function createScriptedTransport(now: () => number = Date.now) {
           (item) => item.id === reply.messageId && item.role === "assistant",
         );
         if (!message) throw conflict;
-        if (message.status === "writing") message.status = "stopped";
+        if (
+          message.status === "writing" &&
+          (reply.versionIndex === undefined ||
+            reply.versionIndex === (message.versionIndex ?? 1))
+        )
+          message.status = "stopped";
         const result = { id: `reply-${++next}` };
         replies.set(key, { body, result });
         return result;

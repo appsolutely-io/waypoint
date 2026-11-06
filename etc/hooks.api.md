@@ -2018,6 +2018,7 @@ export interface ReplyStop {
     messageId: string;
     // (undocumented)
     protocol: string;
+    versionIndex?: number;
 }
 
 // @public (undocumented)

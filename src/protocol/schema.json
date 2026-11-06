@@ -1936,6 +1936,11 @@
         "messageId": {
           "type": "string",
           "minLength": 1
+        },
+        "versionIndex": {
+          "description": "The version of the message the stop is for, numbered as the message's `versionIndex` (1 for a message with one version). A host ignores a stop for a version it is not writing. Optional: without it, the stop is for the version being written when it arrives.",
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": ["kind", "protocol", "clientReplyId", "messageId"]

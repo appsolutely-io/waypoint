@@ -81,6 +81,8 @@ export type FixtureFault =
   | "stops-once-per-message"
   // Sends `stopped` to clients that did not negotiate reply-stop.
   | "stopped-to-all"
+  // Stops the version being written whatever version a stop names.
+  | "stops-any-version"
   | FormFault;
 export async function createFixtureServer(options: {
   testMode: boolean;
@@ -531,7 +533,8 @@ export async function createFixtureServer(options: {
     }
     if (match?.[2] === "replies" && body.kind === "stop") {
       // A stop ends the reply being written as stopped and keeps its text;
-      // a replay, or a stop of a reply that already ended, changes nothing.
+      // a replay, a stop of a reply that already ended, or a stop of
+      // another version of it, changes nothing.
       const key = JSON.stringify([conversation.id, body.clientReplyId]);
       const seen = replies.get(key);
       if (seen) {
@@ -553,7 +556,15 @@ export async function createFixtureServer(options: {
         send(409, { id: String(body.clientReplyId), code: "refused" });
         return;
       }
-      if (message.status === "writing" && options.fault !== "ignores-stop") {
+      const named =
+        body.versionIndex === undefined ||
+        body.versionIndex === (message.versionIndex ?? 1) ||
+        options.fault === "stops-any-version";
+      if (
+        message.status === "writing" &&
+        named &&
+        options.fault !== "ignores-stop"
+      ) {
         writing.get(message.id)?.();
         message.status = "stopped";
         if (options.fault === "loses-stopped-text") message.content = "";

@@ -313,19 +313,32 @@ export async function runConformance(
         reply = await read();
       if (reply?.role !== "assistant" || reply.status !== "writing")
         return false;
+      const version = reply.versionIndex ?? 1;
+      // A stop of another version, as one that arrives late does, leaves
+      // the version being written alone.
+      const other = await post(`/conversations/${id}/replies`, {
+        kind: "stop",
+        clientReplyId: "stop-a-other-version",
+        messageId: reply.id,
+        versionIndex: version + 1,
+      });
+      const untouched = await read();
       const stop = {
         kind: "stop",
         clientReplyId: "stop-a-reply",
         messageId: reply.id,
+        versionIndex: version,
       };
       const first = await post(`/conversations/${id}/replies`, stop);
       const replay = await post(`/conversations/${id}/replies`, stop);
       // Each version of a reply is stopped with its own id: a new stop of
       // the same message is a new request, accepted, changing nothing once
-      // the message has ended.
+      // the message has ended. This one names no version: it is for the
+      // version being written when it arrives.
       const again = await post(`/conversations/${id}/replies`, {
-        ...stop,
+        kind: "stop",
         clientReplyId: "stop-a-reply-2",
+        messageId: reply.id,
       });
       const after = await read();
       // A client that did not negotiate reply-stop never sees `stopped`: it
@@ -338,6 +351,8 @@ export async function runConformance(
       ).body.agreementId;
       const older = stopAgreement && plain ? await read(plain) : undefined;
       return (
+        other.status < 500 &&
+        untouched?.status === "writing" &&
         (!older ||
           (older.status === "failed" && older.content === "Partial answer")) &&
         first.status >= 200 &&

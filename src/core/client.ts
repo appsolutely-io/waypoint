@@ -1086,14 +1086,50 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         setStatus(id, mark.read);
       }
   };
-  // Replies the user stopped, each with the id of its stop request and the
-  // text it had then: a read that still says the host is writing shows them
-  // stopped with that text, and text that arrives for them is dropped. A
-  // new version of the message is a new attempt, with its own stop.
-  const stopped = new Map<string, { replyId: string; content: string }>();
+  // Replies the user stopped, each with the version it stopped, the id of
+  // its stop request and the text it had then: a read that still says the
+  // host is writing that version shows it stopped with that text, and text
+  // that arrives for it is dropped. A new version of the message is a new
+  // attempt, with its own stop. A version the client cannot number is
+  // undefined, and its stop holds for whichever version is written.
+  const stopped = new Map<
+    string,
+    { replyId: string; content: string; version: number | undefined }
+  >();
+  // The version of each reply that started on the stream: a message keeps
+  // the previous version's number until a read shows the new one.
+  const started = new Map<string, number | undefined>();
+  const versionOf = (message: Message) =>
+    started.has(message.id)
+      ? started.get(message.id)
+      : (message.versionIndex ?? 1);
+  // A stop that still holds: for the version being written now.
+  const stopOf = (id: string) => {
+    const stop = stopped.get(id);
+    const shown = state.conversation?.messages.find((m) => m.id === id);
+    const version = shown && versionOf(shown);
+    return stop &&
+      (stop.version === undefined ||
+        version === undefined ||
+        version <= stop.version)
+      ? stop
+      : undefined;
+  };
   const withStops = (message: Message): Message => {
+    const known = started.get(message.id);
+    // A read that shows the version written, or a later one, numbers it.
+    if (
+      started.has(message.id) &&
+      (known === undefined
+        ? message.status === "writing"
+        : (message.versionIndex ?? 1) >= known)
+    )
+      started.delete(message.id);
     const stop = stopped.get(message.id);
-    return stop && message.status === "writing"
+    return stop &&
+      message.status === "writing" &&
+      (stop.version === undefined ||
+        (message.versionIndex ?? 1) <= stop.version)
       ? { ...message, status: "stopped", content: stop.content }
       : message;
   };
@@ -1426,7 +1462,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       update({
         conversation: { ...state.conversation, replyStatus: undefined },
       });
-    if (frame.type === "text.delta" && stopped.has(frame.messageId)) return;
+    if (frame.type === "text.delta" && stopOf(frame.messageId)) return;
     if (frame.type === "text.delta") {
       // A reply that went on after its mark was dropped is written again.
       const again = mark && mark.binding === stream && !mark.status;
@@ -1442,8 +1478,28 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       (!shown || shown.role === "assistant")
     ) {
       // A start begins the whole text of a version: what is shown is
-      // replaced, never joined.
-      stopped.delete(frame.messageId);
+      // replaced, never joined. Over a reply that ended it is the next
+      // version, numbered only when this client knows the host keeps
+      // versions; over one being written, the same version again.
+      const version = !shown
+        ? 1
+        : shown.status === "writing"
+          ? versionOf(shown)
+          : config.versions
+            ? Math.max(
+                shown.versionCount ?? 1,
+                started.get(frame.messageId) ?? 0,
+              ) + 1
+            : undefined;
+      started.set(frame.messageId, version);
+      const stop = stopped.get(frame.messageId);
+      if (
+        stop &&
+        (stop.version === undefined ||
+          version === undefined ||
+          version > stop.version)
+      )
+        stopped.delete(frame.messageId);
       markAs(frame.messageId, "writing", mark?.read);
       patch(frame.messageId, () => ({
         status: "writing",
@@ -1459,7 +1515,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       ) &&
       // A reply stopped here stays stopped whatever end the host sent
       // before it handled the stop; the read after the end decides.
-      !(stopped.has(frame.messageId) && frame.status !== "stopped") &&
+      !(stopOf(frame.messageId) && frame.status !== "stopped") &&
       (mark
         ? mark.binding === stream
         : !shown.status || shown.status === "writing")
@@ -2036,7 +2092,24 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           emit,
           refresh,
           stopped: (id) => stoppedPlans.has(id),
-          versionAsked: (id) => stopped.delete(id),
+          versionAsking: (id) => {
+            const message = state.conversation?.messages.find(
+              (m) => m.id === id,
+            );
+            const asked = message && versionOf(message);
+            // Once the host answered, a stop of the version the request
+            // replaces no longer holds; a stop of a newer one still does.
+            return () => {
+              const stop = stopped.get(id);
+              if (
+                stop &&
+                (stop.version === undefined ||
+                  asked === undefined ||
+                  stop.version <= asked)
+              )
+                stopped.delete(id);
+            };
+          },
           refusedPending,
           readOnly: (id) => readOnly(adoptedRecord(id)),
           confirmedDigest: (id) => confirmedDigests.get(approvalKey(id)),
@@ -2538,9 +2611,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       const message = stoppable();
       if (!message || !client.canStopReply()) return Promise.resolve();
       const replyId = config.platform.ids();
-      stopped.set(message.id, { replyId, content: message.content });
+      const version = versionOf(message);
+      stopped.set(message.id, { replyId, content: message.content, version });
       setStatus(message.id, "stopped");
-      return later((actions) => actions.stopReply(message.id, replyId));
+      return later((actions) =>
+        actions.stopReply(message.id, replyId, version),
+      );
     },
     prepareFlow(id) {
       const scope = conversationScope.signal;

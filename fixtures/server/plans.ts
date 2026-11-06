@@ -264,7 +264,16 @@ export function createPlanFixture(conversationId = "conversation-a") {
           return { status: 412, body: { id: "match", code: "mismatch" } };
         const status = refuse && target === record ? 412 : 200;
         target.outcomes = [
-          { stepId: "step-a", status, attributed: true, version },
+          {
+            stepId: "step-a",
+            status,
+            attributed: true,
+            version,
+            ...(status !== 200 && {
+              reason: "The item changed since the plan was made.",
+              retryable: false,
+            }),
+          },
         ];
         if (status === 200) {
           value = String(body.title);

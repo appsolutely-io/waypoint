@@ -231,7 +231,7 @@ export interface BlockMarkdown {
 }
 
 // @public (undocumented)
-export type BlockMessageKey = "chat.block.required" | "chat.block.requiredMissing" | "chat.block.answerMissing" | "chat.block.empty" | "chat.block.tierLow" | "chat.block.tierSensitive" | "chat.block.undoCompareAndSet" | "chat.block.undoArchiveCreated" | "chat.block.undoInverse" | "chat.block.status" | "chat.block.outcomeDone" | "chat.block.outcomeFailed" | "chat.block.state.proposed" | "chat.block.state.awaiting-confirmation" | "chat.block.state.running" | "chat.block.state.undoing" | "chat.block.state.completed" | "chat.block.state.submitted" | "chat.block.state.undone" | "chat.block.state.needs-attention" | "chat.block.state.cancelled" | "chat.block.run" | "chat.block.runMissing" | "chat.block.favourite" | "chat.block.flowLoading" | "chat.block.flowsLoading" | "chat.block.flowsEmpty" | "chat.block.answered" | "chat.block.answeredWith";
+export type BlockMessageKey = "chat.block.required" | "chat.block.requiredMissing" | "chat.block.answerMissing" | "chat.block.empty" | "chat.block.tierLow" | "chat.block.tierSensitive" | "chat.block.undoCompareAndSet" | "chat.block.undoArchiveCreated" | "chat.block.undoInverse" | "chat.block.status" | "chat.block.outcomeDone" | "chat.block.outcomeFailed" | "chat.block.retryable" | "chat.block.notRetryable" | "chat.block.state.proposed" | "chat.block.state.awaiting-confirmation" | "chat.block.state.running" | "chat.block.state.undoing" | "chat.block.state.completed" | "chat.block.state.submitted" | "chat.block.state.undone" | "chat.block.state.needs-attention" | "chat.block.state.cancelled" | "chat.block.run" | "chat.block.runMissing" | "chat.block.favourite" | "chat.block.flowLoading" | "chat.block.flowsLoading" | "chat.block.flowsEmpty" | "chat.block.answered" | "chat.block.answeredWith";
 
 // @public (undocumented)
 export interface BlockNotice {
@@ -1762,6 +1762,8 @@ export function noticeMessages(notice: IntentNotice): ViewMessage[];
 export interface Outcome {
     // (undocumented)
     attributed: boolean;
+    reason?: string;
+    retryable?: boolean;
     // (undocumented)
     status: number;
     // (undocumented)

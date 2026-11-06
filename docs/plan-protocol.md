@@ -20,6 +20,8 @@ The runner sends the confirmed canonical request unchanged with its step identit
 
 Stop inhibits local dispatch synchronously, including a Stop before acceptance. Interruption never automatically invokes the deprecated stop port or requests Undo. It submits the applicable Stop intent and reads step facts. Outcomes are `done`, `not-done` and `unknown`; communication loss alone proves neither success nor failure. Legacy plans without the profile inhibit locally and read back, with no terminal-intent traffic. Existing legacy resume/retry adapters can still be used by their client paths; they do not implement protected forward continuation or selected Undo.
 
+A step's `Outcome` (in the plan record's `outcomes` and on a `plan.step` frame) may carry `reason`, the host's plain words for why a failed step failed (at most 500 characters, shown as plain text), and `retryable`, whether it can be tried again. The chat shows both under the failed step, after "Failed". Both are optional and only describe a failed step; a host never puts in `reason` anything the user may not see.
+
 ## Bounded terminal intents
 
 There are five fixed slots, one each for `stop`, `cancel-initial`, `cancel-review`, `leave` and `keep`. A slot is bounded durable semantic state, not an unbounded request log. The resolver orders Stop above Cancel, Keep and Leave; safety-only replacement and compatible same-round Keep/Leave joining preserve actual effects and the original disposition. An old captured request cannot affect an independent later execution. Both evidence/winner and decision-resolution floors matter when joining rounds.

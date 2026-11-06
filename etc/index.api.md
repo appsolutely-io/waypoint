@@ -1384,6 +1384,8 @@ export interface NegotiationOfferWire {
 export interface Outcome {
     // (undocumented)
     attributed: boolean;
+    reason?: string;
+    retryable?: boolean;
     // (undocumented)
     status: number;
     // (undocumented)

@@ -295,6 +295,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.block.status": "状态：{status}",
   "chat.block.outcomeDone": "已完成",
   "chat.block.outcomeFailed": "失败",
+  "chat.block.retryable": "可以重试",
+  "chat.block.notRetryable": "无法重试",
   "chat.block.state.proposed": "已提议",
   "chat.block.state.awaiting-confirmation": "等待确认",
   "chat.block.state.running": "运行中",

@@ -12,6 +12,7 @@
 - While a reply is written, the stock Markdown renderer closes for display a code fence, `**`, `~~` or `` ` `` the reply has opened and not yet closed, so raw syntax never flashes before its end arrives. A host `renderers.markdown` gets the text unchanged.
 - `Message.sources` (`Source`: `id`, `title`, `url`): `[n]` in a reply's text links to the n-th source, named "Source n: title", and the sources are listed under the answer behind a "Sources (n)" disclosure. Only addresses the URL policy allows are linked.
 - A `form` block's field may carry `value`: the form in the reply starts from it.
+- A step's `Outcome` may carry `reason` (the host's plain words for why it failed) and `retryable`; the plan's steps show both under a failed step ("It can be tried again", "It cannot be tried again"). The reference fixture sends them for a refused step.
 - The `details` block (`BlockDetails`: `summary` and nested `blocks`) holds what supports an answer behind a native disclosure, closed until the user opens it, so the answer comes first.
 - An overdue reply offers "Keep waiting" and "Retry". `client.keepWaiting()` puts the reply row back to `writing` until another 15 seconds pass without progress; `client.retryReply()` does the same and reads the conversation again, so a retry never sends the message twice. `replyRow` takes `heldUntil` for a reply being written as well.
 

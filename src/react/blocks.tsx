@@ -29,6 +29,7 @@ const UNDO: Record<string, BlockMessageKey> = {
   "compare-and-set": "chat.block.undoCompareAndSet",
   "archive-created": "chat.block.undoArchiveCreated",
 };
+const ok = (status: number) => status >= 200 && status < 300;
 const stateLabel = (t: FormatMessage, state: PlanState) =>
   t("chat.block.status", {
     status: t(`chat.block.state.${state}` as BlockMessageKey),
@@ -135,13 +136,27 @@ export function PlanSteps({
                     {outcome
                       ? t("chat.block.status", {
                           status: t(
-                            outcome.status >= 200 && outcome.status < 300
+                            ok(outcome.status)
                               ? "chat.block.outcomeDone"
                               : "chat.block.outcomeFailed",
                           ),
                         })
                       : stateLabel(t, record.state)}
                   </li>
+                  {/* A failed step says why, in the host's words, and
+                      whether it can be tried again. */}
+                  {outcome?.reason && !ok(outcome.status) ? (
+                    <li>{outcome.reason}</li>
+                  ) : null}
+                  {outcome?.retryable !== undefined && !ok(outcome.status) ? (
+                    <li>
+                      {t(
+                        outcome.retryable
+                          ? "chat.block.retryable"
+                          : "chat.block.notRetryable",
+                      )}
+                    </li>
+                  ) : null}
                   {isSafeUrl(step.view, extraUrlSchemes) ? (
                     <li>
                       <a href={step.view}>{t("chat.view")}</a>

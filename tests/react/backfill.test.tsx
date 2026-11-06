@@ -511,6 +511,50 @@ describe.each([
       expect(document.body.textContent).not.toContain(String(code));
       client.dispose();
     });
+    it.each([
+      [false, "chat.block.notRetryable"],
+      [true, "chat.block.retryable"],
+    ] as const)(
+      "a failed step says why, and whether it can be retried (%s)",
+      async (retryable, key) => {
+        const { client } = await plan((m) => (
+          <m.PlanDiagram
+            record={record((value) => {
+              value.outcomes = [
+                {
+                  stepId: "step-a",
+                  status: 412,
+                  attributed: true,
+                  reason: "The item changed since the plan was made.",
+                  retryable,
+                },
+              ];
+            })}
+          />
+        ));
+        expect(
+          await screen.findByText("The item changed since the plan was made."),
+        ).not.toBeNull();
+        expect(t(key as MessageKey)).not.toBe("");
+        expect(screen.getByText(t(key as MessageKey))).not.toBeNull();
+        client.dispose();
+      },
+    );
+    it("a failed step without a reason says only that it failed", async () => {
+      const { client } = await plan((m) => (
+        <m.PlanDiagram
+          record={record((value) => {
+            value.outcomes = [
+              { stepId: "step-a", status: 500, attributed: true },
+            ];
+          })}
+        />
+      ));
+      await screen.findByText(status("chat.block.outcomeFailed"));
+      for (const key of ["chat.block.retryable", "chat.block.notRetryable"])
+        expect(screen.queryByText(t(key as MessageKey))).toBeNull();
+      client.dispose();
+    });
     it("the step's values are plain words, before and after", async () => {
       const { client } = await plan((m) => <m.PlanDiagram record={record()} />);
       await screen.findByText(t("chat.block.tierLow"));

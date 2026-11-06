@@ -322,6 +322,14 @@ export interface Outcome {
   status: number;
   attributed: boolean;
   version?: string;
+  /**
+   * The host's plain words for why the step failed, shown to the user; only for a failed step. Optional.
+   */
+  reason?: string;
+  /**
+   * Whether the failed step can be tried again. Optional.
+   */
+  retryable?: boolean;
 }
 export interface ConfirmationItem {
   label: string;

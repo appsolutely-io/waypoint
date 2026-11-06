@@ -374,8 +374,9 @@ module.exports = withSharedChunks(budgets, {
     {
       name: "lazy block messages",
       source: "src/react/block-messages.ts",
-      // 957 B measured, with an answered card's texts.
-      limit: "985 B",
+      // 1,019 B measured, with an answered card's texts and a failed
+      // step's "It can (not) be tried again"; the limit is 3% above it.
+      limit: "1049 B",
       gzip: true,
       brotli: false,
       ignore: ["react", "react-dom", "./chunk-*"],

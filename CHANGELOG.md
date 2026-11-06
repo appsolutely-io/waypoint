@@ -28,6 +28,7 @@
 
 ### Fixed
 
+- A change renders only the messages it changes: a streamed delta renders the reply being written and no other message, and a keystroke in the composer renders none. Each message's Markdown is parsed once for each version of its text and sources, and the parse is dropped when the message is no longer shown. Long conversations stay responsive while typing and while a reply streams.
 - A reply the host ends with `message.end` status `failed` or `unavailable` is no longer shown as finished with an empty reply row: the reply says "Reply failed" or "Reply unavailable", as the row does for the conversation's `replyStatus`. A screen reader hears it once, from the message announcements; the row's live region stays quiet for it.
 - A failed or unavailable reply offers Retry. `client.retryReply()` asks for a reply the host ended as failed or unavailable again as a new version when a `versions` port is given; without one, `client.canRetryReply()` is false and the reply row offers no Retry, since a read would show the same ended reply. For the conversation's `replyStatus` it reads the conversation again. Neither sends the user's message twice; `replyRowView` takes `canRetry`. Its message actions offer no Copy, Regenerate, Good response or Bad response: there is no answer to copy or rate, and Retry asks for it again. Its version walk stays.
 - While a reply streams, "Writing" is shown once, under its text; the reply row still says it to assistive technology, and shows it while no reply text has arrived.

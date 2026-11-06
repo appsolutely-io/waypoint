@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
@@ -260,85 +267,98 @@ interface MarkdownProps {
   extraSchemes?: readonly string[];
   // The name of a code block's own sideways scroller.
   scrollLabel?: string;
+  /**
+   * Keeps the finished text's parse: given how to parse it, returns the
+   * kept result while the text it was made from is unchanged.
+   */
+  cached?: (parse: () => ReactNode) => ReactNode;
 }
-export default function Markdown(props: MarkdownProps) {
-  // The element renderers keep one identity for the renderer's lifetime:
-  // new ones on each render would be new element types, and React would
-  // replace every code block and table whenever the chat renders again,
-  // dropping the keyboard focus and scroll position inside them. They read
-  // the current props when they render.
-  const current = useRef(props);
-  current.current = props;
-  const components = useMemo<Components>(
-    () => ({
-      // A code block scrolls inside itself, never the transcript, and can
-      // be reached and scrolled by keyboard.
-      pre: ({ children }) => (
-        <pre
-          data-scroll-region=""
-          tabIndex={0}
-          aria-label={current.current.scrollLabel}
+// What the element renderers below read when they render: the props of
+// the renderer showing them, so an element made by an earlier render (or
+// kept parsed for a message) shows with the current names and policies.
+const Current = createContext<MarkdownProps>({ text: "" });
+// The element renderers keep one identity for good: new ones would be new
+// element types, and React would replace every code block and table
+// whenever the chat renders again, dropping the keyboard focus and scroll
+// position inside them.
+const components: Components = {
+  // A code block scrolls inside itself, never the transcript, and can be
+  // reached and scrolled by keyboard.
+  pre: function Pre({ children }) {
+    const { scrollLabel } = useContext(Current);
+    return (
+      <pre data-scroll-region="" tabIndex={0} aria-label={scrollLabel}>
+        {children}
+      </pre>
+    );
+  },
+  // A table scrolls inside itself too, as a named region.
+  table: function Table({ children }) {
+    const { scrollLabel } = useContext(Current);
+    return (
+      <div
+        data-scroll-region=""
+        tabIndex={0}
+        role="region"
+        aria-label={scrollLabel}
+      >
+        <table>{children}</table>
+      </div>
+    );
+  },
+  img: function Image({ src, alt }) {
+    const { images, extraSchemes } = useContext(Current);
+    if (!src) return <span>{alt}</span>;
+    return showsImage(src, images, extraSchemes) ? (
+      <img src={src} alt={alt ?? ""} />
+    ) : (
+      <a href={src} rel="noreferrer noopener">
+        {alt || src}
+      </a>
+    );
+  },
+  a: function Link({ href, children, node }) {
+    const { sources, sourceNames } = useContext(Current);
+    // A citation opens its source, named by its number and title. Only the
+    // citations plugin marks one: author text cannot, and its address has
+    // passed the allow-list like any other.
+    const cited = Number(node?.properties?.[CITE] ?? 0);
+    const source = cited ? sources?.[cited - 1] : undefined;
+    if (source && href)
+      return (
+        <a
+          href={href}
+          rel="noreferrer noopener"
+          target="_blank"
+          data-wp-cite=""
+          aria-label={sourceNames?.item(cited, source.title)}
         >
           {children}
-        </pre>
-      ),
-      // A table scrolls inside itself too, as a named region.
-      table: ({ children }) => (
-        <div
-          data-scroll-region=""
-          tabIndex={0}
-          role="region"
-          aria-label={current.current.scrollLabel}
-        >
-          <table>{children}</table>
-        </div>
-      ),
-      img: ({ src, alt }) => {
-        if (!src) return <span>{alt}</span>;
-        const { images, extraSchemes } = current.current;
-        return showsImage(src, images, extraSchemes) ? (
-          <img src={src} alt={alt ?? ""} />
-        ) : (
-          <a href={src} rel="noreferrer noopener">
-            {alt || src}
-          </a>
-        );
-      },
-      a: ({ href, children, node }) => {
-        // A citation opens its source, named by its number and title. Only
-        // the citations plugin marks one: author text cannot, and its
-        // address has passed the allow-list like any other.
-        const cited = Number(node?.properties?.[CITE] ?? 0);
-        const source = cited ? current.current.sources?.[cited - 1] : undefined;
-        if (source && href)
-          return (
-            <a
-              href={href}
-              rel="noreferrer noopener"
-              target="_blank"
-              data-wp-cite=""
-              aria-label={current.current.sourceNames?.item(
-                cited,
-                source.title,
-              )}
-            >
-              {children}
-            </a>
-          );
-        return href ? (
-          <a href={href} rel="noreferrer noopener">
-            {children}
-          </a>
-        ) : (
-          <span>{children}</span>
-        );
-      },
-    }),
-    [],
-  );
+        </a>
+      );
+    return href ? (
+      <a href={href} rel="noreferrer noopener">
+        {children}
+      </a>
+    ) : (
+      <span>{children}</span>
+    );
+  },
+};
+export default function Markdown(props: MarkdownProps) {
   const { text, extraSchemes, sources = [] } = props;
   // Sources that may be opened: the others are named but never linked.
   const safe = (source: Source) => isSafeUrl(source.url, extraSchemes);
+  // Called as a function: the synchronous renderer is a plain function of
+  // its options, so its result can be kept for a message.
+  const parse = (markdown: string) =>
+    ReactMarkdown({
+      skipHtml: true,
+      remarkPlugins: [gfm, [citations, { sources, safe }]],
+      urlTransform: (url) => (isSafeUrl(url, extraSchemes) ? url : undefined),
+      components,
+      children: markdown,
+    });
   const reduced = reducedMotion();
   const shown = useReveal(text, !!props.writing && !reduced, props.lang);
   return (
@@ -347,14 +367,13 @@ export default function Markdown(props: MarkdownProps) {
       // Under reduced motion a reply fades in instead of typing out.
       data-fade={props.writing && reduced ? "" : undefined}
     >
-      <ReactMarkdown
-        skipHtml
-        remarkPlugins={[gfm, [citations, { sources, safe }]]}
-        urlTransform={(url) => (isSafeUrl(url, extraSchemes) ? url : undefined)}
-        components={components}
-      >
-        {props.writing ? closeOpenMarkdown(shown) : text}
-      </ReactMarkdown>
+      <Current.Provider value={props}>
+        {props.writing
+          ? parse(closeOpenMarkdown(shown))
+          : props.cached
+            ? props.cached(() => parse(text))
+            : parse(text)}
+      </Current.Provider>
       {sources.length ? (
         <details
           data-sources=""

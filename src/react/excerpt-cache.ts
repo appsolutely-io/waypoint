@@ -1,17 +1,17 @@
-// Excerpts already made, for the messages the chat shows now. An entry
-// belongs to one owner (client and conversation), one policy and one
-// message's current source; anything else is dropped when a render begins,
-// so no source of a message no longer shown is kept. Projection stays lazy:
-// an entry exists only once something asked for it.
-interface Entry {
+// What was already made from the messages the chat shows now (an excerpt,
+// a parsed body). An entry belongs to one owner (client and conversation),
+// one policy and one message's current source; anything else is dropped
+// when a render begins, so nothing of a message no longer shown is kept.
+// Projection stays lazy: an entry exists only once something asked for it.
+interface Entry<V> {
   source: unknown;
-  value: string | undefined;
+  value: V;
 }
 
-export class ExcerptCache {
+export class ShownCache<V> {
   private owner: string | undefined;
   private policy: readonly unknown[] = [];
-  private byId = new Map<string, Entry>();
+  private byId = new Map<string, Entry<V>>();
 
   /**
    * Starts a render for this owner, policy and the messages shown, each
@@ -43,12 +43,8 @@ export class ExcerptCache {
         this.byId.delete(id);
   }
 
-  /** The excerpt of a shown message, projected once per source. */
-  get<S>(
-    id: string,
-    source: S,
-    project: (source: S) => string | undefined,
-  ): string | undefined {
+  /** What is made from a shown message, once per source. */
+  get<S>(id: string, source: S, project: (source: S) => V): V {
     const entry = this.byId.get(id);
     if (entry && entry.source === source) return entry.value;
     const value = project(source);
@@ -61,3 +57,6 @@ export class ExcerptCache {
     return [...this.byId].map(([id, entry]) => ({ id, source: entry.source }));
   }
 }
+
+/** The outline's excerpts of the messages shown. */
+export class ExcerptCache extends ShownCache<string | undefined> {}

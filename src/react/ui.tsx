@@ -7,6 +7,7 @@ import type {
 } from "../core/form-fill";
 import {
   createContext,
+  memo,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -31,7 +32,7 @@ import type {
   Reply,
 } from "../protocol/generated";
 import { excerpt } from "./excerpt";
-import { ExcerptCache } from "./excerpt-cache";
+import { ExcerptCache, ShownCache } from "./excerpt-cache";
 import { useTranscriptPosition } from "./transcript";
 import { useAnnouncements, useHeldWhileInert } from "./announcements";
 import {
@@ -102,6 +103,10 @@ const RenderFailures = createContext<{
 // The message a body belongs to, so a chat can tell which messages show
 // nothing.
 const BodyOf = createContext<string | undefined>(undefined);
+// Keeps the parse of the message body below it, for that message's version.
+const ParseOf = createContext<
+  ((parse: () => ReactNode) => ReactNode) | undefined
+>(undefined);
 function ReportFailure({ id }: { id: string }) {
   const failures = useContext(RenderFailures);
   useEffect(() => {
@@ -959,6 +964,7 @@ function StockMarkdown({
   const failures = useContext(RenderFailures);
   const own = useId();
   const id = useContext(BodyOf) ?? own;
+  const cached = useContext(ParseOf);
   // In a chat the failure is said once for the transcript; elsewhere here.
   const failed = failures ? (
     <ReportFailure id={id} />
@@ -991,6 +997,7 @@ function StockMarkdown({
         images={provider.markdownImages}
         extraSchemes={provider.extraUrlSchemes}
         scrollLabel={t("chat.scrollRegion")}
+        cached={cached}
       />
     </RenderBoundary>
   );
@@ -1364,6 +1371,157 @@ function RailDrawer({
     </ModalDrawer>
   );
 }
+// What a message's parsed body is made from: a read that brings the same
+// text and sources again keeps the parse.
+const bodySource = (message: Message) =>
+  message.sources?.length
+    ? `${message.content}\u0000${JSON.stringify(message.sources)}`
+    : message.content;
+type CardAnswer = Pick<Reply, "kind"> & Record<string, unknown>;
+// What every message row calls, with one identity for the chat's life.
+interface RowEvents {
+  respond(block: Block, messageId: string): (reply: CardAnswer) => void;
+  parses: ShownCache<ReactNode>;
+}
+function RowActions({ slots, message }: { slots?: Slots; message: Message }) {
+  const { client } = context();
+  return (
+    <Part
+      name="messageActions"
+      slots={slots}
+      data={{
+        message: {
+          id: message.id,
+          role: message.role,
+          status: message.status,
+          versionIndex: message.versionIndex,
+          versionCount: message.versionCount,
+        },
+      }}
+    >
+      <MessageActions client={client} message={message} />
+    </Part>
+  );
+}
+// One message of the transcript. It renders again only when one of its
+// props changes: a delta into another message, or a keystroke in the
+// composer, leaves it as it is.
+const MessageRow = memo(function MessageRow({
+  message,
+  slots,
+  anchorId,
+  writing,
+  bodyUnavailable,
+  disabled,
+  answered,
+  actions,
+  rows,
+}: {
+  message: Message;
+  slots?: Slots;
+  anchorId: string;
+  // Still streaming in: what it says is not final.
+  writing: boolean;
+  // Its stock rendering failed.
+  bodyUnavailable: boolean;
+  disabled: boolean;
+  // Whether each of its blocks is answered, "1" or "0" in block order.
+  answered: string;
+  // Its actions follow it here (else after the plan).
+  actions: boolean;
+  rows: RowEvents;
+}) {
+  const t = context().format;
+  const parse = useMemo(() => {
+    const source = bodySource(message);
+    return (made: () => ReactNode) => rows.parses.get(message.id, source, made);
+  }, [rows, message]);
+  const sender = t(
+    message.role === "user" ? "chat.roleUser" : "chat.roleAssistant",
+  );
+  return (
+    <article
+      id={anchorId}
+      tabIndex={-1}
+      data-message-id={message.id}
+      data-role={message.role}
+      aria-busy={writing ? true : undefined}
+      // Named by its sender, whatever the bubble renders.
+      aria-label={sender}
+      // Nothing to show: the bubble is not drawn empty.
+      data-body-unavailable={bodyUnavailable ? "" : undefined}
+    >
+      <Part
+        name="bubble"
+        slots={slots}
+        data={{
+          message: {
+            id: message.id,
+            role: message.role,
+            content: message.content,
+            status: message.status,
+            versionIndex: message.versionIndex,
+            versionCount: message.versionCount,
+            blocks: message.blocks.map(blockSummary),
+          },
+        }}
+      >
+        {/* Seen first in the bubble; said once, as the article's name. */}
+        <span data-sender="" aria-hidden="true">
+          {sender}
+        </span>
+        <BodyOf.Provider value={message.id}>
+          <ParseOf.Provider value={parse}>
+            <Markdown
+              text={message.content}
+              writing={writing}
+              sources={message.sources}
+            />
+          </ParseOf.Provider>
+        </BodyOf.Provider>
+        {/* Seen in the bubble; said once, by the reply row. */}
+        {writing ? (
+          <span data-writing="" aria-hidden="true">
+            {t("reply.writing")}
+          </span>
+        ) : message.status === "stopped" ? (
+          <span data-stopped="">{t("reply.stopped")}</span>
+        ) : message.status === "failed" || message.status === "unavailable" ? (
+          // Seen in the reply it is about; said once, by the message region,
+          // not the reply row.
+          <span data-reply-ended={message.status}>
+            {t(`reply.${message.status}`)}
+          </span>
+        ) : null}
+        {message.blocks.map((block, index) => {
+          const isAnswered = answered[index] === "1";
+          return (
+            <Part
+              key={block.id}
+              name="widgetFrame"
+              slots={slots}
+              data={{ block: blockSummary(block) }}
+            >
+              <div
+                data-open-card={
+                  block.type === "card" && !isAnswered ? "true" : undefined
+                }
+              >
+                <Widget
+                  block={block}
+                  disabled={disabled || isAnswered}
+                  onReply={rows.respond(block, message.id)}
+                />
+                {block.answered ? <Answered block={block} /> : null}
+              </div>
+            </Part>
+          );
+        })}
+      </Part>
+      {actions ? <RowActions slots={slots} message={message} /> : null}
+    </article>
+  );
+});
 function ChatBody({
   slots,
   features,
@@ -1704,6 +1862,23 @@ function ChatBody({
       ),
     );
   };
+  // Each shown message's body is parsed once per version of what it says
+  // (its text and sources); a message no longer shown takes its parse with
+  // it at the next render.
+  const parses = useRef(new ShownCache<ReactNode>()).current;
+  const bodies = useMemo(
+    () =>
+      messages.map((message) => ({
+        id: message.id,
+        source: bodySource(message),
+      })),
+    [messages],
+  );
+  parses.begin(
+    ownerKey(client, shownId ?? ""),
+    [markdownModule, provider.extraUrlSchemes?.join(" "), renderRetry],
+    bodies,
+  );
   // Labels are made only while the outline shows them.
   const excerpts = outlineOpen ? messages.map(excerptOf) : [];
   const liveRegion = useRef<HTMLDivElement>(null);
@@ -1780,34 +1955,32 @@ function ChatBody({
   // Held while a modal drawer makes the row inert; said once it is live.
   const replyRow = useRef<HTMLDivElement>(null);
   const heldRow = useHeldWhileInert(row, replyRow);
-  const respond =
-    (block: Block, messageId: string) =>
-    (reply: Pick<Reply, "kind"> & Record<string, unknown>) => {
-      const pressed = deepActiveElement(document);
-      const id = cardReplyId(state.conversationId, messageId, block.id, reply);
-      // A press while the same answer is in flight leaves the id to it;
-      // otherwise this press frees it however the answer ends, a call that
-      // failed outright included.
-      const owned = !checking.current.has(id);
-      checking.current.add(id);
-      void answerCard(block, reply, messageId).then((outcome) => {
-        if (owned) checking.current.delete(id);
-        const now = client.getSnapshot();
-        // Refused, and the read after it shows the card answered: it was
-        // answered elsewhere (another tab, an earlier page), which the
-        // problem then says instead of the generic refusal.
-        if (
-          outcome?.accepted === false &&
-          outcome.problem?.code === "refused" &&
-          now.conversation?.messages
-            .find((message) => message.id === messageId)
-            ?.blocks.find((shown) => shown.id === block.id)?.answered
-        )
-          answeredElsewhere.current = now.problem;
-        pressedAnswer.current = pressed;
-        settleCard((count) => count + 1);
-      });
-    };
+  const respond = (block: Block, messageId: string) => (reply: CardAnswer) => {
+    const pressed = deepActiveElement(document);
+    const id = cardReplyId(state.conversationId, messageId, block.id, reply);
+    // A press while the same answer is in flight leaves the id to it;
+    // otherwise this press frees it however the answer ends, a call that
+    // failed outright included.
+    const owned = !checking.current.has(id);
+    checking.current.add(id);
+    void answerCard(block, reply, messageId).then((outcome) => {
+      if (owned) checking.current.delete(id);
+      const now = client.getSnapshot();
+      // Refused, and the read after it shows the card answered: it was
+      // answered elsewhere (another tab, an earlier page), which the
+      // problem then says instead of the generic refusal.
+      if (
+        outcome?.accepted === false &&
+        outcome.problem?.code === "refused" &&
+        now.conversation?.messages
+          .find((message) => message.id === messageId)
+          ?.blocks.find((shown) => shown.id === block.id)?.answered
+      )
+        answeredElsewhere.current = now.problem;
+      pressedAnswer.current = pressed;
+      settleCard((count) => count + 1);
+    });
+  };
   useLayoutEffect(() => {
     const pressed = pressedAnswer.current;
     const root = chatFocus.value.root();
@@ -1974,23 +2147,23 @@ function ChatBody({
     )
       ? lastMessage
       : undefined;
-  const messageActions = (message: Message) => (
-    <Part
-      name="messageActions"
-      slots={slots}
-      data={{
-        message: {
-          id: message.id,
-          role: message.role,
-          status: message.status,
-          versionIndex: message.versionIndex,
-          versionCount: message.versionCount,
-        },
-      }}
-    >
-      <MessageActions client={client} message={message} />
-    </Part>
+  // A row renders again only when what it shows changes: its message (a
+  // patch keeps every other message's identity), its flags, and these
+  // events, which keep one identity and call the current render's own.
+  const respondNow = useRef(respond);
+  respondNow.current = respond;
+  const rows = useMemo<RowEvents>(
+    () => ({
+      respond: (block, messageId) => (reply) =>
+        respondNow.current(block, messageId)(reply),
+      parses,
+    }),
+    [parses],
   );
+  const answeredOf = (message: Message) =>
+    message.blocks
+      .map((block) => (isAnswered(block, message.id) ? "1" : "0"))
+      .join("");
   return (
     <ChatFocusContext.Provider value={chatFocus.value}>
       <section
@@ -2141,111 +2314,21 @@ function ChatBody({
                         </Part>
                       ) : null}
                       {messages.map((message) => (
-                        <article
+                        <MessageRow
                           key={message.id}
-                          id={anchor(message.id)}
-                          tabIndex={-1}
-                          data-message-id={message.id}
-                          data-role={message.role}
-                          // Still streaming in: what it says is not final.
-                          aria-busy={
-                            message.id === writingId ? true : undefined
-                          }
-                          // Named by its sender, whatever the bubble renders.
-                          aria-label={t(
-                            message.role === "user"
-                              ? "chat.roleUser"
-                              : "chat.roleAssistant",
-                          )}
-                          // Nothing to show: the bubble is not drawn empty.
-                          data-body-unavailable={
+                          message={message}
+                          slots={slots}
+                          anchorId={anchor(message.id)}
+                          writing={message.id === writingId}
+                          bodyUnavailable={
                             failedBodies.has(message.id) &&
                             !message.blocks.length
-                              ? ""
-                              : undefined
                           }
-                        >
-                          <Part
-                            name="bubble"
-                            slots={slots}
-                            data={{
-                              message: {
-                                id: message.id,
-                                role: message.role,
-                                content: message.content,
-                                status: message.status,
-                                versionIndex: message.versionIndex,
-                                versionCount: message.versionCount,
-                                blocks: message.blocks.map(blockSummary),
-                              },
-                            }}
-                          >
-                            {/* Seen first in the bubble; said once, as the
-                                article's name. */}
-                            <span data-sender="" aria-hidden="true">
-                              {t(
-                                message.role === "user"
-                                  ? "chat.roleUser"
-                                  : "chat.roleAssistant",
-                              )}
-                            </span>
-                            <BodyOf.Provider value={message.id}>
-                              <Markdown
-                                text={message.content}
-                                writing={message.id === writingId}
-                                sources={message.sources}
-                              />
-                            </BodyOf.Provider>
-                            {/* Seen in the bubble; said once, by the reply
-                                row. */}
-                            {message.id === writingId ? (
-                              <span data-writing="" aria-hidden="true">
-                                {t("reply.writing")}
-                              </span>
-                            ) : message.status === "stopped" ? (
-                              <span data-stopped="">{t("reply.stopped")}</span>
-                            ) : message.status === "failed" ||
-                              message.status === "unavailable" ? (
-                              // Seen in the reply it is about; said once, by
-                              // the message region, not the reply row.
-                              <span data-reply-ended={message.status}>
-                                {t(`reply.${message.status}`)}
-                              </span>
-                            ) : null}
-                            {message.blocks.map((block) => (
-                              <Part
-                                key={block.id}
-                                name="widgetFrame"
-                                slots={slots}
-                                data={{ block: blockSummary(block) }}
-                              >
-                                <div
-                                  data-open-card={
-                                    block.type === "card" &&
-                                    !isAnswered(block, message.id)
-                                      ? "true"
-                                      : undefined
-                                  }
-                                >
-                                  <Widget
-                                    block={block}
-                                    disabled={
-                                      state.conversationUnavailable ||
-                                      isAnswered(block, message.id)
-                                    }
-                                    onReply={respond(block, message.id)}
-                                  />
-                                  {block.answered ? (
-                                    <Answered block={block} />
-                                  ) : null}
-                                </div>
-                              </Part>
-                            ))}
-                          </Part>
-                          {message === actionsAfterPlan
-                            ? null
-                            : messageActions(message)}
-                        </article>
+                          disabled={state.conversationUnavailable}
+                          answered={answeredOf(message)}
+                          actions={message !== actionsAfterPlan}
+                          rows={rows}
+                        />
                       ))}
                       {state.pending.map((pending) => (
                         <article
@@ -2394,7 +2477,9 @@ function ChatBody({
               ) : null}
             </Part>
             {narrow ? planPanel : null}
-            {actionsAfterPlan ? messageActions(actionsAfterPlan) : null}
+            {actionsAfterPlan ? (
+              <RowActions slots={slots} message={actionsAfterPlan} />
+            ) : null}
             {enabled("flows") ? (
               <Part name="flowTabs" slots={slots}>
                 <nav aria-label={t("chat.flows")}>

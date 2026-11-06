@@ -15,6 +15,10 @@
 - The `details` block (`BlockDetails`: `summary` and nested `blocks`) holds what supports an answer behind a native disclosure, closed until the user opens it, so the answer comes first.
 - An overdue reply offers "Keep waiting" and "Retry". `client.keepWaiting()` puts the reply row back to `writing` until another 15 seconds pass without progress; `client.retryReply()` does the same and reads the conversation again, so a retry never sends the message twice. `replyRow` takes `heldUntil` for a reply being written as well.
 
+### Changed
+
+- Confirm is named by the number of changes the host's record lists: "Apply 2 changes", "Schedule 1 change" ("应用 2 项修改"), and "Apply these changes" when it lists none. A host's `actionLabel` still names it verbatim. `ActionEntry.labelValues` carries the count, so a UI drawn from `/hooks` passes it: `t(entry.labelKey, entry.labelValues)`.
+
 ## 0.1.1-next.0 - 2026-11-06
 
 A pre-release, published under the `next` dist-tag.

@@ -70,7 +70,7 @@ function NativeLikePlan({ client }: { client: WaypointClient }) {
     <div>
       {view.actions.map((entry) => (
         <button key={entry.id} type="button">
-          {t(entry.labelKey)}
+          {t(entry.labelKey, entry.labelValues)}
         </button>
       ))}
     </div>
@@ -90,7 +90,7 @@ it("the plan's buttons have their text from /hooks, /messages and /messages/en",
   expect(buttons.length).toBeGreaterThan(0);
   for (const button of buttons) expect(button.textContent).not.toBe("");
   expect(buttons.map((button) => button.textContent)).toContain(
-    confirmationEnglish["chat.confirmation.apply"],
+    "Apply these changes",
   );
   client.dispose();
 });

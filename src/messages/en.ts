@@ -297,8 +297,10 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.recovery.stepStatusChanged": "Step status updated.",
   "chat.recovery.stepNotKnownYet": "Not known yet",
   "chat.confirmation.heading": "Review these changes",
-  "chat.confirmation.apply": "Apply these changes",
-  "chat.confirmation.schedule": "Schedule these changes",
+  "chat.confirmation.apply":
+    "{count, plural, =0 {Apply these changes} one {Apply # change} other {Apply # changes}}",
+  "chat.confirmation.schedule":
+    "{count, plural, =0 {Schedule these changes} one {Schedule # change} other {Schedule # changes}}",
   "chat.confirmation.unavailable":
     "This plan can't be confirmed in this app. Ask the site administrator to update it.",
   "chat.confirmation.expired":

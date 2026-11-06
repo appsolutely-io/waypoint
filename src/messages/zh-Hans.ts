@@ -264,8 +264,10 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.recovery.stepStatusChanged": "步骤状态已更新。",
   "chat.recovery.stepNotKnownYet": "暂未获知",
   "chat.confirmation.heading": "请核对以下修改",
-  "chat.confirmation.apply": "应用这些修改",
-  "chat.confirmation.schedule": "安排执行这些修改",
+  "chat.confirmation.apply":
+    "{count, plural, =0 {应用这些修改} other {应用 # 项修改}}",
+  "chat.confirmation.schedule":
+    "{count, plural, =0 {安排执行这些修改} other {安排执行 # 项修改}}",
   "chat.confirmation.unavailable":
     "此应用无法确认这个计划。请联系网站管理员更新应用。",
   "chat.confirmation.expired": "此确认已过期。请重新获取计划后再核对。",

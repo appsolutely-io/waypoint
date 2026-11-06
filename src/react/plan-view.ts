@@ -47,6 +47,8 @@ export type ActionId =
 export interface ActionEntry {
   id: ActionId;
   labelKey: MessageKey;
+  /** The values `labelKey` takes: the number of changes, for Confirm. */
+  labelValues?: Record<string, number>;
   available: boolean;
   reasonKey?: MessageKey;
   reasonValues?: Record<string, number>;
@@ -314,7 +316,9 @@ function confirmEntry(
       ? ("chat.confirmation.expired" as MessageKey)
       : undefined,
   );
-  return record.schedule ? { ...confirm, schedule: true } : confirm;
+  // Named by how many changes it applies: "Apply 2 changes".
+  const named = { ...confirm, labelValues: { count: record.items.length } };
+  return record.schedule ? { ...named, schedule: true } : named;
 }
 
 function protectedActions(

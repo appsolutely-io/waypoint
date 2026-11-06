@@ -264,7 +264,22 @@ describe.each(skins)("the host's confirmation (%s)", (_, skin) => {
   it("CK-A1b without a host label the action has the client's name", async () => {
     await chat(awaiting({ actionLabel: undefined }), skin);
     await waitFor(() => expect(apply()).not.toBeNull());
-    expect(apply()!.textContent).toBe(t("chat.confirmation.apply"));
+    expect(apply()!.textContent).toBe("Apply 1 change");
+  });
+  it("CK-A1c the client's name counts the record's changes", async () => {
+    const items = [
+      { label: "Item a: title", after: '"A"' },
+      { label: "Item b: title", after: '"B"' },
+    ];
+    await chat(awaiting({ actionLabel: undefined, items }), skin);
+    await waitFor(() => expect(apply()).not.toBeNull());
+    expect(apply()!.textContent).toBe("Apply 2 changes");
+    cleanup();
+    await chat(awaiting({ actionLabel: undefined, items }), skin, undefined, {
+      locale: "zh-CN",
+    });
+    await waitFor(() => expect(apply()).not.toBeNull());
+    expect(apply()!.textContent).toBe("应用 2 项修改");
   });
   it("CK-A2 CK-sched-same a scheduled record uses the same token path", async () => {
     const record = awaiting({
@@ -279,7 +294,7 @@ describe.each(skins)("the host's confirmation (%s)", (_, skin) => {
     record.plan = structuredClone(samples.TimedPlan) as PlanRecord["plan"];
     const { sent } = await chat(record, skin);
     await waitFor(() => expect(apply()).not.toBeNull());
-    expect(apply()!.textContent).toBe(t("chat.confirmation.schedule"));
+    expect(apply()!.textContent).toBe("Schedule 1 change");
     fireEvent.click(apply()!);
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]).toMatchObject({
@@ -1131,10 +1146,10 @@ describe("client messages in both languages", () => {
       "after",
       "refresh",
     ])
-      expect([key, zh(`chat.confirmation.${key}` as never)]).toEqual([
+      expect([
         key,
-        expect.stringMatching(/[一-鿿]/),
-      ]);
+        zh(`chat.confirmation.${key}` as never, { count: 2 }),
+      ]).toEqual([key, expect.stringMatching(/[一-鿿]/)]);
     expect(
       zh("chat.confirmation.verifications" as never, { count: 2 }),
     ).toContain("2");

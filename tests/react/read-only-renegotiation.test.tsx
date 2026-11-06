@@ -12,7 +12,7 @@ import type { PlanRecord } from "../../src/protocol/generated";
 import { renegotiationHost } from "../support/renegotiation";
 afterEach(cleanup);
 
-const confirm = "Apply these changes";
+const confirm = /^Apply (these|[0-9]+) changes?$/;
 const why =
   "Update the app to control this plan. Its recorded status is shown here.";
 

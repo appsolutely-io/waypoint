@@ -118,7 +118,7 @@ function PlanActions({ client }) {
       disabled={!entry.available}
       onPress={() => press(entry.id)}
     >
-      {t(entry.labelKey)}
+      {t(entry.labelKey, entry.labelValues)}
     </Button>
   ));
 }

@@ -19,6 +19,7 @@ export interface ActionEntry {
     id: ActionId;
     // (undocumented)
     labelKey: MessageKey;
+    labelValues?: Record<string, number>;
     // (undocumented)
     reasonKey?: MessageKey;
     // (undocumented)

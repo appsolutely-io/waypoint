@@ -549,6 +549,7 @@ describe("Table A: actions", () => {
     });
     expect(action({ plan: initial }, "confirm")).toMatchObject({
       labelKey: "chat.confirmation.apply",
+      labelValues: { count: initial.confirmation!.items.length },
     });
     const bare = { ...initial } as PlanRecord;
     delete bare.confirmation;

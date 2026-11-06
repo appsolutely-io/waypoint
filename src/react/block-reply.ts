@@ -11,7 +11,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type { ReplyInput, ReplyOutcome, WaypointClient } from "../core/client";
 import type { Block, Reply } from "../protocol/generated";
-import { clientOf, useWaypointSnapshot } from "./headless";
+import { clientOf, useWaypointSelector } from "./headless";
 
 /** An answer to a card, without the ids the hook fills in. */
 export type BlockAnswer = Pick<Reply, "kind"> & Record<string, unknown>;
@@ -128,7 +128,12 @@ export function cardReplyId(
 /** The card answer lock every renderer uses. */
 export function useBlockReply(client?: WaypointClient): BlockReply {
   const store = clientOf(client);
-  const { conversationId } = useWaypointSnapshot(store);
+  // The lock follows the conversation shown, not each delta of a reply.
+  const conversationId = useWaypointSelector(
+    (snapshot) => snapshot.conversationId,
+    Object.is,
+    store,
+  );
   const locks = locksOf(store);
   const subscribe = useCallback(
     (listener: () => void) => {

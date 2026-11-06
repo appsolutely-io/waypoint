@@ -1,5 +1,6 @@
 import {
   createContext,
+  memo,
   useContext,
   useEffect,
   useRef,
@@ -137,6 +138,8 @@ export function closeOpenMarkdown(text: string): string {
     if ((outside.split(marker).length - 1) % 2) closing = marker + closing;
   return text + closing;
 }
+// How much of the text still to show one frame of the reveal reads.
+const REVEAL_WINDOW = 4096;
 // One word segmenter per language, made on first use.
 const segmenters = new Map<string, Intl.Segmenter>();
 /**
@@ -153,7 +156,10 @@ export function nextReveal(text: string, from: number, lang?: string): number {
       lang ?? "",
       (segmenter = new Intl.Segmenter(lang, { granularity: "word" })),
     );
-  const segments = [...segmenter.segment(text.slice(from))];
+  // Only a window of what is still to show is read, so a frame costs the
+  // same however far behind the display is.
+  const until = Math.min(text.length, from + REVEAL_WINDOW);
+  const segments = [...segmenter.segment(text.slice(from, until))];
   const words = segments.filter((segment) => segment.isWordLike).length;
   let wanted = Math.max(1, Math.floor(words / 8));
   // Up to the end of the last whole word; what follows the last word (a
@@ -162,8 +168,9 @@ export function nextReveal(text: string, from: number, lang?: string): number {
   for (const segment of segments)
     if (segment.isWordLike) {
       const end = from + segment.index + segment.segment.length;
-      // A word at the very end may still be arriving: it waits for more.
-      if (end === text.length) break;
+      // A word at the very end may still be arriving, and one at the end of
+      // the window may go on past it: either waits.
+      if (end === until) break;
       at = end;
       if (--wanted === 0) return at;
     }
@@ -345,35 +352,114 @@ const components: Components = {
     );
   },
 };
-export default function Markdown(props: MarkdownProps) {
-  const { text, extraSchemes, sources = [] } = props;
+// Called as a function: the synchronous renderer is a plain function of its
+// options, so its result can be kept for a message or a finished block.
+function parse(
+  markdown: string,
+  sources: readonly Source[],
+  extraSchemes: readonly string[] | undefined,
+): ReactNode {
   // Sources that may be opened: the others are named but never linked.
   const safe = (source: Source) => isSafeUrl(source.url, extraSchemes);
-  // Called as a function: the synchronous renderer is a plain function of
-  // its options, so its result can be kept for a message.
-  const parse = (markdown: string) =>
-    ReactMarkdown({
-      skipHtml: true,
-      remarkPlugins: [gfm, [citations, { sources, safe }]],
-      urlTransform: (url) => (isSafeUrl(url, extraSchemes) ? url : undefined),
-      components,
-      children: markdown,
-    });
+  return ReactMarkdown({
+    skipHtml: true,
+    remarkPlugins: [gfm, [citations, { sources, safe }]],
+    urlTransform: (url) => (isSafeUrl(url, extraSchemes) ? url : undefined),
+    components,
+    children: markdown,
+  });
+}
+// A block of a reply being written that later text can no longer change:
+// parsed once, while the open block after it is parsed on every frame.
+const FinishedBlock = memo(function FinishedBlock(props: {
+  text: string;
+  sources: readonly Source[];
+  extraSchemes?: readonly string[];
+}) {
+  return parse(props.text, props.sources, props.extraSchemes);
+});
+// One identity, so a finished block's sources compare equal.
+const NO_SOURCES: readonly Source[] = [];
+const LIST_ITEM = /^(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
+const FENCE = /^ {0,3}(?:```|~~~)/;
+interface Blocks {
+  text: string;
+  // Where each block starts; the last one is still open.
+  starts: number[];
+  // How far whole lines have been read, and what they left open.
+  read: number;
+  fence: boolean;
+  blank: boolean;
+}
+/**
+ * Where the blocks of a text being written start: after a blank line
+ * outside a code fence, at a line that starts a new block (not indented,
+ * not a list item, which may continue the list before it). Text that
+ * continues what was read is read on from where it stopped.
+ */
+export function blockStarts(text: string, was?: Blocks): Blocks {
+  const state: Blocks =
+    was && text.startsWith(was.text)
+      ? { ...was, starts: was.starts, text }
+      : { text, starts: [0], read: 0, fence: false, blank: false };
+  for (;;) {
+    const end = text.indexOf("\n", state.read);
+    if (end < 0) break;
+    const line = text.slice(state.read, end);
+    if (!line.trim()) state.blank = !state.fence;
+    else {
+      if (
+        state.blank &&
+        !state.fence &&
+        !/^\s/.test(line) &&
+        !LIST_ITEM.test(line)
+      )
+        state.starts.push(state.read);
+      state.blank = false;
+      if (FENCE.test(line)) state.fence = !state.fence;
+    }
+    state.read = end + 1;
+  }
+  return state;
+}
+export default function Markdown(props: MarkdownProps) {
+  const { text, extraSchemes, sources = NO_SOURCES } = props;
+  const safe = (source: Source) => isSafeUrl(source.url, extraSchemes);
   const reduced = reducedMotion();
   const shown = useReveal(text, !!props.writing && !reduced, props.lang);
+  const blocks = useRef<Blocks | undefined>(undefined);
+  let body: ReactNode;
+  if (props.writing) {
+    // Only the open block is parsed again, with what it opened closed.
+    const read = (blocks.current = blockStarts(shown, blocks.current));
+    const starts = read.starts.filter((start) => start <= shown.length);
+    const open = starts.at(-1)!;
+    body = (
+      <>
+        {starts.slice(0, -1).map((start, index) => (
+          <FinishedBlock
+            key={start}
+            text={shown.slice(start, starts[index + 1])}
+            sources={sources}
+            extraSchemes={extraSchemes}
+          />
+        ))}
+        {parse(closeOpenMarkdown(shown.slice(open)), sources, extraSchemes)}
+      </>
+    );
+  } else {
+    blocks.current = undefined;
+    body = props.cached
+      ? props.cached(() => parse(text, sources, extraSchemes))
+      : parse(text, sources, extraSchemes);
+  }
   return (
     <div
       className="wp-markdown"
       // Under reduced motion a reply fades in instead of typing out.
       data-fade={props.writing && reduced ? "" : undefined}
     >
-      <Current.Provider value={props}>
-        {props.writing
-          ? parse(closeOpenMarkdown(shown))
-          : props.cached
-            ? props.cached(() => parse(text))
-            : parse(text)}
-      </Current.Provider>
+      <Current.Provider value={props}>{body}</Current.Provider>
       {sources.length ? (
         <details
           data-sources=""

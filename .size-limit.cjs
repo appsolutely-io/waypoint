@@ -162,11 +162,12 @@ const budgets = [
     path: "dist/hooks/index.js",
     // The renderer-neutral hooks with the client code they import: keys
     // only, no strings and no formatter (those are `messages` and a
-    // locale); React is the host's. Measured with Node 22's zlib: 5,451 B,
-    // with problemView and replyRowView, which a native UI needs to word a
-    // problem and the reply row as the web chat does. The limit is 3% above
-    // it, rounded down.
-    limit: "5.614 kB",
+    // locale); React is the host's. With problemView and replyRowView,
+    // which a native UI needs to word a problem and the reply row as the
+    // web chat does, and the selector hooks that let a native list follow
+    // one message: measured with Node 22's zlib at 5,828 B. The limit is 3%
+    // above it, rounded down.
+    limit: "6.002 kB",
     gzip: true,
     brotli: false,
     ignore: ["react"],

@@ -2,7 +2,11 @@
 // strings, for a host that draws its own UI (React Native included). They
 // return message keys; `./messages` and a locale entry give their text.
 // The `./react` entry exports the same hooks.
-export { useWaypointSnapshot } from "../react/headless";
+export {
+  useWaypointSnapshot,
+  useWaypointSelector,
+  useWaypointMessage,
+} from "../react/headless";
 export { usePlanView } from "../react/recovery";
 export type { KeepSheet } from "../react/recovery";
 export { useBlockReply, cardReplyId } from "../react/block-reply";

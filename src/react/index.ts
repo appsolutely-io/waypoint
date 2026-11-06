@@ -2,6 +2,8 @@ export {
   WaypointProvider,
   useWaypointClient,
   useWaypointSnapshot,
+  useWaypointSelector,
+  useWaypointMessage,
   useConversation,
   useComposer,
   usePlan,

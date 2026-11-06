@@ -24,11 +24,22 @@ it("renders an open bold as bold while writing, never as raw stars", async () =>
     <Markdown text="Here is **bold" writing />,
   );
   expect(container.textContent).not.toContain("**");
+  // Each frame of the reveal is recorded: "bold" may show for one frame
+  // only, between two polls.
+  const shown: string[] = [];
+  const raw: string[] = [];
+  new MutationObserver(() => {
+    const strong = container.querySelector("strong")?.textContent;
+    if (strong) shown.push(strong);
+    if (container.textContent?.includes("**")) raw.push(container.textContent);
+  }).observe(container, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+  });
   rerender(<Markdown text="Here is **bold and more" writing />);
-  await vi.waitFor(() =>
-    expect(container.querySelector("strong")?.textContent).toBe("bold"),
-  );
-  expect(container.textContent).not.toContain("**");
+  await vi.waitFor(() => expect(shown).toContain("bold"));
+  expect(raw).toEqual([]);
 });
 
 it("renders the text as it is once the reply is finished", () => {

@@ -79,11 +79,23 @@ import {
 } from "./i18n";
 import { isSafeUrl } from "./urls";
 import { usePlanView, type KeepSheet } from "./recovery";
-import { ClientContext, clientOf, useWaypointSnapshot } from "./headless";
+import {
+  ClientContext,
+  clientOf,
+  shallowEqual,
+  useWaypointMessage,
+  useWaypointSelector,
+  useWaypointSnapshot,
+} from "./headless";
 import { cardReplyId, useBlockReply } from "./block-reply";
 import type { PlanLabels } from "./step-name";
 export type { PlanLabels } from "./step-name";
-export { clientOf, useWaypointSnapshot };
+export {
+  clientOf,
+  useWaypointSnapshot,
+  useWaypointSelector,
+  useWaypointMessage,
+};
 import type { ActionEntry, ActionId, PlanView, StepStatus } from "./plan-view";
 import type { BlockSummary } from "./plan-view";
 import type { MarkdownImagePolicy } from "./markdown";
@@ -579,11 +591,33 @@ function useSystemScheme(): "light" | "dark" {
     () => "light",
   );
 }
+// The value given before when it equals this one: by `same`, else key by
+// key.
+function useStable<T extends object | undefined>(
+  value: T,
+  same: (a: NonNullable<T>, b: NonNullable<T>) => boolean = shallowEqual,
+): T {
+  const kept = useRef(value);
+  const was = kept.current;
+  if (
+    was !== value &&
+    !(was && value && same(was as NonNullable<T>, value as NonNullable<T>))
+  )
+    kept.current = value;
+  return kept.current;
+}
 export function WaypointProvider(props: WaypointProviderProps) {
   // A `theme` prop, whatever its value, makes waypoint's tokens win. So
   // does an explicit scheme the host's theme does not paint: its colours
   // are for the other scheme, so waypoint's own for the requested one.
-  const host = props.useThemeTokens?.();
+  // Equal values keep one identity, so a host that renders the provider
+  // again with the same props renders nothing below it again.
+  const { children, ...given } = props;
+  const options = useStable(given);
+  const host = useStable(
+    props.useThemeTokens?.(),
+    (a, b) => a.scheme === b.scheme && shallowEqual(a.tokens, b.tokens),
+  );
   const tokenSource =
     props.theme === undefined &&
     host &&
@@ -593,27 +627,31 @@ export function WaypointProvider(props: WaypointProviderProps) {
   // An explicit scheme first, then the host's theme, then the system's.
   const system = useSystemScheme();
   const colorScheme = props.colorScheme ?? host?.scheme ?? system;
+  const format = useMemo(
+    () => options.format ?? createFormatter(options.locale),
+    [options.format, options.locale],
+  );
   const value = useMemo<ContextValue>(
     () => ({
-      ...props,
+      ...options,
       colorScheme,
-      format: props.format ?? createFormatter(props.locale),
+      format,
       // The language of the text shown: the host's own when it formats.
-      lang: props.format
-        ? (props.locale ?? "en")
-        : catalogueFor(props.locale).lang,
+      lang: options.format
+        ? (options.locale ?? "en")
+        : catalogueFor(options.locale).lang,
       tokens: {
         ...(colorScheme === "dark" ? darkTheme : lightTheme),
-        ...(tokenSource === "host" ? host!.tokens : props.theme),
+        ...(tokenSource === "host" ? host!.tokens : options.theme),
       },
-      primitives: { ...defaults, ...props.primitives },
+      primitives: { ...defaults, ...options.primitives },
     }),
-    [props, colorScheme, tokenSource, host],
+    [options, format, colorScheme, tokenSource, host],
   );
   const Wrapper = props.wrapper;
   const content = (
     <ClientContext.Provider value={props.client}>
-      <Context.Provider value={value}>{props.children}</Context.Provider>
+      <Context.Provider value={value}>{children}</Context.Provider>
     </ClientContext.Provider>
   );
   return Wrapper ? (
@@ -657,7 +695,11 @@ export function useConversation(client?: WaypointClient) {
 export function useComposer(client?: WaypointClient) {
   const inherited = useContext(Context);
   const store = client ?? inherited?.client;
-  const snapshot = useWaypointSnapshot(client);
+  const snapshot = useWaypointSelector(
+    ({ draft, sending, hints }) => ({ draft, sending, hints }),
+    shallowEqual,
+    client,
+  );
   return {
     draft: snapshot.draft,
     sending: snapshot.sending,
@@ -672,10 +714,14 @@ export function useComposer(client?: WaypointClient) {
 export function usePlan(client?: WaypointClient) {
   const inherited = useContext(Context);
   const store = client ?? inherited?.client;
-  const snapshot = useWaypointSnapshot(client);
+  const plan = useWaypointSelector(
+    (snapshot) => snapshot.plan,
+    Object.is,
+    client,
+  );
   const { view } = usePlanView(client);
   return {
-    plan: snapshot.plan,
+    plan,
     setPlan: store!.setPlan,
     reply: store!.reply,
     // The same view every renderer reads (status, steps, actions, notices).
@@ -685,7 +731,11 @@ export function usePlan(client?: WaypointClient) {
 export function useFlows(client?: WaypointClient) {
   const inherited = useContext(Context);
   const store = client ?? inherited?.client;
-  const snapshot = useWaypointSnapshot(client);
+  const snapshot = useWaypointSelector(
+    ({ flows, flowTab }) => ({ flows, flowTab }),
+    shallowEqual,
+    client,
+  );
   return {
     flows: snapshot.flows,
     tab: snapshot.flowTab,
@@ -1610,6 +1660,18 @@ function ChatBody({
     );
   };
   useEffect(loadFlows, [client]);
+  // The Markdown chunk loads while the conversation is read, once the page
+  // is idle, so the first reply's text does not wait for it after the read.
+  // A message body that mounts first asks for it at once.
+  useEffect(() => {
+    const ask = () => markdownChunk.request();
+    if (typeof requestIdleCallback === "function") {
+      const idle = requestIdleCallback(ask, { timeout: 1000 });
+      return () => cancelIdleCallback(idle);
+    }
+    const timer = setTimeout(ask, 0);
+    return () => clearTimeout(timer);
+  }, []);
   const [, problemsLoaded] = useState(false);
   useEffect(() => {
     void import("./problem-messages").then((messages) => {

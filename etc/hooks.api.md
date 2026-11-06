@@ -2254,6 +2254,12 @@ export function usePlanView(client?: WaypointClient): {
     sheet: KeepSheet | null;
 };
 
+// @public
+export function useWaypointMessage(messageId: string, client?: WaypointClient): Message | undefined;
+
+// @public
+export function useWaypointSelector<T>(selector: (snapshot: ClientSnapshot) => T, isEqual?: (a: T, b: T) => boolean, client?: WaypointClient): T;
+
 // @public (undocumented)
 export function useWaypointSnapshot(client?: WaypointClient): ClientSnapshot;
 

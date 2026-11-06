@@ -14,7 +14,7 @@ import {
   type ActionId,
   type ViewMessage,
 } from "./plan-view";
-import { clientOf, useWaypointSnapshot } from "./headless";
+import { clientOf, shallowEqual, useWaypointSelector } from "./headless";
 
 export interface KeepSheet {
   messages: ViewMessage[];
@@ -23,6 +23,8 @@ export interface KeepSheet {
   onCancel(): void;
 }
 
+// The review while there is no plan.
+const NO_KEEP_REVIEW = { disabled: "keepNoDecision" } as const;
 /**
  * The plan view of the current plan and its presses, for every renderer.
  * Presses go through the client; this hook only tracks a press that has no
@@ -30,7 +32,27 @@ export interface KeepSheet {
  */
 export function usePlanView(client?: WaypointClient) {
   const store = clientOf(client);
-  const snapshot = useWaypointSnapshot(store);
+  // What the view is made from, so a delta of a reply renders nothing here.
+  const snapshot = useWaypointSelector(
+    (current) => ({
+      plan: current.plan,
+      intentOverlays: current.intentOverlays,
+      conversationId: current.conversationId,
+      capabilities: current.capabilities,
+      conversationUnavailable: current.conversationUnavailable,
+      intentNotice: current.intentNotice,
+      intentAlert: current.intentAlert,
+      planReadOnly: current.planReadOnly,
+      // Read from the client, not the snapshot: compared by value below.
+      keepReview: current.plan
+        ? store.keepChangesReview(current.plan.id)
+        : NO_KEEP_REVIEW,
+    }),
+    (a, b) =>
+      shallowEqual({ ...a, keepReview: 0 }, { ...b, keepReview: 0 }) &&
+      JSON.stringify(a.keepReview) === JSON.stringify(b.keepReview),
+    store,
+  );
   const plan = snapshot.plan;
   const [pending, setPending] = useState<IntentKind[]>([]);
   const [now, setNow] = useState(() => Date.now());
@@ -66,9 +88,7 @@ export function usePlanView(client?: WaypointClient) {
     overlay,
     notice: snapshot.intentNotice,
     alert: snapshot.intentAlert,
-    keepReview: plan
-      ? store.keepChangesReview(plan.id)
-      : { disabled: "keepNoDecision" },
+    keepReview: snapshot.keepReview,
     pending,
     now: Math.max(now, Date.now()),
     conversationId: snapshot.conversationId,

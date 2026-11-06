@@ -256,6 +256,25 @@ test.describe("on a phone", () => {
       Math.abs(box.x + box.width - (bubble.x + bubble.width)),
     ).toBeLessThan(1);
   });
+  for (const skin of ["neutral", "antd"])
+    test(`a sent message ends its actions at the message's edge: ${skin}`, async ({
+      page,
+    }) => {
+      // The group also holds the empty status that says Copied.
+      await page.goto(`/?state=streaming&skin=${skin}`);
+      const message = page.locator('article[data-role="user"]').last();
+      const last = message
+        .locator('[data-part="messageActions"] button')
+        .last();
+      await expect(last).toBeVisible();
+      const bubble = (await message
+        .locator('[data-part="bubble"]')
+        .boundingBox())!;
+      const box = (await last.boundingBox())!;
+      expect(
+        Math.abs(box.x + box.width - (bubble.x + bubble.width)),
+      ).toBeLessThan(1);
+    });
   test("a message not sent has its error and Details with it", async ({
     page,
   }) => {

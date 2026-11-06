@@ -213,8 +213,15 @@
 }
 /* The space is between buttons: the last one in a group ends at the
    group's edge, so a group aligned to the end lines up with what is above. */
-.waypoint button:last-child {
+.waypoint button:last-child,
+.waypoint button:not(:has(~ button)) {
   margin-inline-end: 0;
+}
+/* An empty status after a group's buttons (it says Copied, or Loading)
+   takes no place in the row, so the row ends at its last button; it stays
+   in the page, so what it says later is still announced. */
+.waypoint [role="group"] > [role="status"]:empty {
+  position: absolute;
 }
 /* Neutral buttons are drawn from the tokens, so an unavailable one can
    look different from an available one. */

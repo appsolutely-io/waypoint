@@ -82,7 +82,7 @@ function Scenario({ view }: { view: View }) {
     let resource: Preview | undefined;
     setFailed(false);
     setPreview(undefined);
-    void createPreview(view.scenario, view.lang).then(
+    void createPreview(view.scenario, view.lang, view.state).then(
       (value) => {
         resource = value;
         if (live) setPreview(value);
@@ -96,7 +96,7 @@ function Scenario({ view }: { view: View }) {
       live = false;
       resource?.dispose();
     };
-  }, [view.scenario, attempt]);
+  }, [view.scenario, view.state, attempt]);
   useEffect(() => {
     void preview?.setLanguage(view.lang).catch(() => setFailed(true));
   }, [preview, view.lang]);
@@ -161,7 +161,15 @@ function App() {
           aria-label={copy.settings}
         >
           {(
-            ["scenario", "skin", "scheme", "layout", "dir", "lang"] as const
+            [
+              "scenario",
+              "state",
+              "skin",
+              "scheme",
+              "layout",
+              "dir",
+              "lang",
+            ] as const
           ).map((key) => (
             <label key={key} htmlFor={`preview-${key}`}>
               {copy.labels[key]}
@@ -185,7 +193,7 @@ function App() {
         data-layout={view.layout}
         aria-label={copy.names[view.scenario]}
       >
-        <Scenario key={view.scenario} view={view} />
+        <Scenario key={`${view.scenario}:${view.state}`} view={view} />
       </main>
     </div>
   );

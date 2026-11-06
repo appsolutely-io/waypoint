@@ -8,13 +8,22 @@ import { createFormSession } from "../src/core/form-session";
 import type { HttpRequest } from "../src/conformance/index";
 import type { Flow } from "../src/protocol/generated";
 import type { View } from "./state";
+import type { FixtureTurn } from "../fixtures/server/index";
 
 import { translatePreview } from "./copy";
 import { localizeConversation, localizeForm } from "./localize";
+import {
+  STATE_TITLE,
+  defaultTurn,
+  stateQuestion,
+  statePlan,
+  stateTurn,
+} from "./reply-states";
 
 export async function createPreview(
   scenario: View["scenario"],
   language: View["lang"] = "en",
+  replyState: View["state"] = "idle",
 ) {
   let locale = language;
   const response = await fetch("/api/__conformance/session", {
@@ -30,12 +39,19 @@ export async function createPreview(
     return { status: result.status, body: await result.json() };
   };
   const baseSource = createHttpConversationSource(request);
+  // A reply state opens a conversation of its own on every load; only the
+  // one shown is listed.
+  const staged = scenario === "chat" && replyState !== "idle";
   const source = {
     list: async (key?: string) =>
-      (await baseSource.list(key)).map((item) => ({
-        ...item,
-        title: translatePreview(item.title, locale),
-      })),
+      (await baseSource.list(key))
+        .filter(
+          (item) => item.title !== STATE_TITLE || item.id === conversation.id,
+        )
+        .map((item) => ({
+          ...item,
+          title: translatePreview(item.title, locale),
+        })),
     create: baseSource.create,
   };
   const form =
@@ -73,6 +89,14 @@ export async function createPreview(
       mode: "form-fill",
       subject,
     });
+  } else if (staged) {
+    const created = await request("/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ protocol: "1.1", title: STATE_TITLE }),
+    });
+    if (created.status !== 201) throw new Error("Preview unavailable");
+    conversation = created.body as { id: string };
   } else {
     const list = await baseSource.list();
     const found = list.find((item) => item.title === titles[scenario]);
@@ -102,17 +126,33 @@ export async function createPreview(
       body: "Prepare a weekly report",
     },
   ];
+  // The mock host's event stream, read as it arrives: replies stream in
+  // a piece at a time, as from a real host. A form-bound conversation's
+  // mock only signals that it changed.
   const transport = createHttpTransport(
     request,
     {
       subscribe: (path, onChunk, onStatus) => {
         const controller = new AbortController();
-        onStatus("open");
-        void fetch("/api" + path, { signal: controller.signal })
+        onStatus("connecting");
+        void fetch("/api" + path, {
+          signal: controller.signal,
+          headers: { Accept: "text/event-stream" },
+        })
           .then(async (result) => {
-            if (!result.ok) throw new Error("Stream unavailable");
-            const body = await result.text();
-            if (!controller.signal.aborted) onChunk(body + "\n");
+            if (!result.ok || !result.body)
+              throw new Error("Stream unavailable");
+            onStatus("open");
+            const reader = result.body
+              .pipeThrough(new TextDecoderStream())
+              .getReader();
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done || controller.signal.aborted) break;
+              onChunk(value);
+            }
+            // A body that ends without a line break still ends its line.
+            if (!controller.signal.aborted) onChunk("\n");
           })
           .catch(() => {
             if (!controller.signal.aborted) onStatus("unavailable");
@@ -120,13 +160,30 @@ export async function createPreview(
         return () => controller.abort();
       },
     },
-    "signals",
+    form ? "signals" : "sse",
   );
+  // The mock host answers every message: a reply state's own turn when one
+  // was just scripted, otherwise a short streamed answer.
+  let scripted = false;
+  const script = async (turn: FixtureTurn) => {
+    const result = await request("/__conformance/script", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turns: [turn] }),
+    });
+    if (result.status !== 200) throw new Error("Preview unavailable");
+  };
   const client = createWaypointClient({
     accountId: "playground",
     conversationId: conversation.id,
     transport: {
       ...transport,
+      send: async (reply, ...rest) => {
+        if (reply.kind === "message" && !form && !scripted)
+          await script(defaultTurn(locale));
+        scripted = false;
+        return transport.send(reply, ...rest);
+      },
       read: async (...args) =>
         localizeConversation(await transport.read(...args), locale),
     },
@@ -203,6 +260,14 @@ export async function createPreview(
     client.dispose();
     form?.dispose();
     throw new Error("Preview unavailable");
+  }
+  if (staged) {
+    // The host is told what to do with the next message, then it is asked.
+    await script(stateTurn(replyState, language));
+    scripted = true;
+    await client.setDraft(stateQuestion(language));
+    await client.send();
+    if (replyState === "plan") client.setPlan(statePlan(conversation.id));
   }
   return {
     client,

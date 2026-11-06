@@ -5,7 +5,31 @@ export const choices = {
   dir: ["ltr", "rtl"],
   lang: ["en", "zh-CN"],
   scenario: ["chat", "form-fill", "flows", "transcript"],
+  state: [
+    "idle",
+    "streaming",
+    "done",
+    "overdue",
+    "reply-failed",
+    "reply-unavailable",
+    "error-retryable",
+    "error-rate-limited",
+    "error-unavailable",
+    "error-refused",
+    "error-closed",
+    "error-full",
+    "error-declined",
+    "error-sign-in",
+    "error-in-doubt",
+    "error-replaced",
+    "plan",
+    "form",
+  ],
 } as const;
+/** The states in which the host refuses the message, one per problem code. */
+export const problemStates = choices.state.filter((value) =>
+  value.startsWith("error-"),
+);
 export type View = { [K in keyof typeof choices]: (typeof choices)[K][number] };
 export function readView(search: string): View {
   const query = new URLSearchParams(search);
@@ -22,5 +46,6 @@ export function readView(search: string): View {
     dir: pick("dir"),
     lang: pick("lang"),
     scenario: pick("scenario"),
+    state: pick("state"),
   };
 }

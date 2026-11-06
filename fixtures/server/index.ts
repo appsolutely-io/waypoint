@@ -19,6 +19,19 @@ export interface FixtureTurn {
   content?: string;
   blocks?: Block[];
   problem?: Problem;
+  /**
+   * The reply streams in: these pieces arrive as text deltas on the
+   * conversation's event stream, `interval` ms apart, after the message is
+   * accepted. `content` is ignored for a streamed reply.
+   */
+  chunks?: string[];
+  interval?: number;
+  /** How a streamed reply ends; `held` leaves it being written. */
+  ending?: "completed" | "failed" | "unavailable" | "held";
+  /** Accept the message and never start a reply. */
+  silent?: boolean;
+  /** The accepted message was asked this many ms ago. */
+  askedAgo?: number;
 }
 export type FixtureFault =
   | "version"
@@ -70,6 +83,60 @@ export async function createFixtureServer(options: {
       }
   };
   let issued = 0;
+  // Live event streams by conversation, and the timers of replies still
+  // streaming in, so closing the server stops them.
+  const live = new Map<string, Set<(frame: object) => void>>();
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  let sequence = 1;
+  const publish = (conversationId: string, frame: object) => {
+    const body = { protocol: protocol, sequence: ++sequence, ...frame };
+    for (const write of live.get(conversationId) ?? []) write(body);
+  };
+  // Streams a scripted reply into a stored assistant message.
+  const stream = (
+    conversation: Conversation,
+    message: Message,
+    turn: FixtureTurn,
+  ) => {
+    const pieces = [...(turn.chunks ?? [])];
+    const step = (at: number) => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        if (at === 0)
+          publish(conversation.id, {
+            type: "message.start",
+            messageId: message.id,
+            role: "assistant",
+          });
+        const text = pieces.shift();
+        if (text !== undefined) {
+          message.content += text;
+          publish(conversation.id, {
+            type: "text.delta",
+            messageId: message.id,
+            text,
+          });
+          return step(at + 1);
+        }
+        if (turn.ending === "held") return;
+        // A host that loses a reply says so on the conversation, which the
+        // next read carries; the reply itself is never finished.
+        if (turn.ending === "failed" || turn.ending === "unavailable") {
+          conversation.replyStatus = turn.ending;
+          publish(conversation.id, { type: "stale", reads: ["conversation"] });
+          return;
+        }
+        message.status = "completed";
+        publish(conversation.id, {
+          type: "message.end",
+          messageId: message.id,
+          status: "completed",
+        });
+      }, turn.interval ?? 120);
+      timers.add(timer);
+    };
+    step(0);
+  };
   const server = createServer((req, res) => {
     // A rejected handler answers a fixed error instead of escaping.
     handle(req, res).catch(() => {
@@ -312,9 +379,17 @@ export async function createFixtureServer(options: {
       res.write(
         `data: ${JSON.stringify({ protocol: answered, sequence: 1, type: "stale", reads: ["conversation"] })}\n\n`,
       );
+      const write = (frame: object) =>
+        res.write(`data: ${JSON.stringify(frame)}\n\n`);
+      let writers = live.get(conversation.id);
+      if (!writers) live.set(conversation.id, (writers = new Set()));
+      writers.add(write);
       const stream = { agreement, end: () => res.end() };
       streams.add(stream);
-      req.on("close", () => streams.delete(stream));
+      req.on("close", () => {
+        streams.delete(stream);
+        writers.delete(write);
+      });
       return;
     }
     if (match?.[2] === "stream") {
@@ -350,10 +425,22 @@ export async function createFixtureServer(options: {
         clientMessageId: String(body.clientMessageId),
         content: String(body.content),
         blocks: [],
-        createdAt: Date.now(),
+        createdAt: Date.now() - (turn?.askedAgo ?? 0),
       };
       conversation.messages.push(message);
-      if (turn && options.fault !== "refetch")
+      if (turn?.chunks && options.fault !== "refetch") {
+        const answer: Message = {
+          id: `message-${++next}`,
+          role: "assistant",
+          content: "",
+          blocks: turn.blocks ?? [],
+          createdAt: Date.now(),
+          status: "writing",
+        };
+        conversation.messages.push(answer);
+        delete conversation.replyStatus;
+        stream(conversation, answer, turn);
+      } else if (turn && !turn.silent && options.fault !== "refetch")
         conversation.messages.push({
           id: `message-${++next}`,
           role: "assistant",
@@ -420,6 +507,8 @@ export async function createFixtureServer(options: {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
     close: () =>
       new Promise<void>((resolve, reject) => {
+        for (const timer of timers) clearTimeout(timer);
+        timers.clear();
         endStreams(() => true);
         protectedPlans.dispose();
         server.close((error) => (error ? reject(error) : resolve()));

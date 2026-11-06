@@ -150,11 +150,19 @@ export function nextReveal(text: string, from: number, lang?: string): number {
   let wanted = Math.max(1, Math.floor(words / 8));
   // Up to the end of the last whole word; what follows the last word (a
   // full stop, a space) comes with the rest.
+  let at = from;
   for (const segment of segments)
-    if (segment.isWordLike && --wanted === 0 && words > 1)
-      return from + segment.index + segment.segment.length;
-  return text.length;
+    if (segment.isWordLike) {
+      const end = from + segment.index + segment.segment.length;
+      // A word at the very end may still be arriving: it waits for more.
+      if (end === text.length) break;
+      at = end;
+      if (--wanted === 0) return at;
+    }
+  return at;
 }
+// How long a last word waits for the rest of it.
+const HOLD_MS = 400;
 const reducedMotion = () =>
   typeof matchMedia === "function" &&
   matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -175,9 +183,14 @@ function useReveal(text: string, live: boolean, lang?: string) {
   shown.current = text.slice(0, at);
   useEffect(() => {
     if (!live || at >= text.length) return;
-    const frame = requestAnimationFrame(() =>
-      setCount(nextReveal(text, at, lang)),
-    );
+    const next = nextReveal(text, at, lang);
+    // Only a last word that may still be arriving is left: it shows once
+    // no more text has come for a moment, so a stalled reply hides none.
+    if (next === at) {
+      const wait = setTimeout(() => setCount(text.length), HOLD_MS);
+      return () => clearTimeout(wait);
+    }
+    const frame = requestAnimationFrame(() => setCount(next));
     return () => cancelAnimationFrame(frame);
   }, [live, at, text, lang]);
   return shown.current;

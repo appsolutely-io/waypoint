@@ -20,8 +20,11 @@ it.each([
 });
 
 it("renders an open bold as bold while writing, never as raw stars", async () => {
-  const { container } = render(<Markdown text="Here is **bold" writing />);
+  const { container, rerender } = render(
+    <Markdown text="Here is **bold" writing />,
+  );
   expect(container.textContent).not.toContain("**");
+  rerender(<Markdown text="Here is **bold and more" writing />);
   await vi.waitFor(() =>
     expect(container.querySelector("strong")?.textContent).toBe("bold"),
   );

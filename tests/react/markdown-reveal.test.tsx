@@ -23,6 +23,11 @@ it("reveals up to whole words, and more of them the further it is behind", () =>
   expect(long.slice(0, step).trim().split(/\s+/).length).toBeGreaterThan(2);
   expect(/\S$/.test(long.slice(0, step))).toBe(true);
   expect(nextReveal(words, words.length, "en")).toBe(words.length);
+  // A last word may still be arriving: it is not shown half typed.
+  expect(
+    "Here is what cha".slice(0, nextReveal("Here is what cha", 8, "en")),
+  ).toBe("Here is what");
+  expect(nextReveal("Here is what cha", 12, "en")).toBe(12);
 });
 
 it("finds word boundaries in Chinese text", () => {
@@ -33,12 +38,23 @@ it("finds word boundaries in Chinese text", () => {
 });
 
 it("types a reply being written out over frames", async () => {
-  const { container } = render(<Markdown text={words} writing />);
+  const { container, rerender } = render(<Markdown text={words} writing />);
   const first = container.textContent ?? "";
   expect(first.length).toBeLessThan(words.length);
+  // Up to the last word, which may still be arriving.
+  await waitFor(
+    () =>
+      expect(container.textContent).toBe(
+        "The first order shipped on Monday and arrived a day",
+      ),
+    { timeout: 3000 },
+  );
+  // Nothing more arrives: the last word shows after a moment.
   await waitFor(() => expect(container.textContent).toBe(words), {
     timeout: 3000,
   });
+  rerender(<Markdown text={words} />);
+  expect(container.textContent).toBe(words);
 });
 
 it("shows a finished reply whole at once", () => {

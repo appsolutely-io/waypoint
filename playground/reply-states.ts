@@ -44,6 +44,7 @@ const copy = {
     planFailed:
       "I applied the plan. One change did not go through; it is marked below.",
     stepFailed: "The order changed since the plan was made.",
+    planBlock: "Plan: update 2 records in orders",
     form: "I need the order number before I can look this up.",
     orderLabel: "Order number",
     noteLabel: "Note",
@@ -80,6 +81,7 @@ const copy = {
     partial: "我开始读取订单，然后",
     plan: "我准备了一个计划。执行前请先检查改动。",
     planFailed: "计划已执行。其中一项修改没有完成，已在下方标出。",
+    planBlock: "计划：更新订单中的 2 条记录",
     stepFailed: "制定计划后，这个订单已有变化。",
     form: "我需要订单号才能查询。",
     orderLabel: "订单号",
@@ -208,10 +210,12 @@ export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
         interval: 40,
         ending: "unavailable",
       };
+    // The reply holds the plan's block, as a host sends it: narrow, the plan
+    // is shown inside the reply, before its actions.
     case "plan":
-      return { content: text.plan };
+      return { content: text.plan, blocks: [planBlock(text.planBlock)] };
     case "plan-step-failed":
-      return { content: text.planFailed };
+      return { content: text.planFailed, blocks: [planBlock(text.planBlock)] };
     case "form":
       return {
         content: text.form,
@@ -239,6 +243,13 @@ export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
       return {};
   }
 }
+
+const planBlock = (fallback: string) => ({
+  type: "plan" as const,
+  id: "playground-plan-block",
+  fallback,
+  body: { planId: "playground-plan" },
+});
 
 /** What the mock host answers any other message with. */
 export const defaultTurn = (lang: View["lang"]): FixtureTurn => ({

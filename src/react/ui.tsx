@@ -1958,6 +1958,39 @@ function ChatBody({
         ) : null}
       </PlanRegion>
     ) : null;
+  // Narrow, the plan follows the messages. When the reply that presents it
+  // is the last message (it holds the plan's block, and nothing was sent
+  // after it), that reply's actions follow the plan, so the reply reads as
+  // its text, the plan, then Copy and the ratings.
+  const lastMessage = messages.at(-1);
+  const actionsAfterPlan =
+    narrow &&
+    planPanel &&
+    !state.pending.length &&
+    lastMessage?.blocks.some(
+      (block) =>
+        block.type === "plan" &&
+        (block.body as { planId?: unknown } | null)?.planId === plan?.id,
+    )
+      ? lastMessage
+      : undefined;
+  const messageActions = (message: Message) => (
+    <Part
+      name="messageActions"
+      slots={slots}
+      data={{
+        message: {
+          id: message.id,
+          role: message.role,
+          status: message.status,
+          versionIndex: message.versionIndex,
+          versionCount: message.versionCount,
+        },
+      }}
+    >
+      <MessageActions client={client} message={message} />
+    </Part>
+  );
   return (
     <ChatFocusContext.Provider value={chatFocus.value}>
       <section
@@ -2209,21 +2242,9 @@ function ChatBody({
                               </Part>
                             ))}
                           </Part>
-                          <Part
-                            name="messageActions"
-                            slots={slots}
-                            data={{
-                              message: {
-                                id: message.id,
-                                role: message.role,
-                                status: message.status,
-                                versionIndex: message.versionIndex,
-                                versionCount: message.versionCount,
-                              },
-                            }}
-                          >
-                            <MessageActions client={client} message={message} />
-                          </Part>
+                          {message === actionsAfterPlan
+                            ? null
+                            : messageActions(message)}
                         </article>
                       ))}
                       {state.pending.map((pending) => (
@@ -2363,6 +2384,7 @@ function ChatBody({
               ) : null}
             </Part>
             {narrow ? planPanel : null}
+            {actionsAfterPlan ? messageActions(actionsAfterPlan) : null}
             {enabled("flows") ? (
               <Part name="flowTabs" slots={slots}>
                 <nav aria-label={t("chat.flows")}>

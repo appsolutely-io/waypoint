@@ -82,3 +82,79 @@ describe.each([
     client.dispose();
   });
 });
+
+// A reply that presents the plan is read as its text, then the plan, then
+// its own actions: copying or rating it comes after what it proposes.
+describe.each([
+  ["neutral", {}],
+  ["antd", { primitives: antdPrimitives }],
+] as const)("the actions of the reply with the plan (%s)", (_, skin) => {
+  it("narrow: after the plan; wide: in the reply", async () => {
+    const base = config();
+    const client = createWaypointClient({
+      ...base,
+      transport: {
+        ...base.transport,
+        read: async () => ({
+          protocol: "1.0",
+          id: "conversation-a",
+          title: "Chat",
+          messages: [
+            {
+              id: "u",
+              role: "user",
+              content: "Change it",
+              blocks: [],
+              createdAt: 0,
+            },
+            {
+              id: "a",
+              role: "assistant",
+              content: "I prepared a plan.",
+              blocks: [
+                {
+                  type: "plan",
+                  id: "b",
+                  fallback: "The plan",
+                  body: { planId: "plan-a" },
+                },
+              ],
+              createdAt: 1,
+              status: "completed",
+            },
+          ],
+        }),
+      },
+    });
+    render(<WaypointChat client={client} {...skin} />);
+    await act(async () => {
+      await client.ready;
+      client.setPlan(plan);
+    });
+    const root = document.querySelector<HTMLElement>(".waypoint")!;
+    Object.defineProperty(root, "getBoundingClientRect", {
+      configurable: true,
+      value: () => DOMRect.fromRect({ width, height: 600 }),
+    });
+    const region = () =>
+      document.querySelector<HTMLElement>(
+        `:is(aside, section)[aria-label="${english["chat.plan"]}"]`,
+      )!;
+    const reply = () => document.querySelector('article[data-message-id="a"]')!;
+    const actions = () =>
+      document.querySelectorAll('[data-part="messageActions"]');
+    await measure(300);
+    // Each message keeps one set of actions.
+    expect(actions()).toHaveLength(2);
+    const last = actions()[1]!;
+    expect(reply().contains(last)).toBe(false);
+    expect(before(region(), last)).toBe(true);
+    expect(before(last, screen.getByRole("textbox", { name: "Message" }))).toBe(
+      true,
+    );
+    await measure(1000);
+    expect(actions()).toHaveLength(2);
+    expect(reply().contains(actions()[1]!)).toBe(true);
+    client.dispose();
+  });
+});

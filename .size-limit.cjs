@@ -27,10 +27,11 @@ const budgets = [
     path: "dist/index.js",
     // Besides the read-handler failure reported once per load, the frozen
     // read-only Keep review and the bounded read after a reply, a stopped
-    // reply's dropped text and the wait an overdue reply is given again
-    // must act on frames and timers here. Measured with Node 22's zlib:
-    // 15,188 B; the limit is 3% above it, rounded down.
-    limit: "15.643 kB",
+    // reply's dropped text, the version each stop is for and the wait an
+    // overdue reply is given again must act on frames and timers here.
+    // Measured with Node 22's zlib: 15,756 B; the limit is 3% above it,
+    // rounded down.
+    limit: "16.228 kB",
     gzip: true,
     brotli: false,
     ignore: [
@@ -93,9 +94,10 @@ const budgets = [
   {
     name: "lazy conformance runners",
     path: "dist/conformance.js",
-    // The reply stop check: measured with Node 22's zlib at 5,159 B, the
-    // limit is 3% above it, rounded down.
-    limit: "5.313 KB",
+    // The reply stop check, with its stop of another version and its
+    // agreement check: measured with Node 22's zlib at 5,371 B, the limit
+    // is 3% above it, rounded down.
+    limit: "5.532 KB",
     gzip: true,
     brotli: false,
   },

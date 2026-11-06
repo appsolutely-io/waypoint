@@ -347,6 +347,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.message.actions": "消息操作",
   "chat.message.copy": "复制",
   "chat.message.copied": "已复制",
+  "chat.message.copyFailed": "无法复制",
   "chat.message.regenerate": "重新生成",
   "chat.message.edit": "编辑",
   "chat.message.editLabel": "编辑消息",

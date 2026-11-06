@@ -84,6 +84,23 @@ it("copies a message's text and says it was copied", async () => {
   client.dispose();
 });
 
+it.each([
+  ["refuses", { writeText: async () => Promise.reject(new Error("denied")) }],
+  ["is missing", undefined],
+])("says a copy failed when the clipboard %s", async (_name, clipboard) => {
+  Object.defineProperty(navigator, "clipboard", {
+    value: clipboard,
+    configurable: true,
+  });
+  const client = await chat();
+  const actions = within(actionsOf("a1"));
+  await userEvent.click(await actions.findByRole("button", { name: "Copy" }));
+  await waitFor(() =>
+    expect(actions.getByRole("status").textContent).toBe("Could not copy"),
+  );
+  client.dispose();
+});
+
 it("regenerates a reply and edits and resends the user's message", async () => {
   const regenerate = vi.fn(async () => {});
   const edit = vi.fn(async () => {});

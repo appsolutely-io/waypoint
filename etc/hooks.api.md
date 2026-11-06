@@ -1950,7 +1950,7 @@ export interface ReplyMessage {
 }
 
 // @public (undocumented)
-export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting" | "chat.tool.working" | "chat.tool.running" | "chat.tool.done" | "chat.tool.failed" | "chat.tool.show" | "chat.tool.hide" | "chat.message.actions" | "chat.message.copy" | "chat.message.copied" | "chat.message.regenerate" | "chat.message.edit" | "chat.message.editLabel" | "chat.message.resend" | "chat.message.good" | "chat.message.bad" | "chat.message.previous" | "chat.message.next" | "chat.message.version";
+export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting" | "chat.tool.working" | "chat.tool.running" | "chat.tool.done" | "chat.tool.failed" | "chat.tool.show" | "chat.tool.hide" | "chat.message.actions" | "chat.message.copy" | "chat.message.copied" | "chat.message.copyFailed" | "chat.message.regenerate" | "chat.message.edit" | "chat.message.editLabel" | "chat.message.resend" | "chat.message.good" | "chat.message.bad" | "chat.message.previous" | "chat.message.next" | "chat.message.version";
 
 // @public
 export type ReplyOutcome = {

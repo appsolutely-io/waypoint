@@ -12,6 +12,7 @@ export type ReplyMessageKey =
   | "chat.message.actions"
   | "chat.message.copy"
   | "chat.message.copied"
+  | "chat.message.copyFailed"
   | "chat.message.regenerate"
   | "chat.message.edit"
   | "chat.message.editLabel"
@@ -34,6 +35,7 @@ export const replyEnglish: ReplyCatalogue = {
   "chat.message.actions": "Message actions",
   "chat.message.copy": "Copy",
   "chat.message.copied": "Copied",
+  "chat.message.copyFailed": "Could not copy",
   "chat.message.regenerate": "Regenerate",
   "chat.message.edit": "Edit",
   "chat.message.editLabel": "Edit message",
@@ -56,6 +58,7 @@ export const replySimplifiedChinese: ReplyCatalogue = {
   "chat.message.actions": "消息操作",
   "chat.message.copy": "复制",
   "chat.message.copied": "已复制",
+  "chat.message.copyFailed": "无法复制",
   "chat.message.regenerate": "重新生成",
   "chat.message.edit": "编辑",
   "chat.message.editLabel": "编辑消息",

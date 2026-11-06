@@ -23,7 +23,8 @@ export function MessageActions({
   const B = ui.button;
   const id = `wp${useId().replace(/[^\w-]/g, "")}`;
   const field = useRef<HTMLTextAreaElement>(null);
-  const [copied, setCopied] = useState(false);
+  // What the last Copy did, said in the status beside the buttons.
+  const [copied, setCopied] = useState<"copied" | "copyFailed">();
   const [editing, setEditing] = useState<string>();
   const [rating, setRating] = useState<Rating>();
   // One call at a time from these buttons; the client also sends one
@@ -140,12 +141,16 @@ export function MessageActions({
       ) : null}
       {ended ? null : (
         <B
-          onPress={() =>
-            void navigator.clipboard?.writeText(message.content).then(
-              () => setCopied(true),
-              () => {},
-            )
-          }
+          onPress={() => {
+            // A missing clipboard or a refused write is said, never silent.
+            const write = navigator.clipboard?.writeText(message.content);
+            if (!write) setCopied("copyFailed");
+            else
+              void write.then(
+                () => setCopied("copied"),
+                () => setCopied("copyFailed"),
+              );
+          }}
         >
           {t("chat.message.copy")}
         </B>
@@ -173,7 +178,7 @@ export function MessageActions({
           {rate("negative", "bad")}
         </>
       ) : null}
-      <span role="status">{copied ? t("chat.message.copied") : ""}</span>
+      <span role="status">{copied ? t(`chat.message.${copied}`) : ""}</span>
     </div>
   );
 }

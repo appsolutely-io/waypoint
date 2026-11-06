@@ -390,6 +390,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.message.actions": "Message actions",
   "chat.message.copy": "Copy",
   "chat.message.copied": "Copied",
+  "chat.message.copyFailed": "Could not copy",
   "chat.message.regenerate": "Regenerate",
   "chat.message.edit": "Edit",
   "chat.message.editLabel": "Edit message",

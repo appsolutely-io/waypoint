@@ -83,6 +83,33 @@ for (const skin of ["neutral", "antd"])
         expect(await sideways(page)).toEqual([]);
         await scrollersReachTheEnd(page);
       });
+// The chat renders again on its own when the reply it waits for turns
+// overdue (15 s after the user's message). A code block being scrolled by
+// keyboard keeps its focus and position through that render.
+test("CK-B2 a code block keeps keyboard focus and scroll when the chat renders again", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page, "skin=neutral");
+  const code = page.locator(".wp-markdown pre[data-scroll-region]").first();
+  await code.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(() => code.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
+  const before = await code.evaluate((element) => element.scrollLeft);
+  // Past the reply's 15 s: the reply row turns overdue and the chat renders.
+  await page.clock.fastForward(16000);
+  await expect(page.locator('[data-reply-state="overdue"]')).toHaveCount(1);
+  expect(
+    await code.evaluate((element) => document.activeElement === element),
+  ).toBe(true);
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(() => code.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(before);
+});
 for (const skin of ["neutral", "antd"])
   test(`CK-B4 at 200% text in 375 nothing scrolls sideways: ${skin}`, async ({
     page,

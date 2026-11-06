@@ -1,4 +1,5 @@
-import ReactMarkdown from "react-markdown";
+import { useMemo, useRef } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import gfm from "./gfm";
@@ -110,62 +111,75 @@ export function visibleText(
   walk(tree);
   return parts.join("").replace(/\s+/g, " ").trim();
 }
-export default function Markdown({
-  text,
-  images,
-  extraSchemes,
-  scrollLabel,
-}: {
+interface MarkdownProps {
   text: string;
   images?: MarkdownImagePolicy;
   extraSchemes?: readonly string[];
   // The name of a code block's own sideways scroller.
   scrollLabel?: string;
-}) {
+}
+export default function Markdown(props: MarkdownProps) {
+  // The element renderers keep one identity for the renderer's lifetime:
+  // new ones on each render would be new element types, and React would
+  // replace every code block and table whenever the chat renders again,
+  // dropping the keyboard focus and scroll position inside them. They read
+  // the current props when they render.
+  const current = useRef(props);
+  current.current = props;
+  const components = useMemo<Components>(
+    () => ({
+      // A code block scrolls inside itself, never the transcript, and can
+      // be reached and scrolled by keyboard.
+      pre: ({ children }) => (
+        <pre
+          data-scroll-region=""
+          tabIndex={0}
+          aria-label={current.current.scrollLabel}
+        >
+          {children}
+        </pre>
+      ),
+      // A table scrolls inside itself too, as a named region.
+      table: ({ children }) => (
+        <div
+          data-scroll-region=""
+          tabIndex={0}
+          role="region"
+          aria-label={current.current.scrollLabel}
+        >
+          <table>{children}</table>
+        </div>
+      ),
+      img: ({ src, alt }) => {
+        if (!src) return <span>{alt}</span>;
+        const { images, extraSchemes } = current.current;
+        return showsImage(src, images, extraSchemes) ? (
+          <img src={src} alt={alt ?? ""} />
+        ) : (
+          <a href={src} rel="noreferrer noopener">
+            {alt || src}
+          </a>
+        );
+      },
+      a: ({ href, children }) =>
+        href ? (
+          <a href={href} rel="noreferrer noopener">
+            {children}
+          </a>
+        ) : (
+          <span>{children}</span>
+        ),
+    }),
+    [],
+  );
+  const { text, extraSchemes } = props;
   return (
     <div className="wp-markdown">
       <ReactMarkdown
         skipHtml
         remarkPlugins={[gfm]}
         urlTransform={(url) => (isSafeUrl(url, extraSchemes) ? url : undefined)}
-        components={{
-          // A code block scrolls inside itself, never the transcript, and
-          // can be reached and scrolled by keyboard.
-          pre: ({ children }) => (
-            <pre data-scroll-region="" tabIndex={0} aria-label={scrollLabel}>
-              {children}
-            </pre>
-          ),
-          // A table scrolls inside itself too, as a named region.
-          table: ({ children }) => (
-            <div
-              data-scroll-region=""
-              tabIndex={0}
-              role="region"
-              aria-label={scrollLabel}
-            >
-              <table>{children}</table>
-            </div>
-          ),
-          img: ({ src, alt }) => {
-            if (!src) return <span>{alt}</span>;
-            return showsImage(src, images, extraSchemes) ? (
-              <img src={src} alt={alt ?? ""} />
-            ) : (
-              <a href={src} rel="noreferrer noopener">
-                {alt || src}
-              </a>
-            );
-          },
-          a: ({ href, children }) =>
-            href ? (
-              <a href={href} rel="noreferrer noopener">
-                {children}
-              </a>
-            ) : (
-              <span>{children}</span>
-            ),
-        }}
+        components={components}
       >
         {text}
       </ReactMarkdown>

@@ -281,3 +281,17 @@ it("shows a reply stopped elsewhere as stopped when its end says so", async () =
   expect(shown().status).toBe("stopped");
   client.dispose();
 });
+
+it("keeps a stopped reply stopped when the host's end says completed", async () => {
+  // The host finished before it handled the stop: until a read says
+  // otherwise, the text cut short is not shown as finished.
+  const { client, frame, delta, shown } = await setup(["reply-stop"]);
+  // Written on this stream, so its end is this stream's to apply.
+  frame({ type: "message.start", role: "assistant" });
+  delta("The first order");
+  await client.stopReply();
+  frame({ type: "message.end", status: "completed" });
+  await flush();
+  expect(shown().status).toBe("stopped");
+  client.dispose();
+});

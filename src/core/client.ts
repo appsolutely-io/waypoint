@@ -1448,6 +1448,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       ["completed", "failed", "unavailable", "stopped"].includes(
         frame.status,
       ) &&
+      // A reply stopped here stays stopped whatever end the host sent
+      // before it handled the stop; the read after the end decides.
+      !(stopped.has(frame.messageId) && frame.status !== "stopped") &&
       (mark
         ? mark.binding === stream
         : !shown.status || shown.status === "writing")

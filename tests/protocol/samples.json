@@ -1,0 +1,842 @@
+{
+  "Problem": {
+    "code": "refused",
+    "id": "problem-a"
+  },
+  "Negotiation": {
+    "protocol": "1.0",
+    "supported": ["1.0"]
+  },
+  "NegotiationOfferWire": {
+    "capabilities": ["plans", "flows"]
+  },
+  "Negotiated": {
+    "protocol": "1.0",
+    "capabilities": ["plans"]
+  },
+  "CanonicalRequest": {
+    "method": "PATCH",
+    "path": "/items/a",
+    "body": "{\"title\":\"After\"}",
+    "headers": {
+      "If-Match": "v1"
+    },
+    "digest": "request-a"
+  },
+  "ReadTemplate": {
+    "method": "GET",
+    "path": "/items/a",
+    "rows": ["a"],
+    "fields": ["title"]
+  },
+  "Step": {
+    "id": "step-a",
+    "operation": "items.update",
+    "resource": "items",
+    "rows": ["a"],
+    "fields": ["title"],
+    "view": "/items/a",
+    "tier": "low",
+    "undo": "compare-and-set",
+    "stepUp": false
+  },
+  "ImmediateDraft": {
+    "kind": "immediate",
+    "stage": "draft",
+    "id": "draft-a",
+    "steps": [
+      {
+        "id": "step-a",
+        "operation": "items.update",
+        "resource": "items",
+        "rows": ["a"],
+        "fields": ["title"],
+        "view": "/items/a",
+        "tier": "low",
+        "undo": "compare-and-set",
+        "stepUp": false,
+        "planningRead": {
+          "method": "GET",
+          "path": "/items/a",
+          "rows": ["a"],
+          "fields": ["title"]
+        }
+      }
+    ]
+  },
+  "ImmediatePlan": {
+    "kind": "immediate",
+    "stage": "final",
+    "id": "plan-a",
+    "digest": "plan-digest",
+    "steps": [
+      {
+        "id": "step-a",
+        "operation": "items.update",
+        "resource": "items",
+        "rows": ["a"],
+        "fields": ["title"],
+        "view": "/items/a",
+        "tier": "low",
+        "undo": "compare-and-set",
+        "stepUp": false,
+        "request": {
+          "method": "PATCH",
+          "path": "/items/a",
+          "body": "{\"title\":\"After\"}",
+          "headers": {
+            "If-Match": "v1"
+          },
+          "digest": "request-a"
+        },
+        "before": {
+          "title": "Before"
+        },
+        "after": {
+          "title": "After"
+        }
+      }
+    ],
+    "stepUpCount": 0
+  },
+  "TimedPlan": {
+    "kind": "timed",
+    "id": "timed-a",
+    "values": {
+      "a": {
+        "title": "After"
+      }
+    },
+    "start": "2026-12-01T00:00:00Z",
+    "end": null
+  },
+  "Plan": {
+    "kind": "immediate",
+    "stage": "final",
+    "id": "plan-a",
+    "digest": "plan-digest",
+    "steps": [
+      {
+        "id": "step-a",
+        "operation": "items.update",
+        "resource": "items",
+        "rows": ["a"],
+        "fields": ["title"],
+        "view": "/items/a",
+        "tier": "low",
+        "undo": "compare-and-set",
+        "stepUp": false,
+        "request": {
+          "method": "PATCH",
+          "path": "/items/a",
+          "body": "{\"title\":\"After\"}",
+          "headers": {
+            "If-Match": "v1"
+          },
+          "digest": "request-a"
+        },
+        "before": {
+          "title": "Before"
+        },
+        "after": {
+          "title": "After"
+        }
+      }
+    ],
+    "stepUpCount": 0
+  },
+  "PlanState": "running",
+  "Outcome": {
+    "stepId": "step-a",
+    "status": 200,
+    "attributed": true,
+    "version": "v2"
+  },
+  "ConfirmationItem": {
+    "label": "Item a: title",
+    "before": "\"Before\"",
+    "after": "\"After\""
+  },
+  "ConfirmationSchedule": {
+    "start": "2026-12-01T10:30:00.000Z",
+    "end": null,
+    "startText": "1 December 2026, 10:30 UTC",
+    "endText": "No end date"
+  },
+  "ConfirmationRecord": {
+    "token": "confirmation-token",
+    "expiresAt": "2026-12-01T10:40:00.000Z",
+    "planId": "plan-a",
+    "conversationId": "conversation-a",
+    "revision": 2,
+    "heading": "Update 1 record in items",
+    "items": [
+      {
+        "label": "Item a: title",
+        "before": "\"Before\"",
+        "after": "\"After\""
+      }
+    ],
+    "irreversible": false,
+    "undo": "Undoing this change is not available in this version.",
+    "verificationCount": 0,
+    "actionLabel": "Apply 1 change"
+  },
+  "PlanRecord": {
+    "protocol": "1.0",
+    "id": "plan-a",
+    "state": "running",
+    "plan": {
+      "kind": "immediate",
+      "stage": "final",
+      "id": "plan-a",
+      "digest": "plan-digest",
+      "steps": [
+        {
+          "id": "step-a",
+          "operation": "items.update",
+          "resource": "items",
+          "rows": ["a"],
+          "fields": ["title"],
+          "view": "/items/a",
+          "tier": "low",
+          "undo": "compare-and-set",
+          "stepUp": false,
+          "request": {
+            "method": "PATCH",
+            "path": "/items/a",
+            "body": "{\"title\":\"After\"}",
+            "headers": {
+              "If-Match": "v1"
+            },
+            "digest": "request-a"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "after": {
+            "title": "After"
+          }
+        }
+      ],
+      "stepUpCount": 0
+    },
+    "outcomes": [],
+    "confirmation": {
+      "token": "confirmation-token",
+      "expiresAt": "2026-12-01T10:40:00.000Z",
+      "planId": "plan-a",
+      "conversationId": "conversation-a",
+      "revision": 2,
+      "heading": "Update 1 record in items",
+      "items": [
+        {
+          "label": "Item a: title",
+          "before": "\"Before\"",
+          "after": "\"After\""
+        }
+      ],
+      "irreversible": false,
+      "undo": "Undoing this change is not available in this version.",
+      "verificationCount": 0,
+      "actionLabel": "Apply 1 change"
+    }
+  },
+  "RecoveryPhase": "readback",
+  "IntentKind": "stop",
+  "WinnerKind": "leave",
+  "IntentCause": "connection-lost",
+  "IntentWinner": {
+    "kind": "stop",
+    "cause": "user"
+  },
+  "RecoveryView": {
+    "profile": "plan-recovery-v1",
+    "phase": "forward-active",
+    "generation": "g1",
+    "round": 1,
+    "revision": 3,
+    "conversationId": "conversation-a",
+    "reviewId": "r1",
+    "executionId": "plan-a.e1",
+    "slots": {
+      "stop": 0,
+      "cancel-initial": 0,
+      "cancel-review": 0,
+      "leave": 0,
+      "keep": 0
+    },
+    "versions": {
+      "evidence": 2,
+      "winner": 1,
+      "decisionResolution": 0
+    },
+    "decisionKey": "plan-a.e1",
+    "evidenceDigest": "ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0",
+    "unknownCount": 0
+  },
+  "IntentTarget": {
+    "type": "execution",
+    "id": "plan-a.e1"
+  },
+  "IntentRequest": {
+    "kind": "stop",
+    "planId": "plan-a",
+    "target": {
+      "type": "execution",
+      "id": "plan-a.e1"
+    },
+    "capturedRound": 1,
+    "expectedSlotVersion": 0,
+    "correlation": "stop-1",
+    "cause": "user"
+  },
+  "PlanIntentReply": {
+    "planId": "plan-a",
+    "kind": "stop",
+    "capturedRound": 1,
+    "correlation": "stop-1",
+    "effectiveRound": 1,
+    "slotVersion": 1,
+    "resolvedTarget": "plan-a.e1",
+    "result": "applied",
+    "keys": ["stopped"],
+    "winner": {
+      "kind": "stop",
+      "cause": "user"
+    },
+    "phase": "readback"
+  },
+  "ExecutionAcceptance": {
+    "planId": "plan-a",
+    "executionId": "plan-a.e1",
+    "fence": 1
+  },
+  "ReplyDecline": {
+    "kind": "decline",
+    "planId": "plan-a",
+    "clientReplyId": "decline-1"
+  },
+  "BlockMarkdown": {
+    "type": "markdown",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "text": "Hello"
+    }
+  },
+  "BlockCard": {
+    "type": "card",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "title": "Question",
+      "blocks": []
+    }
+  },
+  "BlockList": {
+    "type": "list",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "items": ["One"]
+    }
+  },
+  "BlockTable": {
+    "type": "table",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "columns": ["Title"],
+      "rows": [["One"]]
+    }
+  },
+  "BlockForm": {
+    "type": "form",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "fields": [
+        {
+          "name": "title",
+          "label": "Title"
+        }
+      ]
+    }
+  },
+  "BlockChoice": {
+    "type": "choice",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "mode": "single",
+      "options": ["One"]
+    }
+  },
+  "BlockButtons": {
+    "type": "buttons",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "actions": [
+        {
+          "id": "accept",
+          "label": "Accept"
+        }
+      ]
+    }
+  },
+  "BlockDiff": {
+    "type": "diff",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "before": "Before",
+      "after": "After"
+    }
+  },
+  "BlockPlan": {
+    "type": "plan",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "planId": "plan-a"
+    }
+  },
+  "BlockRouteLink": {
+    "type": "route-link",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "label": "View",
+      "route": "/items/a"
+    }
+  },
+  "BlockNotice": {
+    "type": "notice",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "text": "Ready"
+    }
+  },
+  "ExtensionBlock": {
+    "type": "example/widget",
+    "id": "block-custom",
+    "fallback": "Readable",
+    "body": {}
+  },
+  "Block": {
+    "type": "markdown",
+    "id": "block-a",
+    "fallback": "Readable",
+    "body": {
+      "text": "Hello"
+    }
+  },
+  "Message": {
+    "id": "message-a",
+    "role": "assistant",
+    "content": "Hello",
+    "blocks": [],
+    "createdAt": 0
+  },
+  "Conversation": {
+    "protocol": "1.0",
+    "id": "conversation-a",
+    "title": "Example",
+    "messages": []
+  },
+  "ReplyMessage": {
+    "kind": "message",
+    "protocol": "1.0",
+    "clientReplyId": "reply-a",
+    "content": "Hello",
+    "clientMessageId": "send-a"
+  },
+  "ReplyConfirm": {
+    "kind": "confirm",
+    "protocol": "1.0",
+    "clientReplyId": "reply-a",
+    "planId": "plan-a",
+    "digest": "plan-digest",
+    "confirmationToken": "confirmation-token"
+  },
+  "ReplyForm": {
+    "kind": "form",
+    "protocol": "1.0",
+    "clientReplyId": "reply-a",
+    "blockId": "block-a",
+    "values": {
+      "title": "After"
+    }
+  },
+  "ReplyAction": {
+    "kind": "action",
+    "protocol": "1.0",
+    "clientReplyId": "reply-a",
+    "blockId": "block-a",
+    "actionId": "accept"
+  },
+  "ReplyToolResult": {
+    "kind": "tool-result",
+    "protocol": "1.0",
+    "clientReplyId": "reply-a",
+    "callId": "call-a",
+    "result": {
+      "title": "Before"
+    }
+  },
+  "ReplyPlanValues": {
+    "kind": "plan.values",
+    "protocol": "1.0",
+    "clientReplyId": "reply-a",
+    "planId": "plan-a",
+    "steps": [
+      {
+        "stepId": "step-a",
+        "rows": {
+          "a": {
+            "title": "Before"
+          }
+        },
+        "versions": {
+          "a": "v1"
+        }
+      }
+    ]
+  },
+  "Reply": {
+    "kind": "message",
+    "protocol": "1.0",
+    "clientReplyId": "reply-a",
+    "content": "Hello",
+    "clientMessageId": "send-a"
+  },
+  "ManifestEntry": {
+    "id": "items.read",
+    "kind": "read",
+    "method": "GET",
+    "path": "/items/a",
+    "resource": "items",
+    "fields": {
+      "title": "low"
+    },
+    "returns": ["title"],
+    "filterable": ["title"],
+    "permission": "items.read",
+    "view": "/items/a",
+    "undo": "none"
+  },
+  "ToolCall": {
+    "id": "call-a",
+    "operation": "items.read",
+    "method": "GET",
+    "path": "/items/a"
+  },
+  "FrameMessageStart": {
+    "type": "message.start",
+    "protocol": "1.0",
+    "sequence": 1,
+    "messageId": "message-a",
+    "role": "assistant"
+  },
+  "FrameTextDelta": {
+    "type": "text.delta",
+    "protocol": "1.0",
+    "sequence": 1,
+    "messageId": "message-a",
+    "text": "Hi"
+  },
+  "FrameBlock": {
+    "type": "block",
+    "protocol": "1.0",
+    "sequence": 1,
+    "messageId": "message-a",
+    "block": {
+      "type": "markdown",
+      "id": "block-a",
+      "fallback": "Readable",
+      "body": {
+        "text": "Hello"
+      }
+    }
+  },
+  "FramePlanDraft": {
+    "type": "plan.draft",
+    "protocol": "1.0",
+    "sequence": 1,
+    "messageId": "message-a",
+    "plan": {
+      "kind": "immediate",
+      "stage": "draft",
+      "id": "draft-a",
+      "steps": [
+        {
+          "id": "step-a",
+          "operation": "items.update",
+          "resource": "items",
+          "rows": ["a"],
+          "fields": ["title"],
+          "view": "/items/a",
+          "tier": "low",
+          "undo": "compare-and-set",
+          "stepUp": false,
+          "planningRead": {
+            "method": "GET",
+            "path": "/items/a",
+            "rows": ["a"],
+            "fields": ["title"]
+          }
+        }
+      ]
+    }
+  },
+  "FramePlanFinal": {
+    "type": "plan.final",
+    "protocol": "1.0",
+    "sequence": 1,
+    "messageId": "message-a",
+    "plan": {
+      "kind": "immediate",
+      "stage": "final",
+      "id": "plan-a",
+      "digest": "plan-digest",
+      "steps": [
+        {
+          "id": "step-a",
+          "operation": "items.update",
+          "resource": "items",
+          "rows": ["a"],
+          "fields": ["title"],
+          "view": "/items/a",
+          "tier": "low",
+          "undo": "compare-and-set",
+          "stepUp": false,
+          "request": {
+            "method": "PATCH",
+            "path": "/items/a",
+            "body": "{\"title\":\"After\"}",
+            "headers": {
+              "If-Match": "v1"
+            },
+            "digest": "request-a"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "after": {
+            "title": "After"
+          }
+        }
+      ],
+      "stepUpCount": 0
+    }
+  },
+  "FramePlanStep": {
+    "type": "plan.step",
+    "protocol": "1.0",
+    "sequence": 1,
+    "planId": "plan-a",
+    "outcome": {
+      "stepId": "step-a",
+      "status": 200,
+      "attributed": true,
+      "version": "v2"
+    }
+  },
+  "FrameToolCall": {
+    "type": "tool.call",
+    "protocol": "1.0",
+    "sequence": 1,
+    "call": {
+      "id": "call-a",
+      "operation": "items.read",
+      "method": "GET",
+      "path": "/items/a"
+    }
+  },
+  "FramePlanningRead": {
+    "type": "planning-read",
+    "protocol": "1.0",
+    "sequence": 1,
+    "planId": "plan-a",
+    "stepId": "step-a",
+    "template": {
+      "method": "GET",
+      "path": "/items/a",
+      "rows": ["a"],
+      "fields": ["title"]
+    }
+  },
+  "FrameMessageEnd": {
+    "type": "message.end",
+    "protocol": "1.0",
+    "sequence": 1,
+    "messageId": "message-a",
+    "status": "completed"
+  },
+  "FrameStale": {
+    "type": "stale",
+    "protocol": "1.0",
+    "sequence": 1,
+    "reads": ["conversation"]
+  },
+  "FrameProblem": {
+    "type": "problem",
+    "protocol": "1.0",
+    "sequence": 1,
+    "problem": {
+      "code": "refused",
+      "id": "problem-a"
+    }
+  },
+  "Frame": {
+    "type": "text.delta",
+    "protocol": "1.0",
+    "sequence": 1,
+    "messageId": "message-a",
+    "text": "Hi"
+  },
+  "FlowParameter": {
+    "name": "title",
+    "type": "string",
+    "label": "Title",
+    "required": true
+  },
+  "Flow": {
+    "format": "1.0",
+    "id": "example/rename",
+    "title": "Rename",
+    "kind": "prompt",
+    "parameters": [],
+    "tags": [],
+    "body": "Rename an item"
+  },
+  "CreateConversation": {
+    "protocol": "1.0",
+    "title": "Example"
+  },
+  "PlanCommand": {
+    "protocol": "1.0",
+    "action": "stop",
+    "planId": "plan-a"
+  },
+  "RunFlow": {
+    "protocol": "1.0",
+    "flowId": "example/rename",
+    "values": {}
+  },
+  "PatchFlow": {
+    "protocol": "1.0",
+    "flowId": "example/rename",
+    "favourite": true,
+    "title": "Example"
+  },
+  "FormSubject": {
+    "key": "draft-a",
+    "resource": "items",
+    "label": "Item",
+    "route": "/items/new",
+    "state": "pending"
+  },
+  "FormValidation": {
+    "status": "invalid",
+    "messages": ["Invalid"],
+    "guidance": "Keep complete"
+  },
+  "FormFillValue": {
+    "value": "Draft",
+    "validation": {
+      "status": "valid",
+      "messages": []
+    }
+  },
+  "FormFillField": {
+    "name": "title",
+    "label": "Title",
+    "tier": "low",
+    "value": ""
+  },
+  "FormFillRequest": {
+    "requestId": "request-a",
+    "text": "Fill",
+    "references": [],
+    "attachments": [],
+    "fields": [
+      {
+        "name": "title",
+        "label": "Title",
+        "tier": "low",
+        "value": ""
+      }
+    ]
+  },
+  "BlockFormFill": {
+    "type": "form.fill",
+    "id": "fill-a",
+    "fallback": "Draft",
+    "body": {
+      "requestId": "request-a",
+      "values": {
+        "title": {
+          "value": "Draft",
+          "validation": {
+            "status": "valid",
+            "messages": []
+          }
+        }
+      }
+    }
+  },
+  "ReplyFormFill": {
+    "kind": "form-fill",
+    "protocol": "1.1",
+    "clientReplyId": "request-a",
+    "request": {
+      "requestId": "request-a",
+      "text": "Fill",
+      "references": [],
+      "attachments": [],
+      "fields": [
+        {
+          "name": "title",
+          "label": "Title",
+          "tier": "low",
+          "value": ""
+        }
+      ]
+    }
+  },
+  "DecisionVersions": {
+    "evidence": 2,
+    "winner": 1,
+    "decisionResolution": 0
+  },
+  "LeaveAcknowledgment": {
+    "sourceDecisionKey": "plan-a.e1",
+    "evidenceVersion": 2,
+    "winnerVersion": 1,
+    "decisionResolutionVersion": 0,
+    "evidenceDigest": "ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0",
+    "unknownCount": 0
+  },
+  "KeptFact": {
+    "keepEffect": "forward-closed",
+    "actorCause": "user",
+    "round": 2
+  },
+  "FinalHistory": {
+    "winner": {
+      "kind": "keep",
+      "cause": "user"
+    },
+    "keptFact": {
+      "keepEffect": "forward-closed",
+      "actorCause": "user",
+      "round": 2
+    },
+    "relation": "leaveCoveredByKeep",
+    "requestedTargetApplied": false
+  }
+}

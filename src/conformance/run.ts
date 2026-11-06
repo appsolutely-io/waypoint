@@ -1,0 +1,222 @@
+import { runFormFillConformance } from "./form-fill";
+import { runPlanConformance } from "./plans";
+import type { Conversation, Problem } from "../protocol/generated";
+import { SUPPORTED_PROTOCOLS } from "../protocol/index";
+import type { ConformanceConfig, ConformanceResult } from "./index";
+// Loaded on first use by the conformance entry points, outside the core
+// bundle.
+export { runFormFillConformance, runPlanConformance };
+export async function runConformance(
+  config: ConformanceConfig,
+): Promise<ConformanceResult> {
+  const failures: string[] = [];
+  const scenarios: string[] = [];
+  const session = await config.request("/__conformance/session", {
+    method: "POST",
+  });
+  if (session.status !== 200)
+    return {
+      passed: false,
+      failures: ["test session unavailable"],
+      scenarios: [],
+    };
+  const credentials = session.body as { session: string; csrf: string };
+  const headers = {
+    "Content-Type": "application/json",
+    Cookie: `waypoint=${credentials.session}`,
+    "X-CSRF-Token": credentials.csrf,
+  };
+  const post = (path: string, value: unknown) =>
+    config.request(path, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ protocol: "1.0", ...(value as object) }),
+    });
+  const check = async (name: string, run: () => Promise<boolean>) => {
+    scenarios.push(name);
+    try {
+      if (!(await run())) failures.push(name);
+    } catch {
+      failures.push(name);
+    }
+  };
+  await check("negotiation", async () => {
+    const r = await post("/negotiate", { supported: SUPPORTED_PROTOCOLS });
+    return (
+      r.status === 200 &&
+      SUPPORTED_PROTOCOLS.some(
+        (version) => version === (r.body as { protocol: string }).protocol,
+      ) &&
+      Array.isArray((r.body as { capabilities: unknown }).capabilities)
+    );
+  });
+  const formPeer = await post("/negotiate", { supported: SUPPORTED_PROTOCOLS });
+  const peer = formPeer.body as { protocol: string; capabilities?: string[] };
+  if (peer.protocol === "1.1" && peer.capabilities?.includes("form-fill")) {
+    const forms = await runFormFillConformance(config.request);
+    failures.push(...forms.failures);
+    scenarios.push(...forms.scenarios);
+  }
+  const created = await post("/conversations", { title: "Fixture" });
+  const id = (created.body as { id: string }).id;
+  await check("optimistic replay", async () => {
+    const value = { clientMessageId: "replay-a", content: "Request" };
+    const first = await post(`/conversations/${id}/messages`, value);
+    const next = await post(`/conversations/${id}/messages`, value);
+    return (
+      (first.body as { id: string }).id === (next.body as { id: string }).id
+    );
+  });
+  await check("closed failures", async () => {
+    for (const code of [
+      "in-doubt",
+      "replaced",
+      "retryable",
+      "refused",
+      "closed",
+      "full",
+      "declined",
+      "unavailable",
+    ]) {
+      await post("/__conformance/script", {
+        turns: [{ problem: { id: "failure-a", code } }],
+      });
+      const r = await post(`/conversations/${id}/messages`, {
+        clientMessageId: `failure-${code}`,
+        content: "Request",
+      });
+      if (r.status < 400 || (r.body as Problem).code !== code) return false;
+    }
+    return true;
+  });
+  await check("blocks and fallback", async () => {
+    const types = [
+      "markdown",
+      "card",
+      "list",
+      "table",
+      "form",
+      "choice",
+      "buttons",
+      "diff",
+      "plan",
+      "route-link",
+      "notice",
+      "example/future",
+    ];
+    const blocks = types.map((type) => ({
+      type,
+      id: type,
+      fallback: "Readable",
+      body: bodyFor(type),
+    }));
+    await post("/__conformance/script", { turns: [{ blocks }] });
+    await post(`/conversations/${id}/messages`, {
+      clientMessageId: "blocks-a",
+      content: "Request",
+    });
+    const read = await config.request(`/conversations/${id}`, { headers });
+    const conversation = read.body as Conversation;
+    return types.every((type) =>
+      conversation.messages.some((message) =>
+        message.blocks.some(
+          (block) => block.type === type && block.fallback === "Readable",
+        ),
+      ),
+    );
+  });
+  await check("drop then refetch", async () => {
+    await post("/__conformance/script", {
+      turns: [{ content: "Authoritative after drop" }],
+    });
+    await post(`/conversations/${id}/messages`, {
+      clientMessageId: "drop-a",
+      content: "Request",
+    });
+    await config.request(`/conversations/${id}/stream`, { headers });
+    const read = await config.request(`/conversations/${id}`, { headers });
+    return (read.body as Conversation).messages.some(
+      (message) => message.content === "Authoritative after drop",
+    );
+  });
+  await check("agreement binding", async () => {
+    const bound = await post("/negotiate", {
+      supported: SUPPORTED_PROTOCOLS,
+      offer: { capabilities: ["plans"] },
+    });
+    const answer = bound.body as { agreementId?: unknown };
+    // A host that issues no agreement is a legacy host for this check.
+    if (bound.status === 200 && answer.agreementId === undefined) return true;
+    if (bound.status !== 200 || typeof answer.agreementId !== "string")
+      return false;
+    const unknown = { ...headers, "Waypoint-Agreement": "conformance-unknown" };
+    const read = await config.request(`/conversations/${id}`, {
+      headers: unknown,
+    });
+    const refused = await config.request(`/conversations/${id}/messages`, {
+      method: "POST",
+      headers: unknown,
+      body: JSON.stringify({
+        protocol: "1.0",
+        clientMessageId: "binding-a",
+        content: "Request",
+      }),
+    });
+    const after = await config.request(`/conversations/${id}`, { headers });
+    const valid = await config.request(`/conversations/${id}`, {
+      headers: { ...headers, "Waypoint-Agreement": answer.agreementId },
+    });
+    return (
+      read.status === 409 &&
+      (read.body as Problem).code === "agreement-expired" &&
+      refused.status === 409 &&
+      (refused.body as Problem).code === "agreement-expired" &&
+      !(after.body as Conversation).messages.some(
+        (message) => message.clientMessageId === "binding-a",
+      ) &&
+      valid.status === 200
+    );
+  });
+  await check("agreement keeps its answer", async () => {
+    const first = await post("/negotiate", {
+      supported: ["1.0"],
+      offer: { capabilities: ["plans"] },
+    });
+    const second = await post("/negotiate", {
+      supported: SUPPORTED_PROTOCOLS,
+      offer: { capabilities: ["plans"] },
+    });
+    const a = first.body as { agreementId?: string; protocol?: string };
+    const b = second.body as { agreementId?: string; protocol?: string };
+    // Legacy hosts, and hosts whose answers cannot differ, have nothing to
+    // compare.
+    if (!a.agreementId || !b.agreementId || a.protocol === b.protocol)
+      return true;
+    const read = await config.request(`/conversations/${id}`, {
+      headers: { ...headers, "Waypoint-Agreement": a.agreementId },
+    });
+    return (
+      read.status === 200 && (read.body as Conversation).protocol === a.protocol
+    );
+  });
+  const plans = await runPlanConformance(config.request);
+  failures.push(...plans.failures);
+  scenarios.push(...plans.scenarios);
+  return { passed: failures.length === 0, failures, scenarios };
+}
+function bodyFor(type: string): unknown {
+  const bodies: Record<string, unknown> = {
+    markdown: { text: "Readable" },
+    card: { title: "Card", blocks: [] },
+    list: { items: [] },
+    table: { columns: [], rows: [] },
+    form: { fields: [] },
+    choice: { mode: "single", options: [] },
+    buttons: { actions: [] },
+    diff: { before: "Before", after: "After" },
+    plan: { planId: "plan-a" },
+    "route-link": { label: "View", route: "/items/a" },
+    notice: { text: "Ready" },
+  };
+  return bodies[type] ?? {};
+}

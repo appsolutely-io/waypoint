@@ -535,6 +535,9 @@ export type CreateConversation = {
     clientCreationId?: string;
 };
 
+// @public
+export function createFormatter(locale?: string): FormatMessage;
+
 // @public (undocumented)
 export function createMemoryStorage(asynchronous?: boolean): StoragePort;
 
@@ -773,6 +776,9 @@ export const FORM_SESSION_UNAVAILABLE: {
     readonly code: "retryable";
     readonly id: "form-session-load";
 };
+
+// @public (undocumented)
+export type FormatMessage = (key: MessageKey, values?: MessageValues) => string;
 
 // @public (undocumented)
 export type FormCatalogue = Readonly<Record<FormMessageKey, string>>;
@@ -1338,6 +1344,9 @@ export interface Message {
 
 // @public (undocumented)
 export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof FormCatalogue;
+
+// @public (undocumented)
+export type MessageValues = Record<string, string | number | boolean>;
 
 // @public (undocumented)
 export interface MessageVersionInput {

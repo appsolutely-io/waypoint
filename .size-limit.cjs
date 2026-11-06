@@ -144,10 +144,11 @@ const budgets = [
   {
     name: "hooks",
     path: "dist/hooks/index.js",
-    // The renderer-neutral hooks with the client code they import; React
-    // is the host's. Measured with Node 22's zlib (4,377 B), plus 3%,
-    // rounded down.
-    limit: "4.508 kB",
+    // The renderer-neutral hooks with the client code they import, and
+    // the formatter with every catalogue a host needs for their text (a
+    // host that never calls it drops it); React is the host's. Measured
+    // with Node 22's zlib (27,749 B), plus 3%, rounded down.
+    limit: "28.581 kB",
     gzip: true,
     brotli: false,
     ignore: ["react"],

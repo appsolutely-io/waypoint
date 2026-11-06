@@ -101,6 +101,12 @@ export function MessageActions({
     </B>
   );
   const walk = client.canChangeVersions() ? versionWalk(message) : null;
+  // A reply the host ended unfinished is not an answer: nothing to copy or
+  // rate, and the reply row's Retry already asks for it again. Its other
+  // versions can still be walked to.
+  const ended =
+    reply && (message.status === "failed" || message.status === "unavailable");
+  if (ended && !walk) return null;
   // An end of the walk stays focusable and does nothing.
   const step = (to: number | null, label: "previous" | "next") => (
     <B
@@ -132,17 +138,19 @@ export function MessageActions({
           {step(walk.next, "next")}
         </span>
       ) : null}
-      <B
-        onPress={() =>
-          void navigator.clipboard?.writeText(message.content).then(
-            () => setCopied(true),
-            () => {},
-          )
-        }
-      >
-        {t("chat.message.copy")}
-      </B>
-      {client.canChangeVersions() ? (
+      {ended ? null : (
+        <B
+          onPress={() =>
+            void navigator.clipboard?.writeText(message.content).then(
+              () => setCopied(true),
+              () => {},
+            )
+          }
+        >
+          {t("chat.message.copy")}
+        </B>
+      )}
+      {ended ? null : client.canChangeVersions() ? (
         reply ? (
           <B
             aria-disabled={busy}
@@ -159,7 +167,7 @@ export function MessageActions({
           </B>
         )
       ) : null}
-      {reply && client.canSendFeedback() ? (
+      {reply && !ended && client.canSendFeedback() ? (
         <>
           {rate("positive", "good")}
           {rate("negative", "bad")}

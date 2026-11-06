@@ -276,3 +276,57 @@ it("shows no walk for a single version", async () => {
   expect(reply.queryByRole("button", { name: "Previous version" })).toBeNull();
   client.dispose();
 });
+
+for (const status of ["failed", "unavailable"] as const)
+  it(`a reply ended as ${status} offers no copy, regenerate or feedback`, async () => {
+    const ended: Message = {
+      id: "a2",
+      role: "assistant",
+      content: "I started reading the orders, and then ",
+      blocks: [],
+      createdAt: 4,
+      status,
+    };
+    const client = await chat({
+      shown: [
+        ...messages,
+        { id: "u2", role: "user", content: "More", blocks: [], createdAt: 3 },
+        ended,
+      ],
+      versions: {
+        regenerate: async () => {},
+        edit: async () => {},
+        select: async () => {},
+      },
+      feedback: async () => {},
+    });
+    // The finished reply keeps its actions.
+    await within(actionsOf("a1")).findByRole("button", {
+      name: "Good response",
+    });
+    // Its Retry is in the reply row; there is nothing to copy or rate.
+    expect(actionsOf("a2").querySelector("button")).toBeNull();
+    expect(actionsOf("a2").querySelector('[role="group"]')).toBeNull();
+    client.dispose();
+  });
+
+it("a failed reply with versions keeps the walk between them", async () => {
+  const client = await chat({
+    shown: [
+      messages[0]!,
+      { ...messages[1]!, status: "failed", versionIndex: 1, versionCount: 2 },
+    ],
+    versions: {
+      regenerate: async () => {},
+      edit: async () => {},
+      select: async () => {},
+    },
+    feedback: async () => {},
+  });
+  const reply = within(actionsOf("a1"));
+  await reply.findByRole("button", { name: "Next version" });
+  expect(reply.queryByRole("button", { name: "Copy" })).toBeNull();
+  expect(reply.queryByRole("button", { name: "Regenerate" })).toBeNull();
+  expect(reply.queryByRole("button", { name: "Good response" })).toBeNull();
+  client.dispose();
+});

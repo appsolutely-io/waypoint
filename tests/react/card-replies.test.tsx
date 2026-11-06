@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { WaypointChat } from "../../src/react/index";
 import { createWaypointClient } from "../../src/core/client";
+import { cardReplyId } from "../../src/react/block-reply";
 import { config } from "../support/client";
 import { createCardHost } from "../support/card-host";
 afterEach(cleanup);
@@ -67,6 +68,59 @@ it("a refused card answer can be corrected and retried instead of staying disabl
     (screen.getByRole("button", { name: "Accept" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
+  client.dispose();
+});
+it("an answer that fails outright does not hide a later problem with its id", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    transport: {
+      ...base.transport,
+      read: async () => ({
+        protocol: "1.0",
+        id: "conversation-a",
+        title: "Chat",
+        messages: [
+          {
+            id: "assistant-a",
+            role: "assistant",
+            content: "",
+            createdAt: 0,
+            blocks: [
+              {
+                type: "buttons",
+                id: "question-a",
+                fallback: "Answer",
+                body: { actions: [{ id: "accept", label: "Accept" }] },
+              },
+            ],
+          },
+        ],
+      }),
+    },
+  });
+  await client.ready;
+  // The answer's call fails before any outcome: no problem, no read.
+  const failed = Promise.reject(new Error("lost"));
+  failed.catch(() => {});
+  let calls = 0;
+  client.replyOutcome = () => {
+    calls++;
+    return failed;
+  };
+  render(<WaypointChat client={client} />);
+  fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  const id = cardReplyId("conversation-a", "assistant-a", "question-a", {
+    kind: "action",
+    blockId: "question-a",
+    actionId: "accept",
+  });
+  act(() => client.report({ code: "refused", id }));
+  expect(calls).toBe(1);
+  await screen.findByText("The site refused this request.");
   client.dispose();
 });
 it("nested replies name the actual form block while one answer disables the whole card", async () => {

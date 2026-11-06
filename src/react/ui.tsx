@@ -1764,10 +1764,13 @@ function ChatBody({
     (reply: Pick<Reply, "kind"> & Record<string, unknown>) => {
       const pressed = deepActiveElement(document);
       const id = cardReplyId(state.conversationId, messageId, block.id, reply);
+      // A press while the same answer is in flight leaves the id to it;
+      // otherwise this press frees it however the answer ends, a call that
+      // failed outright included.
+      const owned = !checking.current.has(id);
       checking.current.add(id);
       void answerCard(block, reply, messageId).then((outcome) => {
-        // A press on a locked card leaves the answer in flight its own.
-        if (outcome) checking.current.delete(id);
+        if (owned) checking.current.delete(id);
         const now = client.getSnapshot();
         // Refused, and the read after it shows the card answered: it was
         // answered elsewhere (another tab, an earlier page), which the

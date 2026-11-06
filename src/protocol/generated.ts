@@ -555,6 +555,10 @@ export interface BlockForm {
       name: string;
       label: string;
       required?: boolean;
+      /**
+       * What the host already knows for the field: the form starts with it, and the user may change it. Optional.
+       */
+      value?: string;
     }[];
   };
   /**

@@ -160,7 +160,13 @@ export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
             fallback: text.form,
             body: {
               fields: [
-                { name: "order", label: text.orderLabel, required: true },
+                // Known from the conversation: the user only checks it.
+                {
+                  name: "order",
+                  label: text.orderLabel,
+                  required: true,
+                  value: "1043",
+                },
                 { name: "note", label: text.noteLabel },
               ],
             },

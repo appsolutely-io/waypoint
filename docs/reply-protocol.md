@@ -11,6 +11,13 @@ A `tool.call` frame asks the client to read data for the reply it is writing. It
 - A host SHOULD give every call a `label`, in the conversation's language, at most 200 characters.
 - A label is shown as plain text, never as markup. It MUST NOT carry data the user may not see.
 
+## Asking for what is missing
+
+A `form` block asks the user for details inline. Each field MAY carry `value`, what the host already knows for it; the form starts with it and the user may change it before sending.
+
+- A host SHOULD fill in every field it can, so the user types only what is missing.
+- A field's `value` MUST NOT hold anything the user may not see.
+
 ## Stopping a reply
 
 A client offers the `reply-stop` capability; a host that implements stopping echoes it in its negotiation answer. Only then does the chat show Stop while a reply is written.

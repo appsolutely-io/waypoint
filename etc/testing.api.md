@@ -146,6 +146,7 @@ export interface BlockForm {
             name: string;
             label: string;
             required?: boolean;
+            value?: string;
         }[];
     };
     // (undocumented)

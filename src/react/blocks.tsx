@@ -189,8 +189,17 @@ export function Answered({ block }: { block: BlockType }) {
 export default function Block({ block, onReply, disabled }: WidgetProps) {
   const radioName = useId();
   const { format: t, primitives: ui } = context();
-  const [values, setValues] = useState<Record<string, unknown>>({});
   const body = block.body as Record<string, unknown>;
+  // A form starts from what the host already knows.
+  const [values, setValues] = useState<Record<string, unknown>>(() =>
+    block.type === "form"
+      ? Object.fromEntries(
+          ((body?.fields as { name: string; value?: string }[]) ?? [])
+            .filter((field) => typeof field.value === "string")
+            .map((field) => [field.name, field.value]),
+        )
+      : {},
+  );
   switch (block.type) {
     case "form.fill": {
       const fill = block as BlockFormFill;

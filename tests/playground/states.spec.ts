@@ -111,7 +111,7 @@ test("a form asks for what is missing inline", async ({ page }) => {
   await page.goto("/?state=form");
   await expect(
     reply(page).getByRole("textbox", { name: "Order number (required)" }),
-  ).toBeVisible();
+  ).toHaveValue("1043");
 });
 
 test("the state is a toolbar choice kept in the URL", async ({ page }) => {

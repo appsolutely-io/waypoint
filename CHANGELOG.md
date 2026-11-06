@@ -8,6 +8,7 @@
 - Default message actions, in a lazy chunk loaded with the first message: Copy on every message; Regenerate on a reply and an inline Edit and Send on the user's message when a `versions` port is given; Good response and Bad response on a reply when the new `feedback` port (`FeedbackPort`, `FeedbackInput`) is given. `client.sendFeedback()`, `client.canChangeVersions()` and `client.canSendFeedback()` are new. A host `messageActions` part still replaces the defaults.
 - The default message actions walk a message's versions in place as "‹ 2/3 ›" (Previous version, Next version), mirrored in a right-to-left chat.
 - `ToolCall.label` names a read in the host's plain words. `ClientSnapshot.toolSteps` (`ToolStep`) lists the reads since the user's last message, each running, done or failed, and the chat shows the latest on one line with "Show all N steps" for the rest; a step without a label reads "Looking this up…".
+- A `form` block's field may carry `value`: the form in the reply starts from it.
 - An overdue reply offers "Keep waiting" and "Retry". `client.keepWaiting()` puts the reply row back to `writing` until another 15 seconds pass without progress; `client.retryReply()` does the same and reads the conversation again, so a retry never sends the message twice. `replyRow` takes `heldUntil` for a reply being written as well.
 
 ## 0.1.1-next.0 - 2026-11-06

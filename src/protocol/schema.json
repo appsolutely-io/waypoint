@@ -1212,6 +1212,10 @@
                   },
                   "required": {
                     "type": "boolean"
+                  },
+                  "value": {
+                    "description": "What the host already knows for the field: the form starts with it, and the user may change it. Optional.",
+                    "type": "string"
                   }
                 },
                 "required": ["name", "label"]

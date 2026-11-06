@@ -211,6 +211,11 @@
   cursor: pointer;
   margin-inline-end: var(--wp-space);
 }
+/* The space is between buttons: the last one in a group ends at the
+   group's edge, so a group aligned to the end lines up with what is above. */
+.waypoint button:last-child {
+  margin-inline-end: 0;
+}
 /* Neutral buttons are drawn from the tokens, so an unavailable one can
    look different from an available one. */
 .waypoint button:not(.ant-btn) {

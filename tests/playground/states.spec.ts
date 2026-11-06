@@ -239,6 +239,23 @@ test.describe("on a phone", () => {
       Math.abs(box.x + box.width - (bubble.x + bubble.width)),
     ).toBeLessThan(1);
   });
+  test("a message not sent ends its controls at the message's edge", async ({
+    page,
+  }) => {
+    await page.goto("/?state=error-retryable");
+    const message = page.locator('article[data-role="pending"]');
+    const last = message
+      .locator('[data-part="failedSendControls"] button')
+      .last();
+    await expect(last).toBeVisible();
+    const bubble = (await message
+      .locator('[data-part="bubble"]')
+      .boundingBox())!;
+    const box = (await last.boundingBox())!;
+    expect(
+      Math.abs(box.x + box.width - (bubble.x + bubble.width)),
+    ).toBeLessThan(1);
+  });
   test("a message not sent has its error and Details with it", async ({
     page,
   }) => {

@@ -3136,6 +3136,14 @@ export function replyRow(input: {
       ? "overdue"
       : "writing";
   }
+  // The host ended the reply without finishing it: the row says so, so the
+  // reply is never taken for a finished one.
+  if (
+    last?.role === "assistant" &&
+    (last.status === "failed" || last.status === "unavailable") &&
+    !input.pending.some((row) => !row.failure)
+  )
+    return last.status;
   if (last?.role !== "user" && !input.pending.some((row) => !row.failure))
     return "none";
   if (input.pending.some((row) => !row.failure)) return "writing";

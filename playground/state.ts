@@ -15,6 +15,7 @@ export const choices = {
     "sources",
     "overdue",
     "reply-failed",
+    "reply-ended-failed",
     "reply-unavailable",
     "error-retryable",
     "error-rate-limited",

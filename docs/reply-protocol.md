@@ -42,3 +42,10 @@ A host that answered `reply-stop`:
 A stopped reply is a finished reply: the chat shows its text with a "Stopped" mark and the reply row is empty.
 
 `waypoint-conformance` checks these rules when the host answers `reply-stop`. It needs the test script to support a reply left being written: a turn `{ "chunks": ["Partial answer"], "ending": "held" }` streams those pieces into an assistant message and leaves it `writing`.
+
+## When a reply fails
+
+A host that cannot finish a reply says so in one of two ways: it ends the message with `message.end` and `status: "failed"` or `"unavailable"` (and gives the message that `status` in every later read), or it leaves the message and sets the conversation's `replyStatus` to `failed` or `unavailable`. Either way the chat says "Reply failed" or "Reply unavailable" in the reply row, below whatever text the reply had; it never shows such a reply as finished.
+
+- A host SHOULD end a reply it gave up on with one of these statuses rather than leave it `writing`.
+- A host MUST NOT mark a message `completed` when its text is not the whole reply.

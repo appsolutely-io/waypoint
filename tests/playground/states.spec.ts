@@ -96,6 +96,14 @@ test("a reply that never starts is overdue", async ({ page }) => {
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "writing");
 });
 
+test("a reply the host ends with a failed message says it failed", async ({
+  page,
+}) => {
+  await page.goto("/?state=reply-ended-failed");
+  await expect(replyRow(page)).toHaveAttribute("data-reply-state", "failed");
+  await expect(replyRow(page)).toHaveText("Reply failed");
+});
+
 for (const state of ["reply-failed", "reply-unavailable"] as const)
   test(`a reply the host ends as ${state} says so`, async ({ page }) => {
     await page.goto(`/?state=${state}`);

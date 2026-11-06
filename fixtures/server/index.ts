@@ -28,8 +28,12 @@ export interface FixtureTurn {
    */
   chunks?: string[];
   interval?: number;
-  /** How a streamed reply ends; `held` leaves it being written. */
-  ending?: "completed" | "failed" | "unavailable" | "held";
+  /**
+   * How a streamed reply ends: `failed` and `unavailable` say so on the
+   * conversation, `message-failed` ends the message itself as failed, and
+   * `held` leaves it being written.
+   */
+  ending?: "completed" | "failed" | "unavailable" | "message-failed" | "held";
   /**
    * Reads the reply asks the client for (tool calls) before its text, each
    * `toolTime` ms after the previous.
@@ -159,11 +163,13 @@ export async function createFixtureServer(options: {
           publish(conversation.id, { type: "stale", reads: ["conversation"] });
           return;
         }
-        message.status = "completed";
+        const status =
+          turn.ending === "message-failed" ? "failed" : "completed";
+        message.status = status;
         publish(conversation.id, {
           type: "message.end",
           messageId: message.id,
-          status: "completed",
+          status,
         });
       }, delay);
       timers.add(timer);

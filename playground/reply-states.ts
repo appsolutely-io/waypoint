@@ -157,6 +157,12 @@ export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
       return { silent: true, askedAgo: 20_000 };
     case "reply-failed":
       return { chunks: pieces(text.partial), interval: 40, ending: "failed" };
+    case "reply-ended-failed":
+      return {
+        chunks: pieces(text.partial),
+        interval: 40,
+        ending: "message-failed",
+      };
     case "reply-unavailable":
       return {
         chunks: pieces(text.partial),

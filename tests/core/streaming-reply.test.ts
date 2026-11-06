@@ -40,8 +40,8 @@ it("a reply whose text stopped arriving 15 seconds ago is overdue", () => {
   ).toBe("overdue");
 });
 
-it("a finished or failed reply leaves the row empty", () => {
-  for (const status of ["completed", "failed", "unavailable"] as const)
+it("a finished or stopped reply leaves the row empty", () => {
+  for (const status of ["completed", "stopped"] as const)
     expect(
       replyRow({
         messages: [user, { ...streaming, status }],
@@ -53,6 +53,17 @@ it("a finished or failed reply leaves the row empty", () => {
   expect(replyRow({ messages: [user, unmarked], pending: [], now: 2000 })).toBe(
     "none",
   );
+});
+
+it("a reply the host ended as failed or unavailable says so", () => {
+  for (const status of ["failed", "unavailable"] as const)
+    expect(
+      replyRow({
+        messages: [user, { ...streaming, status }],
+        pending: [],
+        now: 2000,
+      }),
+    ).toBe(status);
 });
 
 it("a known failure or a lost stream wins over a reply still marked writing", () => {

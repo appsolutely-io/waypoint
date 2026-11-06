@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Transcript fixture</title>
+    <style>
+      .waypoint[data-layout="page"] {
+        block-size: calc(100dvh - 16px);
+        min-block-size: 0;
+      }
+      /* A styled scrollbar takes space and can be dragged, even where the
+         platform's own scrollbars overlay the content. */
+      .wp-transcript::-webkit-scrollbar {
+        width: 14px;
+      }
+      .wp-transcript::-webkit-scrollbar-thumb {
+        background: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./transcript-fixture.tsx"></script>
+  </body>
+</html>

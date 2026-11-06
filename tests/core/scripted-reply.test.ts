@@ -83,4 +83,11 @@ it("the scripted host takes one answer per card and marks the card answered", as
   const read = await transport.read("conversation-a");
   const card = read.messages.at(-1)!.blocks[0]!;
   expect(card.answered).toBe(true);
+  // The card names the answer it holds: the applied reply, no protocol.
+  expect(card.answer).toEqual({
+    kind: "action",
+    clientReplyId: "r-1",
+    blockId: "child-a",
+    actionId: "accept",
+  });
 });

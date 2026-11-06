@@ -42,6 +42,31 @@ it("negotiates known capabilities and rejects incompatible versions", () => {
     blockFallback({ type: "future/card", id: "x", fallback: "Readable" }),
   ).toEqual({ text: "Readable", disabled: true, update: true });
 });
+describe("a card's applied answer", () => {
+  const ajv = new Ajv2020({ strict: false });
+  ajv.addSchema(schema);
+  const block = ajv.getSchema("https://waypoint.example/schema#/$defs/Block")!;
+  const card = { ...samples.BlockButtons, answered: true };
+  it("is optional, so a host that leaves it out stays valid", () =>
+    expect(block(card), JSON.stringify(block.errors)).toBe(true));
+  it("is the applied action or form reply without its protocol", () => {
+    expect(block({ ...card, answer: samples.CardAnswer })).toBe(true);
+    // A form's values may be left out, as for a sensitive form.
+    const form = { kind: "form", clientReplyId: "r", blockId: "f" };
+    expect(block({ ...card, answer: form })).toBe(true);
+    expect(block({ ...card, answer: { ...form, values: { a: 1 } } })).toBe(
+      true,
+    );
+  });
+  it("refuses an answer that is not an action or a form reply", () => {
+    for (const answer of [
+      { kind: "action", clientReplyId: "r", blockId: "q" },
+      { ...samples.CardAnswer, kind: "message" },
+      { ...samples.CardAnswer, blockId: "" },
+    ])
+      expect(block({ ...card, answer })).toBe(false);
+  });
+});
 describe("recovery views from a newer host", () => {
   const ajv = new Ajv2020({ strict: false });
   ajv.addSchema(schema);

@@ -985,6 +985,52 @@
       "required": ["kind", "planId", "clientReplyId"],
       "additionalProperties": false
     },
+    "CardAnswer": {
+      "description": "The answer the host applied to a card, as it was sent without its protocol; only with answered. A host may leave out a form's values.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "action"
+            },
+            "clientReplyId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "blockId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actionId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["kind", "clientReplyId", "blockId", "actionId"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "form"
+            },
+            "clientReplyId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "blockId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "values": {
+              "type": "object"
+            }
+          },
+          "required": ["kind", "clientReplyId", "blockId"]
+        }
+      ]
+    },
     "BlockMarkdown": {
       "type": "object",
       "properties": {
@@ -1008,7 +1054,11 @@
           "required": ["text"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1043,7 +1093,11 @@
           "required": ["title", "blocks"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1075,7 +1129,11 @@
           "required": ["items"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1114,7 +1172,11 @@
           "required": ["columns", "rows"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1159,7 +1221,11 @@
           "required": ["fields"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1194,7 +1260,11 @@
           "required": ["mode", "options"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1236,7 +1306,11 @@
           "required": ["actions"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1263,7 +1337,11 @@
           "required": ["before", "after"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1292,7 +1370,11 @@
           "required": ["planId"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1325,7 +1407,11 @@
           "required": ["label", "route"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1357,7 +1443,11 @@
           "required": ["text"]
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -1378,7 +1468,11 @@
         },
         "body": {},
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"]
@@ -2504,7 +2598,11 @@
           "additionalProperties": false
         },
         "answered": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+        },
+        "answer": {
+          "$ref": "#/$defs/CardAnswer"
         }
       },
       "required": ["type", "id", "fallback", "body"],

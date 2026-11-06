@@ -29,6 +29,11 @@ export type FixtureFault =
   | "binding"
   | "shared-answer"
   | "second-answer"
+  // Names another answer than the one it applied in the card's `answer`.
+  | "wrong-answer"
+  // Answers the same reply id with another body with 422, as the
+  // Idempotency-Key draft does: still a conforming host.
+  | "changed-422"
   | FormFault;
 export async function createFixtureServer(options: {
   testMode: boolean;
@@ -355,15 +360,20 @@ export async function createFixtureServer(options: {
       return;
     }
     if (match?.[2] === "replies") {
-      // One answer per card: a replay of the applied request gets its
-      // first response; the same id with another body, or another answer
-      // to an answered card, is refused and changes nothing.
+      // One answer per card, a message's block with the blocks nested in
+      // it: a replay of the applied request gets its first response; the
+      // same id with another body, or another answer to an answered card,
+      // is refused and changes nothing.
       const key = JSON.stringify([conversation.id, body.clientReplyId]);
       const text = JSON.stringify(body);
       const seen = replies.get(key);
       const card = conversation.messages
         .flatMap((message) => message.blocks)
-        .find((block) => block.id === body.blockId);
+        .find((block) => holds(block, String(body.blockId)));
+      if (seen && seen.body !== text && options.fault === "changed-422") {
+        send(422, { id: String(body.clientReplyId), code: "invalid" });
+        return;
+      }
       if (
         seen
           ? seen.body !== text
@@ -373,7 +383,16 @@ export async function createFixtureServer(options: {
         return;
       }
       if (!seen) {
-        if (card) card.answered = true;
+        if (card) {
+          const answer = { ...body };
+          delete answer.protocol;
+          card.answered = true;
+          card.answer = (
+            options.fault === "wrong-answer"
+              ? { ...answer, actionId: "other" }
+              : answer
+          ) as Block["answer"];
+        }
         replies.set(key, { body: text, result: { id: `reply-${++next}` } });
       }
       send(200, replies.get(key)!.result);
@@ -392,6 +411,12 @@ export async function createFixtureServer(options: {
       }),
   };
 }
+// Whether a message's block is, or holds, the block a reply answers.
+const holds = (block: Block, id: string): boolean =>
+  block.id === id ||
+  ((block.body as { blocks?: Block[] } | null)?.blocks ?? []).some((child) =>
+    holds(child, id),
+  );
 // Any other route's body limit in the reference host.
 const MAX_BODY_BYTES = 1048576;
 class BodyTooLarge extends Error {}

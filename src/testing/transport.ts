@@ -7,7 +7,9 @@ import type {
   Block,
   Conversation,
   Problem,
+  CardAnswer,
   Reply,
+  ReplyAction,
 } from "../protocol/generated";
 export interface ScriptedTurn {
   content?: string;
@@ -24,8 +26,8 @@ const holds = (block: Block, id: string): boolean =>
 /**
  * A scripted host. Like a real one it deduplicates by reply id, refuses the
  * same id with another body, and holds one answer per card: the first
- * answer it applies marks the card answered, and any other answer to that
- * card is refused (`refused`).
+ * answer it applies marks the card answered and names it in the card's
+ * `answer`, and any other answer to that card is refused (`refused`).
  */
 export function createScriptedTransport(now: () => number = Date.now) {
   const listeners = new Map<string, Set<(event: TransportEvent) => void>>();
@@ -69,7 +71,12 @@ export function createScriptedTransport(now: () => number = Date.now) {
       if (card?.answered) throw conflict;
       const turn = turns.shift();
       if (turn?.problem) throw turn.problem;
-      if (card) card.answered = true;
+      if (card) {
+        const answer: Partial<ReplyAction> = { ...(reply as ReplyAction) };
+        delete answer.protocol;
+        card.answered = true;
+        card.answer = answer as CardAnswer;
+      }
       if (reply.kind === "message")
         value.messages.push({
           id: `message-${++next}`,

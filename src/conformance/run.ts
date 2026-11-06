@@ -143,15 +143,26 @@ export async function runConformance(
     await post("/__conformance/script", {
       turns: [
         {
+          // A card: the answer goes to a block nested in it.
           blocks: [
             {
-              type: "buttons",
+              type: "card",
               id: "card-answer",
               fallback: "Answer",
               body: {
-                actions: [
-                  { id: "accept", label: "Accept" },
-                  { id: "decline", label: "Decline" },
+                title: "Question",
+                blocks: [
+                  {
+                    type: "buttons",
+                    id: "card-answer-choice",
+                    fallback: "Answer",
+                    body: {
+                      actions: [
+                        { id: "accept", label: "Accept" },
+                        { id: "decline", label: "Decline" },
+                      ],
+                    },
+                  },
                 ],
               },
             },
@@ -167,7 +178,7 @@ export async function runConformance(
       post(`/conversations/${id}/replies`, {
         kind: "action",
         clientReplyId,
-        blockId: "card-answer",
+        blockId: "card-answer-choice",
         actionId,
       });
     const refused = (r: { status: number; body: unknown }) =>
@@ -186,9 +197,19 @@ export async function runConformance(
       first.status < 300 &&
       replay.status === first.status &&
       JSON.stringify(replay.body) === JSON.stringify(first.body) &&
-      refused(changed) &&
+      // The Idempotency-Key draft's 422 for a changed body also holds.
+      (refused(changed) || changed.status === 422) &&
       refused(other) &&
-      card?.answered === true
+      card?.answered === true &&
+      // An answer the host names is optional, and the one it applied.
+      (!card.answer ||
+        JSON.stringify(card.answer) ===
+          JSON.stringify({
+            kind: "action",
+            clientReplyId: "card-answer-a",
+            blockId: "card-answer-choice",
+            actionId: "accept",
+          }))
     );
   });
   await check("agreement binding", async () => {

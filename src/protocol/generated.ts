@@ -29,6 +29,7 @@ export type WaypointProtocol =
   | PlanIntentReply
   | ExecutionAcceptance
   | ReplyDecline
+  | CardAnswer
   | BlockMarkdown
   | BlockCard
   | BlockList
@@ -115,6 +116,22 @@ export type RecoveryPhase =
   | 'left-unconfirmed'
   | 'left-reopened';
 export type IntentKind = 'stop' | 'cancel-initial' | 'cancel-review' | 'leave' | 'keep';
+/**
+ * The answer the host applied to a card, as it was sent without its protocol; only with answered. A host may leave out a form's values.
+ */
+export type CardAnswer =
+  | {
+      kind: 'action';
+      clientReplyId: string;
+      blockId: string;
+      actionId: string;
+    }
+  | {
+      kind: 'form';
+      clientReplyId: string;
+      blockId: string;
+      values?: {};
+    };
 export type Block =
   | BlockMarkdown
   | BlockCard
@@ -481,7 +498,11 @@ export interface BlockMarkdown {
   body: {
     text: string;
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockCard {
   type: 'card';
@@ -491,7 +512,11 @@ export interface BlockCard {
     title: string;
     blocks: Block[];
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockList {
   type: 'list';
@@ -500,7 +525,11 @@ export interface BlockList {
   body: {
     items: string[];
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockTable {
   type: 'table';
@@ -510,7 +539,11 @@ export interface BlockTable {
     columns: string[];
     rows: unknown[][];
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockForm {
   type: 'form';
@@ -523,7 +556,11 @@ export interface BlockForm {
       required?: boolean;
     }[];
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockChoice {
   type: 'choice';
@@ -533,7 +570,11 @@ export interface BlockChoice {
     mode: 'single' | 'multi' | 'text';
     options: string[];
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockButtons {
   type: 'buttons';
@@ -545,7 +586,11 @@ export interface BlockButtons {
       label: string;
     }[];
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockDiff {
   type: 'diff';
@@ -555,7 +600,11 @@ export interface BlockDiff {
     before: unknown;
     after: unknown;
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockPlan {
   type: 'plan';
@@ -564,7 +613,11 @@ export interface BlockPlan {
   body: {
     planId: string;
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockRouteLink {
   type: 'route-link';
@@ -574,7 +627,11 @@ export interface BlockRouteLink {
     label: string;
     route: string;
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockNotice {
   type: 'notice';
@@ -584,7 +641,11 @@ export interface BlockNotice {
     text: string;
     tone?: 'info' | 'warning' | 'error';
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface BlockFormFill {
   type: 'form.fill';
@@ -596,7 +657,11 @@ export interface BlockFormFill {
       [k: string]: FormFillValue;
     };
   };
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface FormFillValue {
   label?: string;
@@ -613,7 +678,11 @@ export interface ExtensionBlock {
   id: string;
   fallback: string;
   body: unknown;
+  /**
+   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   */
   answered?: boolean;
+  answer?: CardAnswer;
 }
 export interface Message {
   id: string;

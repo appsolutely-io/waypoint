@@ -317,6 +317,12 @@
     "planId": "plan-a",
     "clientReplyId": "decline-1"
   },
+  "CardAnswer": {
+    "kind": "action",
+    "clientReplyId": "card:c:m:q:0123456789abcdef",
+    "blockId": "q",
+    "actionId": "accept"
+  },
   "BlockMarkdown": {
     "type": "markdown",
     "id": "block-a",

@@ -12,6 +12,7 @@ for (const fault of [
   "binding",
   "shared-answer",
   "second-answer",
+  "wrong-answer",
 ] as const)
   it(`HTTP protocol ${fault ?? "clean"}`, async () => {
     const host = await createFixtureServer({ testMode: true, fault });
@@ -243,6 +244,25 @@ it("each reference-host agreement keeps its own negotiated answer", async () => 
       ).protocol;
     expect(await read(a.agreementId)).toBe("1.0");
     expect(await read(b.agreementId)).toBe("1.1");
+  } finally {
+    await host.close();
+  }
+});
+it("a host that answers a changed reply body with 422, as the Idempotency-Key draft does, conforms", async () => {
+  const host = await createFixtureServer({
+    testMode: true,
+    fault: "changed-422",
+  });
+  try {
+    const result = await runConformance({
+      baseUrl: host.url,
+      profile: "admin-host",
+      request: async (path, init) => {
+        const r = await fetch(host.url + path, init);
+        return { status: r.status, body: await r.json() };
+      },
+    });
+    expect(result.passed, result.failures.join(", ")).toBe(true);
   } finally {
     await host.close();
   }

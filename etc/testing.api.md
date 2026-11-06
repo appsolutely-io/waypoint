@@ -61,6 +61,7 @@ export type BlockAnswer = Pick<Reply, "kind"> & Record<string, unknown>;
 // @public (undocumented)
 export interface BlockButtons {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -80,6 +81,7 @@ export interface BlockButtons {
 // @public (undocumented)
 export interface BlockCard {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -100,6 +102,7 @@ export type BlockCatalogue = Readonly<Record<BlockMessageKey, string>>;
 // @public (undocumented)
 export interface BlockChoice {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -117,6 +120,7 @@ export interface BlockChoice {
 // @public (undocumented)
 export interface BlockDiff {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -134,6 +138,7 @@ export interface BlockDiff {
 // @public (undocumented)
 export interface BlockForm {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -154,6 +159,7 @@ export interface BlockForm {
 // @public (undocumented)
 export interface BlockFormFill {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -173,6 +179,7 @@ export interface BlockFormFill {
 // @public (undocumented)
 export interface BlockList {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -189,6 +196,7 @@ export interface BlockList {
 // @public (undocumented)
 export interface BlockMarkdown {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -208,6 +216,7 @@ export type BlockMessageKey = "chat.block.required" | "chat.block.requiredMissin
 // @public (undocumented)
 export interface BlockNotice {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -225,6 +234,7 @@ export interface BlockNotice {
 // @public (undocumented)
 export interface BlockPlan {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -248,6 +258,7 @@ export interface BlockReply {
 // @public (undocumented)
 export interface BlockRouteLink {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -275,6 +286,7 @@ export interface BlockSummary {
 // @public (undocumented)
 export interface BlockTable {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: {
@@ -350,6 +362,19 @@ export const CAPABILITIES: readonly ["plans", "flows", "widgets", "step-up", "sc
 
 // @public (undocumented)
 export type Capability = (typeof CAPABILITIES)[number];
+
+// @public
+export type CardAnswer = {
+    kind: 'action';
+    clientReplyId: string;
+    blockId: string;
+    actionId: string;
+} | {
+    kind: 'form';
+    clientReplyId: string;
+    blockId: string;
+    values?: {};
+};
 
 // @public
 export function cardReplyId(conversationId: string, messageId: string, blockId: string, answer: BlockAnswer): string;
@@ -846,6 +871,7 @@ export interface ExecutionAcceptance {
 // @public (undocumented)
 export interface ExtensionBlock {
     // (undocumented)
+    answer?: CardAnswer;
     answered?: boolean;
     // (undocumented)
     body: unknown;
@@ -2839,7 +2865,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | BlockMarkdown | BlockCard | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
+export type WaypointProtocol = Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
 
 // @public (undocumented)
 export function WaypointProvider(props: WaypointProviderProps): react.JSX.Element;

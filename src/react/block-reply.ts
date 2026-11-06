@@ -25,13 +25,18 @@ export interface BlockReply {
 interface Locks {
   // Locked cards, keyed `conversation:card`.
   keys: Set<string>;
+  // Answers sent per card, so each attempt gets its own reply id.
+  attempts: Map<string, number>;
   listeners: Set<() => void>;
 }
 const stores = new WeakMap<WaypointClient, Locks>();
 const locksOf = (client: WaypointClient) => {
   let locks = stores.get(client);
   if (!locks)
-    stores.set(client, (locks = { keys: new Set(), listeners: new Set() }));
+    stores.set(
+      client,
+      (locks = { keys: new Set(), attempts: new Map(), listeners: new Set() }),
+    );
   return locks;
 };
 // The answered set handed out stays the same until a lock changes.
@@ -76,12 +81,17 @@ export function useBlockReply(client?: WaypointClient): BlockReply {
       const key = `${conversationId}:${block.id}`;
       if (locks.keys.has(key)) return;
       setLock(locks, key, true);
+      // The first answer's id is the card's, so the same answer sent again
+      // (after a reload) is the same reply; an answer after a refusal is a
+      // new reply with its own id, never a changed replay of the refused one.
+      const attempt = (locks.attempts.get(key) ?? 0) + 1;
+      locks.attempts.set(key, attempt);
       void store
         .reply({
           ...answer,
           blockId:
             typeof answer.blockId === "string" ? answer.blockId : block.id,
-          clientReplyId: key,
+          clientReplyId: attempt === 1 ? key : `${key}:${attempt}`,
         } as ReplyInput)
         .then((accepted) => {
           if (!accepted) setLock(locks, key, false);

@@ -98,6 +98,8 @@ it("useBlockReply sends one answer per card and frees a refused one", async () =
   );
   act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
   await waitFor(() => expect(sent).toHaveLength(2));
+  // Another answer after a refusal is a new reply, not a replay of it.
+  expect(sent[1]).toBe("conversation-a:question-a:2");
   await act(async () => release(true));
   expect(result.current.answered.has("question-a")).toBe(true);
   client.dispose();

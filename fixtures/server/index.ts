@@ -55,6 +55,12 @@ export type FixtureFault =
   // Answers the same reply id with another body with 422, as the
   // Idempotency-Key draft does: still a conforming host.
   | "changed-422"
+  // Accepts a stop and keeps writing the reply.
+  | "ignores-stop"
+  // Stops the reply and drops the text it had written.
+  | "loses-stopped-text"
+  // Does not offer reply-stop.
+  | "no-stop"
   | FormFault;
 export async function createFixtureServer(options: {
   testMode: boolean;
@@ -87,6 +93,8 @@ export async function createFixtureServer(options: {
   // streaming in, so closing the server stops them.
   const live = new Map<string, Set<(frame: object) => void>>();
   const timers = new Set<ReturnType<typeof setTimeout>>();
+  // Replies still streaming in, by message id: each stops its own stream.
+  const writing = new Map<string, () => void>();
   let sequence = 1;
   const publish = (conversationId: string, frame: object) => {
     const body = { protocol: protocol, sequence: ++sequence, ...frame };
@@ -99,9 +107,17 @@ export async function createFixtureServer(options: {
     turn: FixtureTurn,
   ) => {
     const pieces = [...(turn.chunks ?? [])];
-    const step = (at: number) => {
-      const timer = setTimeout(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    writing.set(message.id, () => {
+      if (timer) {
+        clearTimeout(timer);
         timers.delete(timer);
+      }
+      writing.delete(message.id);
+    });
+    const step = (at: number) => {
+      timer = setTimeout(() => {
+        timers.delete(timer!);
         if (at === 0)
           publish(conversation.id, {
             type: "message.start",
@@ -119,6 +135,7 @@ export async function createFixtureServer(options: {
           return step(at + 1);
         }
         if (turn.ending === "held") return;
+        writing.delete(message.id);
         // A host that loses a reply says so on the conversation, which the
         // next read carries; the reply itself is never finished.
         if (turn.ending === "failed" || turn.ending === "unavailable") {
@@ -326,6 +343,7 @@ export async function createFixtureServer(options: {
             "plan-recovery",
             "plan-leave",
             "plan-keep",
+            ...(options.fault === "no-stop" ? [] : ["reply-stop"]),
           ],
           offer,
         );
@@ -452,6 +470,39 @@ export async function createFixtureServer(options: {
           createdAt: Date.now(),
         });
       send(200, message);
+      return;
+    }
+    if (match?.[2] === "replies" && body.kind === "stop") {
+      // A stop ends the reply being written as stopped and keeps its text;
+      // a replay, or a stop of a reply that already ended, changes nothing.
+      const key = JSON.stringify([conversation.id, body.clientReplyId]);
+      const seen = replies.get(key);
+      if (seen) {
+        send(200, seen.result);
+        return;
+      }
+      const message = conversation.messages.find(
+        (item) => item.id === body.messageId && item.role === "assistant",
+      );
+      if (!message || options.fault === "no-stop") {
+        send(409, { id: String(body.clientReplyId), code: "refused" });
+        return;
+      }
+      if (message.status === "writing" && options.fault !== "ignores-stop") {
+        writing.get(message.id)?.();
+        message.status = "stopped";
+        if (options.fault === "loses-stopped-text") message.content = "";
+        publish(conversation.id, {
+          type: "message.end",
+          messageId: message.id,
+          status: "stopped",
+        });
+      }
+      replies.set(key, {
+        body: JSON.stringify(body),
+        result: { id: `reply-${++next}` },
+      });
+      send(200, replies.get(key)!.result);
       return;
     }
     if (match?.[2] === "replies") {

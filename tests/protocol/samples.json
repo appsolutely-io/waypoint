@@ -844,5 +844,11 @@
     },
     "relation": "leaveCoveredByKeep",
     "requestedTargetApplied": false
+  },
+  "ReplyStop": {
+    "kind": "stop",
+    "protocol": "1.0",
+    "clientReplyId": "stop-a",
+    "messageId": "a"
   }
 }

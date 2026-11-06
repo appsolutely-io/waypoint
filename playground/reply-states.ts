@@ -84,6 +84,8 @@ export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
   switch (state) {
     case "streaming":
       return { chunks: pieces(text.long), interval: 220 };
+    case "stopped":
+      return { chunks: pieces(text.long), interval: 60 };
     case "done":
       return { chunks: pieces(text.short), interval: 15 };
     case "overdue":

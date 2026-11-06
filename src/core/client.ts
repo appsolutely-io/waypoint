@@ -392,6 +392,14 @@ export interface WaypointClient {
   runFlow(id: string, values: Record<string, unknown>): Promise<string | void>;
   /** Whether `prepareFlow` can read a flow's document (the source has `load`). */
   canPrepareFlow(): boolean;
+  /** Whether the reply being written can be stopped (`reply-stop`). */
+  canStopReply(): boolean;
+  /**
+   * Stops the reply being written: its text so far stays, marked
+   * `stopped` at once, and the host is asked once to stop writing it. Text
+   * that still arrives for it is dropped. Does nothing without `reply-stop`.
+   */
+  stopReply(): Promise<void>;
   /**
    * Loads and validates a flow's document, to ask for its parameters, and
    * keeps it for the next `runFlow` of that flow in this conversation (a
@@ -1013,28 +1021,36 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         setStatus(id, mark.read);
       }
   };
-  const withMarks = (conversation: Conversation, token: number) => {
+  // Replies the user stopped: a read that still says the host is writing
+  // shows them stopped, and text that arrives for them is dropped.
+  const stopped = new Set<string>();
+  const withStops = (message: Message): Message =>
+    stopped.has(message.id) && message.status === "writing"
+      ? { ...message, status: "stopped" }
+      : message;
+  const withMarks = (conversation: Conversation, token: number) => ({
+    ...conversation,
+    messages: shownWithMarks(conversation, token).map(withStops),
+  });
+  const shownWithMarks = (conversation: Conversation, token: number) => {
     const before = state.conversation?.messages ?? [];
-    return {
-      ...conversation,
-      messages: conversation.messages.map((message) => {
-        const mark = marks.get(message.id);
-        if (!mark || mark.binding !== stream) return message;
-        if (mark.reopen !== undefined && token > mark.reopen) {
-          mark.reopen = undefined;
-          if (!message.status) mark.status = undefined;
-        }
-        if (!mark.status) return message;
-        if (token <= mark.at)
-          return before.find((shown) => shown.id === message.id) ?? message;
-        mark.read = message.status;
-        if (message.status && message.status !== "writing") {
-          mark.status = message.status;
-          mark.at = token;
-        }
-        return { ...message, status: mark.status };
-      }),
-    };
+    return conversation.messages.map((message) => {
+      const mark = marks.get(message.id);
+      if (!mark || mark.binding !== stream) return message;
+      if (mark.reopen !== undefined && token > mark.reopen) {
+        mark.reopen = undefined;
+        if (!message.status) mark.status = undefined;
+      }
+      if (!mark.status) return message;
+      if (token <= mark.at)
+        return before.find((shown) => shown.id === message.id) ?? message;
+      mark.read = message.status;
+      if (message.status && message.status !== "writing") {
+        mark.status = message.status;
+        mark.at = token;
+      }
+      return { ...message, status: mark.status };
+    });
   };
   // The read handlers' code loads with the first read frame. Frames whose
   // load failed are kept, in order, and handled again by a later read frame
@@ -1319,6 +1335,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       update({
         conversation: { ...state.conversation, replyStatus: undefined },
       });
+    if (frame.type === "text.delta" && stopped.has(frame.messageId)) return;
     if (frame.type === "text.delta") {
       // A reply that went on after its mark was dropped is written again.
       const again = mark && mark.binding === stream && !mark.status;
@@ -1335,6 +1352,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     ) {
       // A start begins the whole text of a version: what is shown is
       // replaced, never joined.
+      stopped.delete(frame.messageId);
       markAs(frame.messageId, "writing", mark?.read);
       patch(frame.messageId, () => ({
         status: "writing",
@@ -2391,6 +2409,16 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     setFavourite: (id, favourite) =>
       later((actions) => actions.setFavourite(id, favourite)),
     canPrepareFlow: () => !!config.flowSource?.load,
+    canStopReply: () =>
+      !!stoppable() && state.capabilities.includes("reply-stop"),
+    // Marked at once, before the host is asked.
+    stopReply() {
+      const message = stoppable();
+      if (!message || !client.canStopReply()) return Promise.resolve();
+      stopped.add(message.id);
+      setStatus(message.id, "stopped");
+      return later((actions) => actions.stopReply(message.id));
+    },
     prepareFlow(id) {
       const scope = conversationScope.signal;
       return later((actions) => actions.prepareFlow(scope, id));
@@ -2420,6 +2448,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       listeners.clear();
       observers.clear();
     },
+  };
+  // The reply being written, if any: the last message, from the assistant.
+  const stoppable = () => {
+    const last = state.conversation?.messages.at(-1);
+    return last?.role === "assistant" && last.status === "writing"
+      ? last
+      : undefined;
   };
   // A reply owned by a connection (a tool or planning result) is dropped, and
   // its side effects skipped, once that connection has closed.

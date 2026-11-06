@@ -67,6 +67,7 @@ export type {
 } from "./confirmation-messages";
 export type { ProblemCatalogue, ProblemMessageKey } from "./problem-messages";
 export type { BlockCatalogue, BlockMessageKey } from "./block-messages";
+export type { ReplyCatalogue, ReplyMessageKey } from "./reply-messages";
 export type { FormCatalogue, FormMessageKey } from "./form-messages";
 export * from "./i18n";
 export { lightTheme, darkTheme, themeProperties } from "../tokens/index";

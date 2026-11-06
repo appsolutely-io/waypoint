@@ -1548,7 +1548,7 @@
           "minimum": 0
         },
         "status": {
-          "enum": ["writing", "completed", "failed", "unavailable"]
+          "enum": ["writing", "completed", "failed", "unavailable", "stopped"]
         },
         "versionIndex": {
           "type": "integer",
@@ -1821,8 +1821,33 @@
         },
         {
           "$ref": "#/$defs/ReplyFormFill"
+        },
+        {
+          "$ref": "#/$defs/ReplyStop"
         }
       ]
+    },
+    "ReplyStop": {
+      "description": "Asks the host to stop writing a reply. Sent only under the negotiated `reply-stop` capability.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "stop"
+        },
+        "protocol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clientReplyId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["kind", "protocol", "clientReplyId", "messageId"]
     },
     "ManifestEntry": {
       "type": "object",
@@ -2153,7 +2178,7 @@
           "minLength": 1
         },
         "status": {
-          "enum": ["completed", "failed", "unavailable"]
+          "enum": ["completed", "failed", "unavailable", "stopped"]
         }
       },
       "required": ["type", "protocol", "sequence", "messageId", "status"]

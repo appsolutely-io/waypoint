@@ -52,6 +52,7 @@ export type WaypointProtocol =
   | ReplyToolResult
   | ReplyPlanValues
   | Reply
+  | ReplyStop
   | ManifestEntry
   | ToolCall
   | FrameMessageStart
@@ -171,7 +172,7 @@ export type FormSubject = {
   record?: string;
 };
 export type Reply =
-  ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | ReplyFormFill;
+  ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | ReplyFormFill | ReplyStop;
 export type Frame =
   | FrameMessageStart
   | FrameTextDelta
@@ -691,7 +692,7 @@ export interface Message {
   content: string;
   blocks: Block[];
   createdAt: number;
-  status?: 'writing' | 'completed' | 'failed' | 'unavailable';
+  status?: 'writing' | 'completed' | 'failed' | 'unavailable' | 'stopped';
   versionIndex?: number;
   versionCount?: number;
 }
@@ -767,6 +768,15 @@ export interface FormFillField {
   label: string;
   tier: 'low';
   value: unknown;
+}
+/**
+ * Asks the host to stop writing a reply. Sent only under the negotiated `reply-stop` capability.
+ */
+export interface ReplyStop {
+  kind: 'stop';
+  protocol: string;
+  clientReplyId: string;
+  messageId: string;
 }
 export interface ManifestEntry {
   id: string;
@@ -853,7 +863,7 @@ export interface FrameMessageEnd {
   protocol: string;
   sequence: number;
   messageId: string;
-  status: 'completed' | 'failed' | 'unavailable';
+  status: 'completed' | 'failed' | 'unavailable' | 'stopped';
 }
 export interface FrameStale {
   type: 'stale';

@@ -268,6 +268,17 @@ export async function createPreview(
     await client.setDraft(stateQuestion(language));
     await client.send();
     if (replyState === "plan") client.setPlan(statePlan(conversation.id));
+    // Stopped once the reply has written a few lines.
+    if (replyState === "stopped") {
+      const stopWhenWritten = () => {
+        const last = client.getSnapshot().conversation?.messages.at(-1);
+        if (last?.status === "writing" && last.content.length > 160) {
+          unsubscribe();
+          void client.stopReply();
+        }
+      };
+      const unsubscribe = client.subscribe(stopWhenWritten);
+    }
   }
   return {
     client,

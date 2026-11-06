@@ -4,6 +4,7 @@ import type { RecoveryCatalogue } from "./recovery-messages";
 import type { BlockCatalogue } from "./block-messages";
 import type { ConfirmationCatalogue } from "./confirmation-messages";
 import type { ProblemCatalogue } from "./problem-messages";
+import type { ReplyCatalogue } from "./reply-messages";
 import type { FormCatalogue } from "./form-messages";
 export const english = {
   "form.valid": "Valid",
@@ -106,6 +107,7 @@ export const english = {
   "flow.recent": "Recent",
   "flow.presets": "Presets",
   "reply.writing": "Writing",
+  "reply.stopped": "Stopped",
   "reply.unavailable": "Reply unavailable",
   "reply.failed": "Reply failed",
   "reply.overdue": "Reply overdue",
@@ -124,6 +126,7 @@ export type MessageKey =
   | keyof ConfirmationCatalogue
   | keyof BlockCatalogue
   | keyof ProblemCatalogue
+  | keyof ReplyCatalogue
   | keyof FormCatalogue;
 const added: { en: Record<string, string>; zh: Record<string, string> } = {
   en: {},
@@ -234,6 +237,7 @@ export const simplifiedChinese: Record<keyof typeof english, string> = {
   "flow.recent": "最近",
   "flow.presets": "预设",
   "reply.writing": "正在回复",
+  "reply.stopped": "已停止",
   "reply.unavailable": "无法回复",
   "reply.failed": "回复失败",
   "reply.overdue": "回复已超时",

@@ -19,6 +19,7 @@ export type {
   ProblemMessageKey,
 } from "../react/problem-messages";
 export type { BlockCatalogue, BlockMessageKey } from "../react/block-messages";
+export type { ReplyCatalogue, ReplyMessageKey } from "../react/reply-messages";
 export type { FormCatalogue, FormMessageKey } from "../react/form-messages";
 export type { Theme } from "../tokens/index";
 export * from "../tokens/index";

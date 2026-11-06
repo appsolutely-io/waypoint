@@ -95,6 +95,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "flow.recent": "最近",
   "flow.presets": "预设",
   "reply.writing": "正在回复",
+  "reply.stopped": "已停止",
   "reply.unavailable": "无法回复",
   "reply.failed": "回复失败",
   "reply.overdue": "回复已超时",

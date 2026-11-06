@@ -358,7 +358,7 @@ export interface CanonicalRequest {
 export function canTransition(from: PlanState, to: PlanState): boolean;
 
 // @public (undocumented)
-export const CAPABILITIES: readonly ["plans", "flows", "widgets", "step-up", "scheduled", "form-fill", "plan-recovery", "plan-leave", "plan-keep"];
+export const CAPABILITIES: readonly ["plans", "flows", "widgets", "step-up", "scheduled", "form-fill", "plan-recovery", "plan-leave", "plan-keep", "reply-stop"];
 
 // @public (undocumented)
 export type Capability = (typeof CAPABILITIES)[number];
@@ -847,6 +847,7 @@ export const english: {
     readonly "flow.recent": "Recent";
     readonly "flow.presets": "Presets";
     readonly "reply.writing": "Writing";
+    readonly "reply.stopped": "Stopped";
     readonly "reply.unavailable": "Reply unavailable";
     readonly "reply.failed": "Reply failed";
     readonly "reply.overdue": "Reply overdue";
@@ -1219,7 +1220,7 @@ export interface FrameMessageEnd {
     // (undocumented)
     sequence: number;
     // (undocumented)
-    status: 'completed' | 'failed' | 'unavailable';
+    status: 'completed' | 'failed' | 'unavailable' | 'stopped';
     // (undocumented)
     type: 'message.end';
 }
@@ -1647,7 +1648,7 @@ export interface Message {
     // (undocumented)
     role: 'user' | 'assistant';
     // (undocumented)
-    status?: 'writing' | 'completed' | 'failed' | 'unavailable';
+    status?: 'writing' | 'completed' | 'failed' | 'unavailable' | 'stopped';
     // (undocumented)
     versionCount?: number;
     // (undocumented)
@@ -1655,7 +1656,7 @@ export interface Message {
 }
 
 // @public (undocumented)
-export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof FormCatalogue;
+export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue;
 
 // @public (undocumented)
 export type MessageValues = Record<string, string | number | boolean>;
@@ -2262,7 +2263,7 @@ export function renderWithWaypoint(element: ReactElement, options: {
 }): RenderResult;
 
 // @public (undocumented)
-export type Reply = ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | ReplyFormFill;
+export type Reply = ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | ReplyFormFill | ReplyStop;
 
 // @public (undocumented)
 export interface ReplyAction {
@@ -2277,6 +2278,9 @@ export interface ReplyAction {
     // (undocumented)
     protocol: string;
 }
+
+// @public (undocumented)
+export type ReplyCatalogue = Readonly<Record<ReplyMessageKey, string>>;
 
 // @public (undocumented)
 export interface ReplyConfirm {
@@ -2359,6 +2363,9 @@ export interface ReplyMessage {
     protocol: string;
 }
 
+// @public (undocumented)
+export type ReplyMessageKey = "chat.reply.stop";
+
 // @public
 export type ReplyOutcome = {
     accepted: true;
@@ -2403,6 +2410,18 @@ export function replyRow(input: {
 
 // @public (undocumented)
 export type ReplyState = "none" | "writing" | "unavailable" | "failed" | "overdue";
+
+// @public
+export interface ReplyStop {
+    // (undocumented)
+    clientReplyId: string;
+    // (undocumented)
+    kind: 'stop';
+    // (undocumented)
+    messageId: string;
+    // (undocumented)
+    protocol: string;
+}
 
 // @public (undocumented)
 export interface ReplyToolResult {
@@ -2489,6 +2508,7 @@ export interface ScriptedTurn {
     events?: TransportEvent[];
     // (undocumented)
     problem?: Problem;
+    writing?: boolean;
 }
 
 // @public (undocumented)
@@ -2779,6 +2799,7 @@ export interface WaypointClient {
     // (undocumented)
     canKeepChanges(id?: string): boolean;
     canPrepareFlow(): boolean;
+    canStopReply(): boolean;
     checkIntentStatus(id?: string): Promise<void>;
     checkKeepStatus(id?: string): Promise<void>;
     checkSavedChoice(id?: string): Promise<void>;
@@ -2840,6 +2861,7 @@ export interface WaypointClient {
     setPlan(plan: PlanRecord): void;
     // (undocumented)
     stopPlan(id?: string): void;
+    stopReply(): Promise<void>;
     // (undocumented)
     subscribe(listener: () => void): () => void;
     // (undocumented)
@@ -2865,7 +2887,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
+export type WaypointProtocol = Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
 
 // @public (undocumented)
 export function WaypointProvider(props: WaypointProviderProps): react.JSX.Element;

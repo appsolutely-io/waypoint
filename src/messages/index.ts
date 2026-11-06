@@ -49,6 +49,7 @@ export type {
   ConfirmationMessageKey,
 } from "../react/confirmation-messages";
 export type { BlockCatalogue, BlockMessageKey } from "../react/block-messages";
+export type { ReplyCatalogue, ReplyMessageKey } from "../react/reply-messages";
 export type {
   ProblemCatalogue,
   ProblemMessageKey,

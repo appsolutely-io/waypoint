@@ -28,6 +28,25 @@ test("a finished reply is complete and no longer busy", async ({ page }) => {
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "none");
 });
 
+test("Stop is within reach while a reply streams", async ({ page }) => {
+  await page.goto("/?state=streaming");
+  await expect(
+    page.getByRole("button", { name: "Stop", exact: true }),
+  ).toBeVisible();
+});
+
+test("a stopped reply keeps its text and is marked stopped", async ({
+  page,
+}) => {
+  await page.goto("/?state=stopped");
+  await expect(reply(page).locator("[data-stopped]")).toHaveText("Stopped");
+  await expect(reply(page)).toContainText("Your last three orders");
+  await expect(replyRow(page)).toHaveAttribute("data-reply-state", "none");
+  const text = await reply(page).textContent();
+  await page.waitForTimeout(500);
+  expect(await reply(page).textContent()).toBe(text);
+});
+
 test("a reply that never starts is overdue", async ({ page }) => {
   await page.goto("/?state=overdue");
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "overdue");

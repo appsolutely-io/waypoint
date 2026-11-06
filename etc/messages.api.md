@@ -117,6 +117,7 @@ export const english: {
     readonly "flow.recent": "Recent";
     readonly "flow.presets": "Presets";
     readonly "reply.writing": "Writing";
+    readonly "reply.stopped": "Stopped";
     readonly "reply.unavailable": "Reply unavailable";
     readonly "reply.failed": "Reply failed";
     readonly "reply.overdue": "Reply overdue";
@@ -138,7 +139,7 @@ export type FormCatalogue = Readonly<Record<FormMessageKey, string>>;
 export type FormMessageKey = "form.generating" | "form.ready" | "form.attention" | "form.reverted" | "form.revert" | "form.revertWait" | "form.suggested" | "form.replaceIt" | "form.keepMine" | "form.attach" | "form.remove" | "form.uploading" | "form.attached" | "form.attachFailed" | "form.removeFailed" | "form.onlyImages" | "form.busy" | "form.unusable";
 
 // @public (undocumented)
-export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof FormCatalogue;
+export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue;
 
 // @public (undocumented)
 export type MessageValues = Record<string, string | number | boolean>;
@@ -162,6 +163,12 @@ export type RecoveryCatalogue = Readonly<Record<RecoveryMessageKey, string>>;
 
 // @public (undocumented)
 export type RecoveryMessageKey = "chat.recovery.heading" | "chat.recovery.updateToControl" | "chat.recovery.stopping" | "chat.recovery.cancelling" | "chat.recovery.leavePending" | "chat.recovery.currentRunning" | "chat.recovery.currentStopped" | "chat.recovery.cancelledNoChanges" | "chat.recovery.leftKnown" | "chat.recovery.leftUnconfirmed" | "chat.recovery.keptKnown" | "chat.recovery.done" | "chat.recovery.notDone" | "chat.recovery.unknown" | "chat.recovery.stopped" | "chat.recovery.capabilityMissing" | "chat.recovery.intentPendingReason" | "chat.recovery.refreshConversation" | "chat.recovery.hostGuidance" | "chat.recovery.checkIntentStatus" | "chat.recovery.checkSavedChoice" | "chat.recovery.checkKeepStatus" | "chat.recovery.keepChanges" | "chat.recovery.leave" | "chat.recovery.confirmKeepForwardOnly" | "chat.recovery.confirmEndRetention" | "chat.recovery.keepReasonActive" | "chat.recovery.keepReasonUnknown" | "chat.recovery.keepReasonUnavailable" | "chat.recovery.keepReasonChanged" | "chat.recovery.keepReasonPreview" | "chat.recovery.keepReasonNoSource" | "chat.recovery.alreadyKept" | "chat.recovery.stopNotSent" | "chat.recovery.stopNotSentElsewhere" | "chat.recovery.stopUnconfirmed" | "chat.recovery.cancelNotSent" | "chat.recovery.cancelUnconfirmed" | "chat.recovery.reviewCancelNotSent" | "chat.recovery.reviewCancelUnconfirmed" | "chat.recovery.leaveNotSent" | "chat.recovery.leaveUnconfirmed" | "chat.recovery.keepNotSent" | "chat.recovery.keepUnconfirmed" | "chat.recovery.requestAlreadyStopped" | "chat.recovery.requestTargetStopped" | "chat.recovery.requestedIntentApplied" | "chat.recovery.requestedIntentNotApplied" | "chat.recovery.intentSuperseded" | "chat.recovery.intentTargetChanged" | "chat.recovery.alreadyClosedByWinner" | "chat.recovery.alreadyStoppedNeedsDecision" | "chat.recovery.cancelStarted" | "chat.recovery.stoppedNoChanges" | "chat.recovery.initialTargetSettled" | "chat.recovery.initialTargetStopped" | "chat.recovery.reviewTargetSettled" | "chat.recovery.reviewTargetStopped" | "chat.recovery.planClosedKept" | "chat.recovery.keptForwardClosed" | "chat.recovery.keptAlready" | "chat.recovery.leaveCompletedByKeep" | "chat.recovery.leaveCoveredByKeep" | "chat.recovery.leaveNeedsReview" | "chat.recovery.leaveSafetyNeedsReview" | "chat.recovery.laterReceiptAfterKeep" | "chat.recovery.undoSelected" | "chat.recovery.continue" | "chat.recovery.statusProposal" | "chat.recovery.statusCompleted" | "chat.recovery.stepsNotKnownYet" | "chat.recovery.stepsUnknown" | "chat.recovery.stepsNotDone" | "chat.recovery.laterReportAfterKeep" | "chat.recovery.reportedDifferently" | "chat.recovery.notAvailableYet" | "chat.recovery.actionLoading" | "chat.recovery.retryAfterSeconds" | "chat.recovery.keepPending" | "chat.recovery.keepRemainingSteps" | "chat.recovery.signInRequired" | "chat.recovery.requestRefused" | "chat.recovery.acknowledgmentAhead" | "chat.recovery.cancelCoveredByLeaveSafety" | "chat.recovery.cancelCoveredByStopNoChanges" | "chat.recovery.cancelDefeatedByStop" | "chat.recovery.choiceReplacedByStop" | "chat.recovery.initialTargetClosed" | "chat.recovery.keepDefeatedByWinner" | "chat.recovery.leaveDefeatedByWinner" | "chat.recovery.leaveNoDecision" | "chat.recovery.leaveSafetyAlreadyStopped" | "chat.recovery.reopenedEvidence" | "chat.recovery.winnerStopUser" | "chat.recovery.winnerStopConnection" | "chat.recovery.winnerStopRenewal" | "chat.recovery.winnerStopStep" | "chat.recovery.winnerStopStepUp" | "chat.recovery.winnerStopIdentity" | "chat.recovery.winnerStopAttribution" | "chat.recovery.winnerStopChanged" | "chat.recovery.winnerStopAdapter" | "chat.recovery.winnerCancel" | "chat.recovery.winnerLeave" | "chat.recovery.winnerKeep" | "chat.recovery.stepStatusChanged" | "chat.recovery.stepNotKnownYet";
+
+// @public (undocumented)
+export type ReplyCatalogue = Readonly<Record<ReplyMessageKey, string>>;
+
+// @public (undocumented)
+export type ReplyMessageKey = "chat.reply.stop";
 
 // @public
 export function stepName(t: FormatMessage, labels: PlanLabels | undefined, step: {

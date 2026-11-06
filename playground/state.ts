@@ -9,6 +9,7 @@ export const choices = {
     "idle",
     "streaming",
     "done",
+    "stopped",
     "overdue",
     "reply-failed",
     "reply-unavailable",

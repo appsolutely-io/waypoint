@@ -75,6 +75,15 @@ export function createOnDemand(context: OnDemandContext) {
   let prepared: { id: string; document: Flow; scope: ScopeSignal } | undefined;
   let preparation = 0;
   return {
+    // Asks the host to stop writing a reply the client already shows
+    // stopped; the reply id is the message's, so a repeat is a replay.
+    async stopReply(messageId: string) {
+      await context.sendReply(undefined, {
+        kind: "stop",
+        clientReplyId: `stop-${messageId}`,
+        messageId,
+      });
+    },
     // Edits, regenerates or selects a message version, once per identical
     // request while it is in flight.
     async version(

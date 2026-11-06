@@ -14,6 +14,9 @@ export const CAPABILITIES = [
   // plan-recovery.
   "plan-leave",
   "plan-keep",
+  // Stopping the reply being written: the host accepts a `stop` reply and
+  // ends the reply as `stopped`, keeping its text so far.
+  "reply-stop",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 /** Drops a capability whose prerequisite is not also in `chosen`. */

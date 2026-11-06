@@ -91,7 +91,9 @@ const budgets = [
   {
     name: "lazy conformance runners",
     path: "dist/conformance.js",
-    limit: "5 KB",
+    // The reply stop check: measured with Node 22's zlib at 5,159 B, the
+    // limit is 3% above it, rounded down.
+    limit: "5.313 KB",
     gzip: true,
     brotli: false,
   },
@@ -120,9 +122,10 @@ const budgets = [
     // the form fields' typed editors and guarded Regenerate, the focus
     // handoffs, the shared load-failure notice whose Retry stays while
     // it loads again, and a card that stays answered once the host accepted
-    // its answer. Measured with Node 22's zlib: 39,441 B, 86 B under the
-    // limit.
-    limit: "39.527 KB",
+    // its answer. Stopping a reply needs the stopped mark in the bubble and
+    // the loader of the lazy reply controls in the entry: measured with
+    // Node 22's zlib at 39,599 B, the limit is 3% above it, rounded down.
+    limit: "40.786 KB",
     gzip: true,
     brotli: false,
     ignore: [
@@ -142,6 +145,8 @@ const budgets = [
       "./form-extras-*",
       "../flows-panel-*",
       "./flows-panel-*",
+      "../reply-controls-*",
+      "./reply-controls-*",
     ],
   },
   {
@@ -226,6 +231,14 @@ const budgets = [
     ignore: ["react", "react-dom", "./chunk-*"],
   },
   {
+    name: "lazy reply controls",
+    path: "dist/reply-controls-*.js",
+    limit: "1 KB",
+    gzip: true,
+    brotli: false,
+    ignore: ["react", "react-dom", "./chunk-*"],
+  },
+  {
     name: "lazy recovery panel",
     path: "dist/recovery-panel-*.js",
     limit: "8 KB",
@@ -282,9 +295,10 @@ const budgets = [
     // The testing entry is opt-in and never reaches end users; the
     // focus, transcript and announcement contracts need the space, and it
     // bundles the react entry, so it grows with the react entry above. It
-    // also bundles the form session and the form fields. Measured with
-    // Node 22's zlib.
-    limit: "58.395 KB",
+    // also bundles the form session and the form fields. With the reply
+    // stop in the scripted host, measured with Node 22's zlib at 58,845 B;
+    // the limit is 3% above it, rounded down.
+    limit: "60.610 KB",
     gzip: true,
     brotli: false,
     ignore: [

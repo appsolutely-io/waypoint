@@ -276,6 +276,57 @@ export async function runConformance(
       read.status === 200 && (read.body as Conversation).protocol === a.protocol
     );
   });
+  const stopPeer = await post("/negotiate", {
+    supported: SUPPORTED_PROTOCOLS,
+    offer: { capabilities: ["reply-stop"] },
+  });
+  if (
+    (stopPeer.body as { capabilities?: string[] }).capabilities?.includes(
+      "reply-stop",
+    )
+  )
+    await check("reply stop", async () => {
+      // A reply left being written, as the script asks.
+      await post("/__conformance/script", {
+        turns: [{ chunks: ["Partial answer"], interval: 0, ending: "held" }],
+      });
+      await post(`/conversations/${id}/messages`, {
+        clientMessageId: "stop-a",
+        content: "Request",
+      });
+      const read = async () =>
+        (
+          (await config.request(`/conversations/${id}`, { headers }))
+            .body as Conversation
+        ).messages.at(-1);
+      // Read again, a bounded number of times, until the pieces arrived.
+      let reply = await read();
+      for (
+        let tries = 0;
+        reply?.content !== "Partial answer" && tries < 100;
+        tries++
+      )
+        reply = await read();
+      if (reply?.role !== "assistant" || reply.status !== "writing")
+        return false;
+      const stop = {
+        kind: "stop",
+        clientReplyId: "stop-a-reply",
+        messageId: reply.id,
+      };
+      const first = await post(`/conversations/${id}/replies`, stop);
+      const replay = await post(`/conversations/${id}/replies`, stop);
+      const after = await read();
+      return (
+        first.status >= 200 &&
+        first.status < 300 &&
+        replay.status === first.status &&
+        JSON.stringify(replay.body) === JSON.stringify(first.body) &&
+        after?.id === reply.id &&
+        after.status === "stopped" &&
+        after.content === "Partial answer"
+      );
+    });
   const plans = await runPlanConformance(config.request);
   failures.push(...plans.failures);
   scenarios.push(...plans.scenarios);

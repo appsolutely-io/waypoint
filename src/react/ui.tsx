@@ -34,7 +34,12 @@ import { excerpt } from "./excerpt";
 import { ExcerptCache } from "./excerpt-cache";
 import { useTranscriptPosition } from "./transcript";
 import { useAnnouncements, useHeldWhileInert } from "./announcements";
-import { confirmationOf, flowTabId, type WaypointClient } from "../core/client";
+import {
+  confirmationOf,
+  flowTabId,
+  type ReplyState,
+  type WaypointClient,
+} from "../core/client";
 import type { Capability } from "../protocol/index";
 import {
   ChatFocusContext,
@@ -120,6 +125,15 @@ const LazyConfirmation = lazy(() => import("./confirmation-view"));
 // loaded when the first is shown (most chats never show one), and asked
 // for again by a Retry after a failure.
 const blocksChunk = lazyChunk(() => import("./blocks"));
+// The controls of the reply being written, loaded when one is first shown.
+const replyControlsChunk = lazyChunk(() => import("./reply-controls"));
+function ReplyControls(props: { client: WaypointClient; row: ReplyState }) {
+  const load = useChunk(replyControlsChunk);
+  useEffect(() => replyControlsChunk.request(), []);
+  return load.status === "ready" ? (
+    <load.module.ReplyControls {...props} />
+  ) : null;
+}
 // The saved requests' panel and parameter drawer, loaded with the tabs.
 const flowsChunk = lazyChunk(() => import("./flows-panel"));
 function useBlocks() {
@@ -2092,6 +2106,8 @@ function ChatBody({
                               <span data-writing="" aria-hidden="true">
                                 {t("reply.writing")}
                               </span>
+                            ) : message.status === "stopped" ? (
+                              <span data-stopped="">{t("reply.stopped")}</span>
                             ) : null}
                             {message.blocks.map((block) => (
                               <Part
@@ -2246,6 +2262,9 @@ function ChatBody({
               <div ref={replyRow} role="status" data-reply-state={row}>
                 {heldRow === "none" ? null : <p>{t(`reply.${heldRow}`)}</p>}
               </div>
+              {row === "writing" ? (
+                <ReplyControls client={client} row={row} />
+              ) : null}
             </Part>
             {narrow ? planPanel : null}
             {enabled("flows") ? (

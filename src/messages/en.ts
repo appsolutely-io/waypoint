@@ -100,6 +100,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "flow.recent": "Recent",
   "flow.presets": "Presets",
   "reply.writing": "Writing",
+  "reply.stopped": "Stopped",
   "reply.unavailable": "Reply unavailable",
   "reply.failed": "Reply failed",
   "reply.overdue": "Reply overdue",

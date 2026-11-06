@@ -812,6 +812,19 @@ function ProblemAction({
     />
   );
 }
+// The code and reference, for whoever needs them, outside the alert so it
+// says only the plain words.
+function ProblemDetails({ problem }: { problem: Problem }) {
+  const { format: t } = context();
+  if (!t("chat.problem.details")) return null;
+  return (
+    <details data-problem-details="">
+      <summary>{t("chat.problem.details")}</summary>
+      <p>{t("chat.problem.code", { code: problem.code })}</p>
+      <p>{t("chat.problem.reference", { id: problem.id })}</p>
+    </details>
+  );
+}
 const retryingLoad = (load: { status: string; retrying?: true }) =>
   load.status === "loading" && !!load.retrying;
 /**
@@ -1831,6 +1844,15 @@ function ChatBody({
     )
       ? state.problem
       : undefined;
+  // Where the problem is shown: one about a message that could not be sent
+  // is shown with that message; any other is about the conversation and is
+  // shown after the composer.
+  const messageProblem =
+    shownProblem &&
+    state.pending.some((row) => row.failure && row.id === shownProblem.id)
+      ? shownProblem
+      : undefined;
+  const conversationProblem = messageProblem ? undefined : shownProblem;
   const confirmEntry = planView?.actions.find(
     (entry) => entry.id === "confirm",
   );
@@ -2230,6 +2252,22 @@ function ChatBody({
                                 : "chat.pendingSending",
                             )}
                           </p>
+                          {/* Its own problem, said here. Its Retry is the
+                              message's own, below; a Refresh the problem
+                              asks for stays with it. */}
+                          {messageProblem?.id === pending.id && problem ? (
+                            <p role="alert" key={state.announcement}>
+                              {problem.text}
+                              {problem.action ??
+                                (!provider.problemText &&
+                                problemAction(messageProblem) === "refresh" ? (
+                                  <ProblemAction
+                                    problem={messageProblem}
+                                    refresh={retrying}
+                                  />
+                                ) : null)}
+                            </p>
+                          ) : null}
                           {pending.failure ? (
                             <Part
                               name="failedSendControls"
@@ -2267,6 +2305,12 @@ function ChatBody({
                                 {t("chat.dismiss")}
                               </B>
                             </Part>
+                          ) : null}
+                          {messageProblem?.id === pending.id ? (
+                            <ProblemDetails
+                              key={state.announcement}
+                              problem={messageProblem}
+                            />
                           ) : null}
                         </article>
                       ))}
@@ -2562,7 +2606,7 @@ function ChatBody({
                   </B>
                 </span>
               )}
-              {shownProblem && problem ? (
+              {conversationProblem && problem ? (
                 <span key={state.announcement}>
                   {problem.text}
                   {problem.action ??
@@ -2575,14 +2619,11 @@ function ChatBody({
                 </span>
               ) : null}
             </div>
-            {/* The code and reference, for whoever needs them, outside the
-                alert so it says only the plain words. */}
-            {shownProblem && t("chat.problem.details") ? (
-              <details data-problem-details="" key={state.announcement}>
-                <summary>{t("chat.problem.details")}</summary>
-                <p>{t("chat.problem.code", { code: shownProblem.code })}</p>
-                <p>{t("chat.problem.reference", { id: shownProblem.id })}</p>
-              </details>
+            {conversationProblem ? (
+              <ProblemDetails
+                key={state.announcement}
+                problem={conversationProblem}
+              />
             ) : null}
           </main>
           {narrow ? null : planPanel}

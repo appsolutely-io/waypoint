@@ -186,6 +186,58 @@ test.describe("on a phone", () => {
     hasTouch: true,
     viewport: { width: 390, height: 844 },
   });
+  test("a message's problem keeps its action at the message's side", async ({
+    page,
+  }) => {
+    await page.goto("/?state=error-replaced");
+    const message = page.locator('article[data-role="pending"]');
+    const refresh = message.getByRole("alert").locator("button");
+    await expect(refresh).toBeVisible();
+    const bubble = (await message
+      .locator('[data-part="bubble"]')
+      .boundingBox())!;
+    const box = (await refresh.boundingBox())!;
+    expect(
+      Math.abs(box.x + box.width - (bubble.x + bubble.width)),
+    ).toBeLessThan(1);
+  });
+  test("a message not sent has its error and Details with it", async ({
+    page,
+  }) => {
+    await page.goto("/?state=error-retryable");
+    const message = page.locator('article[data-role="pending"]');
+    const error = message.getByRole("alert");
+    await expect(error).toHaveText(
+      "Something went wrong for a moment. Try again.",
+    );
+    await expect(message.locator("[data-problem-details]")).toBeVisible();
+    // Above the composer, where the message is, and said once.
+    const composer = page.getByRole("textbox", {
+      name: "Message",
+      exact: true,
+    });
+    expect((await error.boundingBox())!.y).toBeLessThan(
+      (await composer.boundingBox())!.y,
+    );
+    await expect(page.locator("[data-problem-details]")).toHaveCount(1);
+    await expect(page.locator("[data-announcement]")).toHaveText("");
+    // Opening the details moves nothing: the words "Details" stay at the
+    // message's side.
+    const summary = message.locator("[data-problem-details] summary");
+    const words = () =>
+      summary.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return Math.round(range.getBoundingClientRect().right);
+      });
+    const closed = await words();
+    await summary.click();
+    await expect(message.locator("[data-problem-details]")).toHaveAttribute(
+      "open",
+      "",
+    );
+    expect(await words()).toBe(closed);
+  });
   for (const skin of ["neutral", "antd"])
     test(`every control of a reply's form is 44 by 44: ${skin}`, async ({
       page,

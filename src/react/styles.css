@@ -283,6 +283,16 @@
 .waypoint [data-pending-status="failed"] {
   color: var(--wp-danger);
 }
+/* A message's problem, its action and its details sit at the message's
+   side, like "Not sent": an action that wraps stays there, and opening the
+   details moves nothing. */
+.waypoint article > [role="alert"] {
+  justify-content: flex-end;
+}
+.waypoint article > [data-problem-details] {
+  align-self: stretch;
+  text-align: end;
+}
 /* A field's validation when it is invalid: the danger tone, with the word
    "Invalid" in front as the cue that is not colour. */
 .waypoint .wp-invalid {

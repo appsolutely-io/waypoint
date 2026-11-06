@@ -57,3 +57,12 @@ A host that cannot finish a reply says so in one of two ways: it ends the messag
 
 - A host SHOULD end a reply it gave up on with one of these statuses rather than leave it `writing`.
 - A host MUST NOT mark a message `completed` when its text is not the whole reply.
+
+## Where an error is shown
+
+An error is shown next to what it is about, so the reader finds it where they are looking, at any width.
+
+- **About one message.** A message the user sent that the host refused or did not receive stays in the transcript marked "Not sent", with its problem in plain words under it, its Retry, Withdraw and Dismiss, and the problem's "Details" (the error code and reference) after them. A reply the host ended as failed or unavailable says so in the reply, with Retry in the reply row right after it. Neither is repeated below the composer.
+- **About the conversation.** Every other problem is about the conversation as a whole, not one message: a read of the conversation that failed, a stream that dropped, a plan, a saved request, the session or the agreement with the host. It is shown once, after the composer, with its one action and its "Details".
+
+A problem is about a message when its `id` is the `clientMessageId` of a message the client could not send. A UI drawn from `/hooks` follows the same rule: `snapshot.pending` lists each message not sent with its `failure`, and `problemView(snapshot.problem)` words the problem.

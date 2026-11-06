@@ -166,3 +166,40 @@ test("the mock host answers a message typed in any conversation", async ({
   await expect(reply(page)).toContainText("local preview");
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "none");
 });
+
+test.describe("on a phone", () => {
+  test.use({
+    isMobile: true,
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+  });
+  for (const skin of ["neutral", "antd"])
+    test(`every control of a reply's form is 44 by 44: ${skin}`, async ({
+      page,
+    }) => {
+      await page.goto(`/?state=form&skin=${skin}`);
+      await expect(
+        reply(page).getByRole("textbox", { name: "Order number (required)" }),
+      ).toBeVisible();
+      const small = await page.evaluate(() =>
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '.waypoint button, .waypoint input:not([type="hidden"]), .waypoint select, .waypoint textarea, .waypoint summary',
+          ),
+        ]
+          .map((element) => ({
+            element,
+            rect: element.getBoundingClientRect(),
+          }))
+          .filter(
+            ({ rect }) =>
+              rect.width > 0 && (rect.width < 43.5 || rect.height < 43.5),
+          )
+          .map(
+            ({ element, rect }) =>
+              `${element.tagName.toLowerCase()} ${Math.round(rect.width)}x${Math.round(rect.height)}`,
+          ),
+      );
+      expect(small).toEqual([]);
+    });
+});

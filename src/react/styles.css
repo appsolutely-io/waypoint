@@ -592,7 +592,10 @@
   .waypoint li > a,
   .waypoint .wp-check,
   .waypoint .ant-checkbox-wrapper,
-  .waypoint .ant-btn {
+  .waypoint .ant-btn,
+  .waypoint input:not([type="checkbox"], [type="radio"], [type="hidden"]),
+  .waypoint .ant-input,
+  .waypoint .ant-picker {
     min-block-size: 44px;
     min-inline-size: 44px;
   }

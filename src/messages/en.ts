@@ -63,7 +63,6 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
     "This conversation is unavailable. Reload to continue; this does not stop a server turn.",
   "chat.reload": "Reload conversation",
   "chat.retry": "Retry",
-  "chat.cardResend": "Send answer again",
   "chat.withdraw": "Withdraw",
   "chat.restored": "Withdrawn messages",
   "chat.restoredEdit": "Edit",

@@ -29,6 +29,8 @@ interface Tracker {
   // The element of the last focus event anywhere in the document, or null
   // once focus was given up to nothing by the user.
   last: Element | null;
+  // That element, while focus left it only because it became disabled.
+  disabled?: Element | null;
 }
 const trackers = new WeakMap<Document, Tracker>();
 
@@ -186,6 +188,7 @@ function tracker(document: Document): Tracker {
     (event) => {
       const target = deepTarget(event) as Element | null;
       created.last = target;
+      created.disabled = null;
       for (const origin of created.origins)
         if (
           !composedContains(origin.root, target) &&
@@ -207,6 +210,10 @@ function tracker(document: Document): Tracker {
       // there Tab passes through the browser's own controls and back.
       queueMicrotask(() => {
         if (!element?.isConnected || !nowhere(document)) return;
+        // Disabled under focus (a press waiting for its answer): the page
+        // took focus, not the user, so it may be handed on like a removal.
+        if (element.matches(":disabled"))
+          return void (created.disabled = element);
         const modal = contained.get(document)?.at(-1)?.drawer;
         if (modal && composedContains(modal, element)) return;
         created.last = null;
@@ -294,7 +301,7 @@ function handoff(removed: Element | null | undefined, document: Document) {
     !!last &&
     // Focus may have been deep in a shadow tree inside the removed element.
     (composedContains(removed, last) || modalRemovals.get(removed) === last) &&
-    !last.isConnected &&
+    (!last.isConnected || last === tracker(document).disabled) &&
     nowhere(document)
   );
 }

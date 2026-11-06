@@ -55,6 +55,7 @@ import {
   composedContains,
   deepActiveElement,
   deepTarget,
+  focusable,
   moveFocus,
   retireOrigin,
   useHandoff,
@@ -1399,11 +1400,12 @@ function ChatBody({
     }),
     [renderRetry, failedBodies],
   );
-  const {
-    isAnswered,
-    reply: answerCard,
-    unsettled: unsettledAnswer,
-  } = useBlockReply(client);
+  const { isAnswered, reply: answerCard } = useBlockReply(client);
+  // The answer pressed on a card loses focus while the card waits for the
+  // host. Once the card shows what the host holds, focus goes back to it
+  // when the card is open, or on to the composer when it is answered.
+  const pressedAnswer = useRef<Element | null>(null);
+  const [settledCards, settleCard] = useState(0);
   const [confirming, setConfirming] = useState(false);
   // The token this window found replaced at its press.
   const [changed, setChanged] = useState<string>();
@@ -1769,8 +1771,25 @@ function ChatBody({
   const heldRow = useHeldWhileInert(row, replyRow);
   const respond =
     (block: Block, messageId: string) =>
-    (reply: Pick<Reply, "kind"> & Record<string, unknown>) =>
-      answerCard(block, reply, messageId);
+    (reply: Pick<Reply, "kind"> & Record<string, unknown>) => {
+      const pressed = deepActiveElement(document);
+      void answerCard(block, reply, messageId).then(() => {
+        pressedAnswer.current = pressed;
+        settleCard((count) => count + 1);
+      });
+    };
+  useLayoutEffect(() => {
+    const pressed = pressedAnswer.current;
+    const root = chatFocus.value.root();
+    pressedAnswer.current = null;
+    // Only while focus is still nowhere: not once the user went on.
+    if (pressed && root)
+      moveFocus(focusable(pressed) ? pressed : chatFocus.value.composer(), {
+        root,
+        owner: "",
+        removed: pressed,
+      });
+  }, [settledCards]);
   const problem = state.problem
     ? (provider.problemText?.(state.problem) ??
       defaultProblemText(state.problem, t))
@@ -2088,47 +2107,32 @@ function ChatBody({
                                 {t("reply.writing")}
                               </span>
                             ) : null}
-                            {message.blocks.map((block) => {
-                              // An answer whose outcome is unknown: the card
-                              // takes no other until the host settles it.
-                              const resend = unsettledAnswer(block, message.id);
-                              return (
-                                <Part
-                                  key={block.id}
-                                  name="widgetFrame"
-                                  slots={slots}
-                                  data={{ block: blockSummary(block) }}
+                            {message.blocks.map((block) => (
+                              <Part
+                                key={block.id}
+                                name="widgetFrame"
+                                slots={slots}
+                                data={{ block: blockSummary(block) }}
+                              >
+                                <div
+                                  data-open-card={
+                                    block.type === "card" &&
+                                    !isAnswered(block, message.id)
+                                      ? "true"
+                                      : undefined
+                                  }
                                 >
-                                  <div
-                                    data-open-card={
-                                      block.type === "card" &&
-                                      !isAnswered(block, message.id)
-                                        ? "true"
-                                        : undefined
+                                  <Widget
+                                    block={block}
+                                    disabled={
+                                      state.conversationUnavailable ||
+                                      isAnswered(block, message.id)
                                     }
-                                  >
-                                    <Widget
-                                      block={block}
-                                      disabled={
-                                        state.conversationUnavailable ||
-                                        !!resend ||
-                                        isAnswered(block, message.id)
-                                      }
-                                      onReply={respond(block, message.id)}
-                                    />
-                                    {resend && !block.answered ? (
-                                      <B
-                                        onPress={() =>
-                                          answerCard(block, resend, message.id)
-                                        }
-                                      >
-                                        {t("chat.cardResend")}
-                                      </B>
-                                    ) : null}
-                                  </div>
-                                </Part>
-                              );
-                            })}
+                                    onReply={respond(block, message.id)}
+                                  />
+                                </div>
+                              </Part>
+                            ))}
                           </Part>
                           <Part
                             name="messageActions"

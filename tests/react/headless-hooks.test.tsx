@@ -7,7 +7,14 @@ import { usePlanView, useBlockReply, cardReplyId } from "../../src/hooks/index";
 import * as react from "../../src/react/index";
 import { createWaypointClient } from "../../src/core/client";
 import type { Block, PlanRecord } from "../../src/protocol/generated";
-import { config, flush } from "../support/client";
+import { config, createManualClock, flush, platform } from "../support/client";
+import {
+  accept,
+  createCardHost,
+  decline,
+  question,
+  shownCard,
+} from "../support/card-host";
 afterEach(cleanup);
 
 const card: Block = {
@@ -67,7 +74,7 @@ it("usePlanView reads the plan and presses through the client, with no provider"
   client.dispose();
 });
 
-it("useBlockReply sends one answer per card and frees a refused one", async () => {
+it("useBlockReply sends one answer per card at a time and frees the card once settled", async () => {
   const base = config();
   let release: (accepted: boolean) => void = () => {};
   const sent: string[] = [];
@@ -88,22 +95,32 @@ it("useBlockReply sends one answer per card and frees a refused one", async () =
   });
   await client.ready;
   const { result } = renderHook(() => useBlockReply(client));
-  act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
-  act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
-  expect(result.current.answered.has("question-a")).toBe(true);
-  await waitFor(() =>
-    expect(sent).toEqual(["card:conversation-a::question-a"]),
+  act(
+    () =>
+      void result.current.reply(card, { kind: "action", actionId: "accept" }),
   );
+  act(
+    () =>
+      void result.current.reply(card, { kind: "action", actionId: "accept" }),
+  );
+  expect(result.current.answered.has("question-a")).toBe(true);
+  const id = cardReplyId("conversation-a", "", "question-a", accept);
+  await waitFor(() => expect(sent).toEqual([id]));
   await act(async () => release(false));
   await waitFor(() =>
     expect(result.current.answered.has("question-a")).toBe(false),
   );
-  act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
+  act(() => void result.current.reply(card, decline));
   await waitFor(() => expect(sent).toHaveLength(2));
-  // Another answer after a refusal is a new reply, not a replay of it.
-  expect(sent[1]).toBe("card:conversation-a::question-a#2");
+  // Another answer is another request; the host decides whether it fits.
+  expect(sent[1]).toBe(
+    cardReplyId("conversation-a", "", "question-a", decline),
+  );
   await act(async () => release(true));
-  expect(result.current.answered.has("question-a")).toBe(true);
+  // Nothing is held here once the host answered: the read shows the card.
+  await waitFor(() =>
+    expect(result.current.answered.has("question-a")).toBe(false),
+  );
   client.dispose();
 });
 
@@ -125,16 +142,24 @@ it("the lock outlives a re-mount while the answer is in flight", async () => {
   });
   await client.ready;
   const first = renderHook(() => useBlockReply(client));
-  act(() =>
-    first.result.current.reply(card, { kind: "action", actionId: "accept" }),
+  act(
+    () =>
+      void first.result.current.reply(card, {
+        kind: "action",
+        actionId: "accept",
+      }),
   );
   await waitFor(() => expect(sent).toHaveLength(1));
   first.unmount();
   const again = renderHook(() => useBlockReply(client));
   expect(again.result.current.answered.has("question-a")).toBe(true);
   expect(again.result.current.isAnswered(card)).toBe(true);
-  act(() =>
-    again.result.current.reply(card, { kind: "action", actionId: "accept" }),
+  act(
+    () =>
+      void again.result.current.reply(card, {
+        kind: "action",
+        actionId: "accept",
+      }),
   );
   await act(async () => release());
   expect(sent).toHaveLength(1);
@@ -167,11 +192,17 @@ it("an answer sent again after an uncertain failure keeps its reply id", async (
   });
   await client.ready;
   const { result } = renderHook(() => useBlockReply(client));
-  act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
+  act(
+    () =>
+      void result.current.reply(card, { kind: "action", actionId: "accept" }),
+  );
   await waitFor(() =>
     expect(result.current.answered.has("question-a")).toBe(false),
   );
-  act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
+  act(
+    () =>
+      void result.current.reply(card, { kind: "action", actionId: "accept" }),
+  );
   await waitFor(() => expect(sent).toHaveLength(2));
   // The same answer, so the host can tell it already has it.
   expect(sent[1]).toBe(sent[0]);
@@ -198,18 +229,20 @@ describe("card reply ids and locks never collide", () => {
   };
   const answer = { kind: "action" as const, actionId: "accept" };
 
-  it("a second attempt at one card and the first answer to another differ", async () => {
+  it("the same answer to one card keeps its id, and answers to other cards differ", async () => {
     const { client, sent } = refusing();
     await client.ready;
     const { result } = renderHook(() => useBlockReply(client));
-    act(() => result.current.reply({ id: "q" }, answer));
+    act(() => void result.current.reply({ id: "q" }, answer));
     await waitFor(() => expect(result.current.answered.has("q")).toBe(false));
-    act(() => result.current.reply({ id: "q" }, answer));
+    act(() => void result.current.reply({ id: "q" }, answer));
     await waitFor(() => expect(sent).toHaveLength(2));
-    act(() => result.current.reply({ id: "q:2" }, answer));
-    act(() => result.current.reply({ id: "q#2" }, answer));
+    act(() => void result.current.reply({ id: "q:2" }, answer));
+    act(() => void result.current.reply({ id: "q#2" }, answer));
     await waitFor(() => expect(sent).toHaveLength(4));
-    expect(new Set(sent).size).toBe(4);
+    // The same answer to one card is one request; other cards differ.
+    expect(sent[1]).toBe(sent[0]);
+    expect(new Set(sent).size).toBe(3);
     client.dispose();
   });
 
@@ -217,7 +250,7 @@ describe("card reply ids and locks never collide", () => {
     const { client } = refusing();
     await client.ready;
     const { result } = renderHook(() => useBlockReply(client));
-    act(() => result.current.reply({ id: "same" }, answer, "message-1"));
+    act(() => void result.current.reply({ id: "same" }, answer, "message-1"));
     await waitFor(() =>
       expect(result.current.isAnswered({ id: "same" }, "message-1")).toBe(true),
     );
@@ -229,8 +262,13 @@ describe("card reply ids and locks never collide", () => {
     const { client, sent } = refusing();
     await client.ready;
     const { result } = renderHook(() => useBlockReply(client));
-    act(() =>
-      result.current.reply({ id: "b".repeat(200) }, answer, "m".repeat(200)),
+    act(
+      () =>
+        void result.current.reply(
+          { id: "b".repeat(200) },
+          answer,
+          "m".repeat(200),
+        ),
     );
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]!.length).toBeLessThanOrEqual(128);
@@ -238,101 +276,123 @@ describe("card reply ids and locks never collide", () => {
   });
 });
 
-describe("an answer whose outcome is unknown stays the card's answer", () => {
-  // A host as the Idempotency-Key draft describes it: a resend with the same
-  // key and body is deduplicated, the same key with another body is refused.
-  const idempotentHost = (
-    read?: () => Promise<import("../../src/protocol/generated").Conversation>,
+describe("the host holds one answer per card; the client shows what it reads", () => {
+  // Presses an answer and waits until the card has settled.
+  const press = async (
+    result: { current: ReturnType<typeof useBlockReply> },
+    answer: typeof accept,
   ) => {
-    const base = config();
-    const bodies = new Map<string, string>();
-    const applied: string[] = [];
-    const sent: string[] = [];
-    const client = createWaypointClient({
-      ...base,
-      transport: {
-        ...base.transport,
-        ...(read && { read }),
-        send: async (reply) => {
-          // The body without the protocol version the client adds.
-          const body = JSON.stringify(reply, (key, value) =>
-            key === "protocol" ? undefined : value,
-          );
-          const action = (reply as { actionId?: string }).actionId!;
-          sent.push(`${reply.clientReplyId}=${action}`);
-          const seen = bodies.get(reply.clientReplyId);
-          if (seen !== undefined && seen !== body)
-            throw { id: "p", code: "refused" };
-          if (seen === undefined) {
-            bodies.set(reply.clientReplyId, body);
-            applied.push(action);
-          }
-          // The first answer is applied, and its response is lost.
-          if (sent.length === 1) throw new TypeError("Failed to fetch");
-          return { id: reply.clientReplyId };
-        },
-      },
+    await act(async () => {
+      await result.current.reply(question, answer, "m");
     });
-    return { client, applied, sent };
   };
-  const accept = { kind: "action" as const, actionId: "accept" };
-  const decline = { kind: "action" as const, actionId: "decline" };
 
-  it("a different answer after a drop sends the first one again, so the host applies one", async () => {
-    const { client, applied, sent } = idempotentHost();
-    await client.ready;
-    const { result } = renderHook(() => useBlockReply(client));
-    // Accept is applied and its response lost; the user then picks
-    // Decline, and presses Decline once more.
-    const bound: unknown[] = [];
-    for (const answer of [accept, decline, decline]) {
-      act(() => result.current.reply(card, answer));
-      await act(() => flush());
-      bound.push(result.current.unsettled?.(card));
-    }
-    expect(applied).toEqual(["accept"]);
-    expect(sent).toEqual([
-      "card:conversation-a::question-a=accept",
-      "card:conversation-a::question-a=accept",
-    ]);
-    expect(result.current.isAnswered(card)).toBe(true);
-    // Until the host settles it, the card offers the answer it sent.
-    expect(bound).toEqual([accept, undefined, undefined]);
-    client.dispose();
+  it("after a reload mid-send, another answer is refused and the applied one shown", async () => {
+    const host = createCardHost({ lose: (send) => send === 1 });
+    const first = host.client();
+    await first.ready;
+    const page = renderHook(() => useBlockReply(first));
+    await press(page.result, accept);
+    // The page goes away with the response lost; a new page answers again.
+    page.unmount();
+    first.dispose();
+    const second = host.client();
+    await second.ready;
+    const { result } = renderHook(() => useBlockReply(second));
+    await press(result, decline);
+    await press(result, decline);
+    expect(host.applied).toEqual(["accept"]);
+    expect(result.current.isAnswered(shownCard(second), "m")).toBe(true);
+    second.dispose();
   });
 
-  it("the conversation is read after a failure, so a card the host marks answered stays locked", async () => {
-    let reads = 0;
-    const { client, sent } = idempotentHost(async () => {
-      reads++;
-      return {
-        protocol: "1.0",
-        id: "conversation-a",
-        title: "Chat",
-        messages:
-          reads > 1
-            ? [
-                {
-                  id: "m",
-                  role: "assistant",
-                  status: "complete",
-                  content: "",
-                  createdAt: "2026-01-01T00:00:00Z",
-                  blocks: [{ ...card, answered: true }],
-                },
-              ]
-            : [],
-      } as unknown as import("../../src/protocol/generated").Conversation;
+  it("in a second tab, another answer is refused and both tabs show the card answered", async () => {
+    const host = createCardHost({ lose: (send) => send === 1 });
+    const one = host.client();
+    const two = host.client();
+    await Promise.all([one.ready, two.ready]);
+    const tab1 = renderHook(() => useBlockReply(one));
+    const tab2 = renderHook(() => useBlockReply(two));
+    await press(tab1.result, accept);
+    await press(tab2.result, decline);
+    await press(tab2.result, decline);
+    expect(host.applied).toEqual(["accept"]);
+    expect(tab1.result.current.isAnswered(shownCard(one), "m")).toBe(true);
+    expect(tab2.result.current.isAnswered(shownCard(two), "m")).toBe(true);
+    one.dispose();
+    two.dispose();
+  });
+
+  it("the same answer after a reload is the same request, so the host deduplicates it", async () => {
+    const host = createCardHost({ lose: (send) => send === 1 });
+    const first = host.client();
+    await first.ready;
+    await press(renderHook(() => useBlockReply(first)).result, accept);
+    first.dispose();
+    const second = host.client();
+    await second.ready;
+    const { result } = renderHook(() => useBlockReply(second));
+    await press(result, accept);
+    expect(host.applied).toEqual(["accept"]);
+    expect(second.getSnapshot().problem).toBeNull();
+    second.dispose();
+  });
+
+  for (const [kind, error, closes] of [
+    ["declined", { id: "p", code: "declined" }, false],
+    ["closed", { id: "p", code: "closed" }, true],
+    ["a plain 409", { status: 409 }, false],
+    ["a 422", { title: "Unprocessable Content" }, false],
+  ] as const)
+    it(`after ${kind}, the card shows what the host reads and is never stuck`, async () => {
+      const host = createCardHost({
+        refuse: (send) =>
+          send === 1 ? { error, answered: closes } : undefined,
+      });
+      const client = host.client();
+      await client.ready;
+      const { result } = renderHook(() => useBlockReply(client));
+      const reads = host.reads();
+      await press(result, accept);
+      expect(host.reads()).toBeGreaterThan(reads);
+      expect(result.current.answered.size).toBe(0);
+      expect(result.current.isAnswered(shownCard(client), "m")).toBe(closes);
+      // An open card takes the user's next choice.
+      await press(result, decline);
+      expect(host.applied).toEqual(closes ? [] : ["decline"]);
+      client.dispose();
+    });
+
+  it("a read that never returns ends in the read error with a retry, and the card is not held", async () => {
+    let hanging = false;
+    const host = createCardHost({
+      lose: (send) => send === 1,
+      hang: () => hanging,
+    });
+    const manual = createManualClock();
+    const client = host.client({
+      platform: { ...platform, clock: manual.clock },
     });
     await client.ready;
     const { result } = renderHook(() => useBlockReply(client));
-    act(() => result.current.reply(card, accept, "m"));
-    await waitFor(() => expect(sent).toHaveLength(1));
-    await waitFor(() => expect(reads).toBeGreaterThan(1));
-    const shown = client
-      .getSnapshot()
-      .conversation?.messages.find((message) => message.id === "m");
-    expect(result.current.isAnswered(shown!.blocks[0]!, "m")).toBe(true);
+    hanging = true;
+    let settled = false;
+    act(() => {
+      void result.current.reply(question, accept, "m").then(() => {
+        settled = true;
+      });
+    });
+    await act(() => flush());
+    // The send's problem is shown at once, before the read answers.
+    expect(client.getSnapshot().problem?.code).toBe("in-doubt");
+    expect(settled).toBe(false);
+    await act(() => manual.advance(10000));
+    expect(settled).toBe(true);
+    expect(client.getSnapshot().problem).toMatchObject({
+      code: "unavailable",
+      id: "conversation-read",
+    });
+    expect(result.current.answered.size).toBe(0);
     client.dispose();
   });
 });
@@ -353,18 +413,19 @@ it("a card id with a lone surrogate gets a reply id and is sent", async () => {
   await client.ready;
   const { result } = renderHook(() => useBlockReply(client));
   expect(() =>
-    act(() =>
-      result.current.reply(
-        { id: "q\ud800" },
-        { kind: "action", actionId: "accept" },
-      ),
+    act(
+      () =>
+        void result.current.reply(
+          { id: "q\ud800" },
+          { kind: "action", actionId: "accept" },
+        ),
     ),
   ).not.toThrow();
   await waitFor(() => expect(sent).toHaveLength(1));
   // Unpaired units are escaped on their own, so they never meet another id.
-  expect(sent[0]).toBe("card:conversation-a::q%d800");
-  expect(cardReplyId("a", "", "\udc00x", 1)).not.toBe(
-    cardReplyId("a", "", "\ufffdx", 1),
+  expect(sent[0]).toMatch(/^card:conversation-a::q%d800:[0-9a-f]{16}$/);
+  expect(cardReplyId("a", "", "\udc00x", accept)).not.toBe(
+    cardReplyId("a", "", "\ufffdx", accept),
   );
   client.dispose();
 });

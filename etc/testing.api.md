@@ -242,8 +242,7 @@ export interface BlockPlan {
 export interface BlockReply {
     answered: ReadonlySet<string>;
     isAnswered(block: Pick<Block, "id" | "answered">, messageId?: string): boolean;
-    reply(block: Pick<Block, "id">, answer: BlockAnswer, messageId?: string): void;
-    unsettled(block: Pick<Block, "id">, messageId?: string): BlockAnswer | undefined;
+    reply(block: Pick<Block, "id">, answer: BlockAnswer, messageId?: string): Promise<void>;
 }
 
 // @public (undocumented)
@@ -353,7 +352,7 @@ export const CAPABILITIES: readonly ["plans", "flows", "widgets", "step-up", "sc
 export type Capability = (typeof CAPABILITIES)[number];
 
 // @public
-export function cardReplyId(conversationId: string, messageId: string, blockId: string, attempt: number): string;
+export function cardReplyId(conversationId: string, messageId: string, blockId: string, answer: BlockAnswer): string;
 
 // @public
 export function catalogueFor(locale?: string): {
@@ -662,7 +661,7 @@ export function createMemoryStorage(asynchronous?: boolean): StoragePort;
 // @public (undocumented)
 export function createPlanRunner(ports: RunnerPorts): PlanRunner;
 
-// @public (undocumented)
+// @public
 export function createScriptedTransport(now?: () => number): {
     transport: TransportPort;
     enqueue: (turn: ScriptedTurn) => void;
@@ -788,7 +787,6 @@ export const english: {
     readonly "chat.conversationUnavailable": "This conversation is unavailable. Reload to continue; this does not stop a server turn.";
     readonly "chat.reload": "Reload conversation";
     readonly "chat.retry": "Retry";
-    readonly "chat.cardResend": "Send answer again";
     readonly "chat.withdraw": "Withdraw";
     readonly "chat.restored": "Withdrawn messages";
     readonly "chat.restoredEdit": "Edit";

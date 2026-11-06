@@ -337,7 +337,9 @@ export interface WaypointClient {
   reply(reply: ReplyInput): Promise<boolean>;
   /**
    * Sends a reply and says how it ended: accepted, or not, with the problem
-   * the host or the network gave (none when nothing was sent).
+   * the host or the network gave (none when nothing was sent). Resolves
+   * after the conversation was read again, so a card shows what the host
+   * holds.
    */
   replyOutcome(reply: ReplyInput): Promise<ReplyOutcome>;
   refresh(): Promise<ConversationReadResult>;
@@ -2465,20 +2467,27 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       );
       if (current()) delivered?.(delivery);
       if (current()) boundResponse(bound);
-      if (current()) await refresh(owner);
+      if (current()) await readAfter(refresh(owner));
       return { accepted: true };
     } catch (error) {
       // A refused reply or confirmation is never resent automatically, and
       // a reply from a retired conversation cannot disturb the current one.
       const problem = asProblem(error, reply.clientReplyId);
-      // A failed reply may still have been applied: a read first shows
-      // what the host holds (a card it marks answered), then the problem.
-      const agreementRefused = isAgreementRefusal(error);
-      if (current() && !agreementRefused) await refresh(owner);
       if (current()) report(problem);
-      if (current() && agreementRefused) bindingRefused(bound);
+      // Whatever the failure, the host may hold this reply or another one
+      // for the same card: the read that follows shows what it holds. On
+      // an agreement refusal the binding owner renegotiates and reads.
+      if (current() && isAgreementRefusal(error)) void bindingRefused(bound);
+      else if (current()) await readAfter(refresh(owner));
       return { accepted: false, problem };
     }
+  };
+  // A read after a reply, within the startup step's budget: one that never
+  // answers ends as the failed read, whose Retry reads again.
+  const readAfter = async (read: Promise<unknown>) => {
+    if ((await within(read, STARTUP_STEP_BUDGET_MS)) === budgetExceeded)
+      if (!isDisposed())
+        report({ code: "unavailable", id: "conversation-read" });
   };
   // A navigation may be owned by work such as a flow run: if that owner is
   // aborted before the navigation lands, it does not navigate.

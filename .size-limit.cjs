@@ -24,9 +24,10 @@ const budgets = [
   {
     name: "core",
     path: "dist/index.js",
-    // Measured with Node 22's zlib (14,706 B, with the read-handler failure
-    // reported once per load and the frozen read-only Keep review), plus
-    // 3%, rounded down.
+    // Measured with Node 22's zlib: 14,976 B, with the read-handler failure
+    // reported once per load, the frozen read-only Keep review and the
+    // bounded read after a reply. The limit is 3% above an earlier
+    // 14,706 B, rounded down.
     limit: "15.147 kB",
     gzip: true,
     brotli: false,
@@ -118,7 +119,8 @@ const budgets = [
     // opening on the press, the read-only plan state, held announcements,
     // the form fields' typed editors and guarded Regenerate, the focus
     // handoffs and the shared load-failure notice whose Retry stays while
-    // it loads again.
+    // it loads again. Measured with Node 22's zlib: 39,427 B, 100 B under
+    // the limit.
     limit: "39.527 KB",
     gzip: true,
     brotli: false,
@@ -146,8 +148,8 @@ const budgets = [
     path: "dist/hooks/index.js",
     // The renderer-neutral hooks with the client code they import: keys
     // only, no strings and no formatter (those are `messages` and a
-    // locale); React is the host's. Measured with Node 22's zlib (4,923 B),
-    // plus 3%, rounded down.
+    // locale); React is the host's. Measured with Node 22's zlib: 4,911 B.
+    // The limit is 3% above an earlier 4,923 B, rounded down.
     limit: "5.07 kB",
     gzip: true,
     brotli: false,
@@ -183,8 +185,9 @@ const budgets = [
   {
     name: "lazy markdown",
     path: "dist/markdown-*.js",
-    // Measured at 43.12 kB with the supported GFM (tables, strikethrough,
-    // task lists, autolinks) parsed in it, plus 10%.
+    // Measured with Node 22's zlib: 43.40 kB with the supported GFM
+    // (tables, strikethrough, task lists, autolinks) parsed in it. The limit
+    // is 10% above an earlier 43.12 kB.
     limit: "47.4 KB",
     gzip: true,
     brotli: false,
@@ -193,9 +196,10 @@ const budgets = [
   {
     name: "lazy blocks",
     path: "dist/blocks-*.js",
-    // Measured plus 10%: 2.64 kB with the plan steps, the required-field
-    // and empty-answer rules, the value formatting and their messages,
-    // which ship in this chunk, not the entry.
+    // The plan steps, the required-field and empty-answer rules, the value
+    // formatting and their messages ship in this chunk, not the entry.
+    // Measured with Node 22's zlib: 1.91 kB. The limit is 10% above an
+    // earlier 2.64 kB.
     limit: "2.9 KB",
     gzip: true,
     brotli: false,
@@ -204,8 +208,9 @@ const budgets = [
   {
     name: "lazy form extras",
     path: "dist/form-extras-*.js",
-    // Measured plus 10%: 4.38 kB with suggestions, fill reverts, the
-    // popup's status, generation and attachments.
+    // Suggestions, fill reverts, the popup's status, generation and
+    // attachments. Measured with Node 22's zlib: 4.69 kB. The limit is 10%
+    // above an earlier 4.38 kB.
     limit: "4.8 KB",
     gzip: true,
     brotli: false,
@@ -343,7 +348,7 @@ module.exports = withSharedChunks(budgets, {
     {
       name: "lazy guarded submit",
       source: "src/react/submit.tsx",
-      // 418 B measured.
+      // 417 B measured; the limit is 3% above an earlier 418 B.
       limit: "430 B",
       gzip: true,
       brotli: false,

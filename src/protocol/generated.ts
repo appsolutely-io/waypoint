@@ -44,6 +44,7 @@ export type WaypointProtocol =
   | ExtensionBlock
   | Block
   | Message
+  | Source
   | Conversation
   | ReplyMessage
   | ReplyConfirm
@@ -699,6 +700,17 @@ export interface Message {
   status?: 'writing' | 'completed' | 'failed' | 'unavailable' | 'stopped';
   versionIndex?: number;
   versionCount?: number;
+  /**
+   * What the reply drew on. `[n]` in its content cites the n-th source. Optional.
+   *
+   * @maxItems 50
+   */
+  sources?: Source[];
+}
+export interface Source {
+  id: string;
+  title: string;
+  url: string;
 }
 export interface ReplyMessage {
   kind: 'message';

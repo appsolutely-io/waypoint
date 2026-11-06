@@ -96,6 +96,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "flow.presets": "预设",
   "reply.writing": "正在回复",
   "reply.stopped": "已停止",
+  "chat.sources": "来源（{count}）",
+  "chat.source": "来源 {index}：{title}",
   "reply.unavailable": "无法回复",
   "reply.failed": "回复失败",
   "reply.overdue": "回复已超时",

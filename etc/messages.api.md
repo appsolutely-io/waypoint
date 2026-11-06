@@ -118,6 +118,8 @@ export const english: {
     readonly "flow.presets": "Presets";
     readonly "reply.writing": "Writing";
     readonly "reply.stopped": "Stopped";
+    readonly "chat.sources": "Sources ({count})";
+    readonly "chat.source": "Source {index}: {title}";
     readonly "reply.unavailable": "Reply unavailable";
     readonly "reply.failed": "Reply failed";
     readonly "reply.overdue": "Reply overdue";

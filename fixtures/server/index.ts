@@ -14,6 +14,7 @@ import type {
   Conversation,
   Message,
   Problem,
+  Source,
   ToolCall,
 } from "../../src/protocol/generated";
 export interface FixtureTurn {
@@ -35,6 +36,8 @@ export interface FixtureTurn {
    */
   tools?: ToolCall[];
   toolTime?: number;
+  /** What the reply drew on, which `[n]` in its text cites. */
+  sources?: Source[];
   /** Accept the message and never start a reply. */
   silent?: boolean;
   /** The accepted message was asked this many ms ago. */
@@ -467,6 +470,7 @@ export async function createFixtureServer(options: {
           blocks: turn.blocks ?? [],
           createdAt: Date.now(),
           status: "writing",
+          ...(turn.sources && { sources: turn.sources }),
         };
         conversation.messages.push(answer);
         delete conversation.replyStatus;

@@ -101,6 +101,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "flow.presets": "Presets",
   "reply.writing": "Writing",
   "reply.stopped": "Stopped",
+  "chat.sources": "Sources ({count})",
+  "chat.source": "Source {index}: {title}",
   "reply.unavailable": "Reply unavailable",
   "reply.failed": "Reply failed",
   "reply.overdue": "Reply overdue",

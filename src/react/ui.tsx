@@ -921,7 +921,15 @@ class RenderBoundary extends Component<
       : this.props.children;
   }
 }
-function StockMarkdown({ text, writing }: { text: string; writing?: boolean }) {
+function StockMarkdown({
+  text,
+  writing,
+  sources,
+}: {
+  text: string;
+  writing?: boolean;
+  sources?: Message["sources"];
+}) {
   const provider = context();
   const t = provider.format;
   const failures = useContext(RenderFailures);
@@ -951,6 +959,11 @@ function StockMarkdown({ text, writing }: { text: string; writing?: boolean }) {
         text={text}
         writing={writing}
         lang={provider.lang}
+        sources={sources}
+        sourceNames={{
+          list: (count) => t("chat.sources", { count }),
+          item: (index, title) => t("chat.source", { index, title }),
+        }}
         images={provider.markdownImages}
         extraSchemes={provider.extraUrlSchemes}
         scrollLabel={t("chat.scrollRegion")}
@@ -958,12 +971,16 @@ function StockMarkdown({ text, writing }: { text: string; writing?: boolean }) {
     </RenderBoundary>
   );
 }
-function Markdown({ text, writing }: { text: string; writing?: boolean }) {
+function Markdown(props: {
+  text: string;
+  writing?: boolean;
+  sources?: Message["sources"];
+}) {
   const Renderer = context().renderers?.markdown;
   return Renderer ? (
-    <Renderer text={text} />
+    <Renderer text={props.text} />
   ) : (
-    <StockMarkdown text={text} writing={writing} />
+    <StockMarkdown {...props} />
   );
 }
 // The client's default words for each problem code (a host's
@@ -2116,6 +2133,7 @@ function ChatBody({
                               <Markdown
                                 text={message.content}
                                 writing={message.id === writingId}
+                                sources={message.sources}
                               />
                             </BodyOf.Provider>
                             {/* Seen in the bubble; said once, by the reply

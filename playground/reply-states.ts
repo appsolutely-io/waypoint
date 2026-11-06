@@ -45,6 +45,9 @@ const copy = {
     orderLabel: "Order number",
     noteLabel: "Note",
     reading: "Reading 3 orders…",
+    cited:
+      "Order 1042 shipped on Monday [1]. Order 1043 waits for one item that is back in stock on Friday [2].",
+    sources: ["Order 1042", "Stock report for week 45"],
     stock: "Checking stock for order 1043…",
     answer:
       "This is the local preview's mock host. It streams an answer to every message, so you can watch a reply arrive. Pick a **reply state** in the toolbar to see the others.",
@@ -71,6 +74,8 @@ const copy = {
     orderLabel: "订单号",
     noteLabel: "备注",
     reading: "正在读取 3 个订单…",
+    cited: "订单 1042 已于周一发货 [1]。订单 1043 还差一件商品，周五到货 [2]。",
+    sources: ["订单 1042", "第 45 周库存报告"],
     stock: "正在查询订单 1043 的库存…",
     answer:
       "这是本地预览的模拟服务。它会逐段回复每条消息，方便观察回复的过程。在工具栏中选择**回复状态**可以查看其他状态。",
@@ -134,6 +139,16 @@ export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
         toolTime: 1200,
         chunks: pieces(text.short),
         interval: 40,
+      };
+    case "sources":
+      return {
+        chunks: pieces(text.cited),
+        interval: 15,
+        sources: text.sources.map((title, at) => ({
+          id: `source-${at + 1}`,
+          title,
+          url: `https://example.test/${at ? "stock/week-45" : "orders/1042"}`,
+        })),
       };
     case "versions":
     case "done":

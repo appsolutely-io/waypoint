@@ -850,5 +850,10 @@
     "protocol": "1.0",
     "clientReplyId": "stop-a",
     "messageId": "a"
+  },
+  "Source": {
+    "id": "s1",
+    "title": "Order 1042",
+    "url": "https://example.test/orders/1042"
   }
 }

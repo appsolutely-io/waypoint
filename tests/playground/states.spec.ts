@@ -74,6 +74,18 @@ test("tool steps are named in plain words and expand to the list", async ({
   await expect(steps.getByRole("listitem")).toHaveCount(2);
 });
 
+test("sources are cited inline and listed under the answer", async ({
+  page,
+}) => {
+  await page.goto("/?state=sources");
+  await expect(
+    reply(page).getByRole("link", { name: "Source 1: Order 1042" }),
+  ).toHaveAttribute("href", "https://example.test/orders/1042");
+  await expect(reply(page).locator("[data-sources] summary")).toHaveText(
+    "Sources (2)",
+  );
+});
+
 test("a reply that never starts is overdue", async ({ page }) => {
   await page.goto("/?state=overdue");
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "overdue");

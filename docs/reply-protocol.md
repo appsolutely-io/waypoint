@@ -11,6 +11,13 @@ A `tool.call` frame asks the client to read data for the reply it is writing. It
 - A host SHOULD give every call a `label`, in the conversation's language, at most 200 characters.
 - A label is shown as plain text, never as markup. It MUST NOT carry data the user may not see.
 
+## Citing sources
+
+A message MAY carry `sources`, what the reply drew on: each has an `id`, a `title` and a `url`. `[n]` in the message's text cites the n-th source; the chat links it to the source, named "Source n: title", and lists the sources under the answer behind a "Sources (2)" disclosure.
+
+- A host SHOULD cite each source it lists at least once.
+- A source's `url` MUST be one the user may open. The chat links only addresses its URL policy allows (`isSafeUrl`, with `extraUrlSchemes`); any other source is named without a link.
+
 ## Asking for what is missing
 
 A `form` block asks the user for details inline. Each field MAY carry `value`, what the host already knows for it; the form starts with it and the user may change it before sending.

@@ -5,6 +5,7 @@ import { unified } from "unified";
 import gfm from "./gfm";
 import { normalizeUri } from "micromark-util-sanitize-uri";
 import { isSafeUrl } from "./urls";
+import type { Source } from "../protocol/generated";
 export interface MarkdownImagePolicy {
   origin?: string;
   allow?: (url: string) => boolean;
@@ -183,6 +184,13 @@ function useReveal(text: string, live: boolean, lang?: string) {
 }
 interface MarkdownProps {
   text: string;
+  /** The reply's sources, which `[n]` in its text cites. */
+  sources?: readonly Source[];
+  /** The sources' list name and each citation's name. */
+  sourceNames?: {
+    list(count: number): string;
+    item(index: number, title: string): string;
+  };
   /** The chat's language, for the word boundaries of a reply being written. */
   lang?: string;
   /** The reply is still being written: open markers are closed for display. */
@@ -235,18 +243,45 @@ export default function Markdown(props: MarkdownProps) {
           </a>
         );
       },
-      a: ({ href, children }) =>
-        href ? (
+      a: ({ href, children }) => {
+        // A citation opens its source, named by its number and title.
+        const cited = /^#wp-cite-(\d+)$/.exec(href ?? "");
+        const source = cited && current.current.sources?.[Number(cited[1]) - 1];
+        if (source)
+          return (
+            <a
+              href={source.url}
+              rel="noreferrer noopener"
+              target="_blank"
+              aria-label={current.current.sourceNames?.item(
+                Number(cited[1]),
+                source.title,
+              )}
+            >
+              {children}
+            </a>
+          );
+        return href ? (
           <a href={href} rel="noreferrer noopener">
             {children}
           </a>
         ) : (
           <span>{children}</span>
-        ),
+        );
+      },
     }),
     [],
   );
-  const { text, extraSchemes } = props;
+  const { text, extraSchemes, sources = [] } = props;
+  // Sources that may be opened: the others are named but never linked.
+  const safe = (source: Source) => isSafeUrl(source.url, extraSchemes);
+  // `[n]` that names a source (not a link's own text) becomes its citation.
+  const cite = (value: string) =>
+    value.replace(/\[(\d+)\](?![(\[:])/g, (whole, n: string) =>
+      sources[Number(n) - 1] && safe(sources[Number(n) - 1]!)
+        ? `[\\[${n}\\]](#wp-cite-${n})`
+        : whole,
+    );
   const reduced = reducedMotion();
   const shown = useReveal(text, !!props.writing && !reduced, props.lang);
   return (
@@ -261,8 +296,33 @@ export default function Markdown(props: MarkdownProps) {
         urlTransform={(url) => (isSafeUrl(url, extraSchemes) ? url : undefined)}
         components={components}
       >
-        {props.writing ? closeOpenMarkdown(shown) : text}
+        {cite(props.writing ? closeOpenMarkdown(shown) : text)}
       </ReactMarkdown>
+      {sources.length ? (
+        <details
+          data-sources=""
+          aria-label={props.sourceNames?.list(sources.length)}
+        >
+          <summary>{props.sourceNames?.list(sources.length)}</summary>
+          <ol>
+            {sources.map((source) => (
+              <li key={source.id}>
+                {safe(source) ? (
+                  <a
+                    href={source.url}
+                    rel="noreferrer noopener"
+                    target="_blank"
+                  >
+                    {source.title}
+                  </a>
+                ) : (
+                  source.title
+                )}
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
     </div>
   );
 }

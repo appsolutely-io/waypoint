@@ -1561,9 +1561,36 @@
         "versionCount": {
           "type": "integer",
           "minimum": 1
+        },
+        "sources": {
+          "description": "What the reply drew on. `[n]` in its content cites the n-th source. Optional.",
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/Source"
+          }
         }
       },
       "required": ["id", "role", "content", "blocks", "createdAt"]
+    },
+    "Source": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["id", "title", "url"]
     },
     "Conversation": {
       "type": "object",

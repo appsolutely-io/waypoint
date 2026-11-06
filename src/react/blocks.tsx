@@ -132,21 +132,29 @@ export function PlanSteps({
                     <li>{t(undo)}</li>
                   ) : null}
                   {step.stepUp ? <li>{t("chat.verify")}</li> : null}
-                  <li>
-                    {outcome
-                      ? t("chat.block.status", {
-                          status: t(
-                            ok(outcome.status)
-                              ? "chat.block.outcomeDone"
-                              : "chat.block.outcomeFailed",
-                          ),
-                        })
-                      : stateLabel(t, record.state)}
-                  </li>
-                  {/* A failed step says why, in the host's words, and
-                      whether it can be tried again. */}
+                  {/* A failed step stands out from the done ones: its
+                      status in the danger tone and in bold, so colour is
+                      not the only cue, with why it failed in the host's
+                      words and whether it can be tried again. */}
+                  {outcome && !ok(outcome.status) ? (
+                    <li data-tone="danger">
+                      <strong>
+                        {t("chat.block.status", {
+                          status: t("chat.block.outcomeFailed"),
+                        })}
+                      </strong>
+                    </li>
+                  ) : (
+                    <li>
+                      {outcome
+                        ? t("chat.block.status", {
+                            status: t("chat.block.outcomeDone"),
+                          })
+                        : stateLabel(t, record.state)}
+                    </li>
+                  )}
                   {outcome?.reason && !ok(outcome.status) ? (
-                    <li>{outcome.reason}</li>
+                    <li data-tone="danger">{outcome.reason}</li>
                   ) : null}
                   {outcome?.retryable !== undefined && !ok(outcome.status) ? (
                     <li>

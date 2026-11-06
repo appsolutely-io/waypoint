@@ -159,6 +159,18 @@ test("a plan whose step failed says which, why, and whether it can be retried", 
   await expect(page.locator('[data-part="stepRow"]').first()).toContainText(
     "Done",
   );
+  // The failed one stands out: danger tone, and bold so colour is not the
+  // only cue.
+  const status = failed.locator('[data-tone="danger"] strong');
+  await expect(status).toHaveCSS("font-weight", "700");
+  const tone = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((node) => getComputedStyle(node).color);
+  expect(await tone('[data-part="stepRow"] [data-tone="danger"]')).not.toBe(
+    await tone('[data-part="stepRow"] .wp-step-facts li'),
+  );
 });
 
 test("a form asks for what is missing inline", async ({ page }) => {

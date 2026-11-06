@@ -540,6 +540,48 @@ describe.each([
         client.dispose();
       },
     );
+    it("a failed step's status and reason are in the danger tone, the status in bold", async () => {
+      const { client } = await plan((m) => (
+        <m.PlanDiagram
+          record={record((value) => {
+            value.outcomes = [
+              {
+                stepId: "step-a",
+                status: 412,
+                attributed: true,
+                reason: "The item changed since the plan was made.",
+              },
+            ];
+          })}
+        />
+      ));
+      const failed = await screen.findByText(
+        status("chat.block.outcomeFailed"),
+      );
+      // Colour is not the only cue: the status is strong text.
+      expect(failed.closest("strong")).not.toBeNull();
+      expect(failed.closest('[data-tone="danger"]')).not.toBeNull();
+      expect(
+        screen
+          .getByText("The item changed since the plan was made.")
+          .closest('[data-tone="danger"]'),
+      ).not.toBeNull();
+      client.dispose();
+    });
+    it("a done step's status is not in the danger tone", async () => {
+      const { client } = await plan((m) => (
+        <m.PlanDiagram
+          record={record((value) => {
+            value.outcomes = [
+              { stepId: "step-a", status: 200, attributed: true },
+            ];
+          })}
+        />
+      ));
+      const done = await screen.findByText(status("chat.block.outcomeDone"));
+      expect(done.closest('[data-tone="danger"]')).toBeNull();
+      client.dispose();
+    });
     it("a failed step without a reason says only that it failed", async () => {
       const { client } = await plan((m) => (
         <m.PlanDiagram

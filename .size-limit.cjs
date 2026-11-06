@@ -233,8 +233,9 @@ const budgets = [
     name: "antd skin",
     path: "dist/skin-antd/index.js",
     // The skin's own code, measured with Node 22's zlib as CI measures it,
-    // plus 10%: 3.12 kB measured.
-    limit: "3.5 KB",
+    // plus 10%, rounded down: 3,498 B measured, with the button that keeps
+    // antd's control height.
+    limit: "3.847 kB",
     gzip: true,
     brotli: false,
     // dayjs is antd's own dependency, shipped by every antd host; the skin

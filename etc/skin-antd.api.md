@@ -2335,7 +2335,7 @@ export interface ReplyMessage {
 }
 
 // @public (undocumented)
-export type ReplyMessageKey = "chat.reply.stop";
+export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting";
 
 // @public
 export type ReplyOutcome = {
@@ -2773,6 +2773,7 @@ export interface WaypointClient {
     getSnapshot(): ClientSnapshot;
     keepChanges(review: KeepChangesReviewResult): Promise<void>;
     keepChangesReview(id?: string): KeepChangesReviewResult;
+    keepWaiting(): void;
     leavePlan(id?: string): Promise<void>;
     // (undocumented)
     loadFlows(): Promise<void>;
@@ -2797,6 +2798,7 @@ export interface WaypointClient {
     retry(id: string): Promise<void>;
     // (undocumented)
     retryIntent(id?: string): Promise<void>;
+    retryReply(): Promise<void>;
     // (undocumented)
     retryUndo(): Promise<void>;
     runFlow(id: string, values: Record<string, unknown>): Promise<string | void>;

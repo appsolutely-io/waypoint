@@ -5,6 +5,7 @@
 ### Added
 
 - Stopping a reply: the `reply-stop` capability, the `stop` reply (`ReplyStop`) and the `stopped` message and `message.end` status. `client.stopReply()` marks the reply being written `stopped` at once, keeps its text, drops text that still arrives for it and asks the host once; `client.canStopReply()` says whether it can. The chat shows Stop beside the reply row while a reply is written, when the host negotiated `reply-stop`, and marks a stopped reply "Stopped". `docs/reply-protocol.md` states what a host must do; `waypoint-conformance` checks it when the host answers `reply-stop`; the scripted transport and the reference fixture stop replies.
+- An overdue reply offers "Keep waiting" and "Retry". `client.keepWaiting()` puts the reply row back to `writing` until another 15 seconds pass without progress; `client.retryReply()` does the same and reads the conversation again, so a retry never sends the message twice. `replyRow` takes `heldUntil` for a reply being written as well.
 
 ## 0.1.1-next.0 - 2026-11-06
 

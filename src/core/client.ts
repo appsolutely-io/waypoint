@@ -401,6 +401,13 @@ export interface WaypointClient {
    */
   stopReply(): Promise<void>;
   /**
+   * Waits again for an overdue reply: the reply row says `writing` and
+   * turns overdue again only after another 15 seconds without progress.
+   */
+  keepWaiting(): void;
+  /** Waits again and reads the conversation again (`refresh()`). */
+  retryReply(): Promise<void>;
+  /**
    * Loads and validates a flow's document, to ask for its parameters, and
    * keeps it for the next `runFlow` of that flow in this conversation (a
    * failed run keeps it for a retry); without an id, forgets it. Resolves
@@ -560,6 +567,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   // then: progress is any change to its text, by a frame or by a read, so
   // it is measured the same on every transport.
   let replyProgress: { id: string; content: string; at: number } | undefined;
+  // Until when the user chose to keep waiting for an overdue reply.
+  let waitUntil: number | undefined;
   // Scopes replace the ad-hoc tokens: the client scope is aborted on dispose,
   // and the conversation scope, its child, on every navigation. Effects check
   // the signal of the scope that produced them where they land.
@@ -654,11 +663,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         failed: state.conversation?.replyStatus === "failed",
         streamLost: state.streamUnavailable,
         activityAt,
+        heldUntil: waitUntil,
       }),
     };
+    if (state.replyState === "none") waitUntil = undefined;
     // A reply that stops arriving turns overdue on its own.
     if (state.replyState === "writing" && activityAt !== undefined) {
-      const delay = activityAt + REPLY_STALL_MS - now;
+      const delay = Math.max(activityAt + REPLY_STALL_MS, waitUntil ?? 0) - now;
       if (delay > 0)
         replyTimer = config.platform.clock.setTimeout(() => {
           replyTimer = undefined;
@@ -671,6 +682,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         Math.max(
           last.createdAt + 15000,
           state.conversation?.replyOverdueAt ?? 0,
+          waitUntil ?? 0,
         ) - config.platform.clock.now();
       if (delay > 0)
         replyTimer = config.platform.clock.setTimeout(() => {
@@ -2409,6 +2421,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     setFavourite: (id, favourite) =>
       later((actions) => actions.setFavourite(id, favourite)),
     canPrepareFlow: () => !!config.flowSource?.load,
+    keepWaiting() {
+      waitUntil = config.platform.clock.now() + REPLY_STALL_MS;
+      update({});
+    },
+    retryReply() {
+      client.keepWaiting();
+      return client.refresh().then(() => {});
+    },
     canStopReply: () =>
       !!stoppable() && state.capabilities.includes("reply-stop"),
     // Marked at once, before the host is asked.
@@ -3047,7 +3067,8 @@ export function replyRow(input: {
     if (input.unavailable || input.streamLost) return "unavailable";
     if (input.failed) return "failed";
     return input.activityAt !== undefined &&
-      input.now >= input.activityAt + REPLY_STALL_MS
+      input.now >=
+        Math.max(input.activityAt + REPLY_STALL_MS, input.heldUntil ?? 0)
       ? "overdue"
       : "writing";
   }

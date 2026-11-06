@@ -2262,7 +2262,7 @@ function ChatBody({
               <div ref={replyRow} role="status" data-reply-state={row}>
                 {heldRow === "none" ? null : <p>{t(`reply.${heldRow}`)}</p>}
               </div>
-              {row === "writing" ? (
+              {row === "writing" || row === "overdue" ? (
                 <ReplyControls client={client} row={row} />
               ) : null}
             </Part>

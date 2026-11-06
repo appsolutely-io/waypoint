@@ -50,6 +50,11 @@ test("a stopped reply keeps its text and is marked stopped", async ({
 test("a reply that never starts is overdue", async ({ page }) => {
   await page.goto("/?state=overdue");
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "overdue");
+  await expect(
+    page.getByRole("button", { name: "Retry", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Keep waiting", exact: true }).click();
+  await expect(replyRow(page)).toHaveAttribute("data-reply-state", "writing");
 });
 
 for (const state of ["reply-failed", "reply-unavailable"] as const)

@@ -24,11 +24,12 @@ const budgets = [
   {
     name: "core",
     path: "dist/index.js",
-    // Measured with Node 22's zlib: 14,976 B, with the read-handler failure
-    // reported once per load, the frozen read-only Keep review and the
-    // bounded read after a reply. The limit is 3% above an earlier
-    // 14,706 B, rounded down.
-    limit: "15.147 kB",
+    // Besides the read-handler failure reported once per load, the frozen
+    // read-only Keep review and the bounded read after a reply, a stopped
+    // reply's dropped text and the wait an overdue reply is given again
+    // must act on frames and timers here. Measured with Node 22's zlib:
+    // 15,188 B; the limit is 3% above it, rounded down.
+    limit: "15.643 kB",
     gzip: true,
     brotli: false,
     ignore: [

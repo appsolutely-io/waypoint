@@ -54,6 +54,8 @@ it("a reply being written is busy, marked in its bubble and said in the reply ro
   expect(marker.textContent).toBe(english["reply.writing"]);
   const row = document.querySelector('[data-part="replyRow"] [role="status"]')!;
   await waitFor(() => expect(row.textContent).toBe(english["reply.writing"]));
+  // Seen once, in the bubble: the row says it to assistive technology only.
+  expect(row.querySelector("p")!.classList.contains("wp-sr-only")).toBe(true);
   client.dispose();
 });
 

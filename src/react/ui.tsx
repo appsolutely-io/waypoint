@@ -2376,7 +2376,17 @@ function ChatBody({
             <Part name="replyRow" slots={slots}>
               <div ref={replyRow} role="status" data-reply-state={row}>
                 {heldRow === "none" || endedInReply ? null : (
-                  <p>{t(`reply.${heldRow}`)}</p>
+                  <p
+                    // A reply being written shows it in its bubble: the row
+                    // says it once, to assistive technology only.
+                    className={
+                      heldRow === "writing" && writingId
+                        ? "wp-sr-only"
+                        : undefined
+                    }
+                  >
+                    {t(`reply.${heldRow}`)}
+                  </p>
                 )}
               </div>
               {row !== "none" || state.toolSteps.length ? (

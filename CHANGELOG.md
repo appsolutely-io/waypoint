@@ -25,6 +25,9 @@
 
 ### Fixed
 
+- A reply the host ends with `message.end` status `failed` or `unavailable` is no longer shown as finished with an empty reply row: the row says "Reply failed" or "Reply unavailable", as it does for the conversation's `replyStatus`.
+- A failed or unavailable reply offers Retry. `client.retryReply()` asks for a failed reply again as a new version when a `versions` port is given, and otherwise reads the conversation again; neither sends the user's message twice.
+- On a coarse pointer, text fields and antd's inputs and pickers are at least 44 px tall, like the chat's other controls.
 - A card answer whose call failed outright, with no outcome, no longer keeps its reply id held back from the alert, which hid any later problem reported with that id.
 - `waypoint-conformance` fails a card whose `answer` is `null` or not an object without throwing inside the check.
 

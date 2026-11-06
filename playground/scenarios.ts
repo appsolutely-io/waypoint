@@ -15,6 +15,7 @@ import { localizeConversation, localizeForm } from "./localize";
 import {
   STATE_TITLE,
   defaultTurn,
+  manifest,
   stateQuestion,
   statePlan,
   stateTurn,
@@ -205,6 +206,14 @@ export async function createPreview(
     // The mock host keeps every rating and three versions of the reply in
     // the versions state; choosing one only changes which is shown.
     feedback: { send: () => {} },
+    // The playground's own data, which the mock host's reads ask for.
+    reads: {
+      manifest,
+      request: () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve([{ title: "Order 1042" }]), 700),
+        ),
+    },
     ...(replyState === "versions"
       ? {
           versions: {

@@ -244,6 +244,11 @@ export interface ClientSnapshot {
   confirmationRefusal?: { token: string; problemId: string };
   /** Queued messages whose withdrawal is waiting for its commit. */
   withdrawing: readonly string[];
+  /**
+   * The reads the host asked for since the user's last message, in order,
+   * each running, done or failed.
+   */
+  toolSteps: readonly ToolStep[];
   /** Withdrawn messages, kept apart from the draft until discarded. */
   restored: readonly RestoredMessage[];
   /** Pending terminal intents of protected plans, by plan id. */
@@ -257,6 +262,13 @@ export interface ClientSnapshot {
    * a new agreement): it is shown, and nothing can be done with it here.
    */
   planReadOnly?: boolean;
+}
+/** A read the host asked for while writing a reply, as the user sees it. */
+export interface ToolStep {
+  id: string;
+  /** The host's plain words for it (`ToolCall.label`), when it gave any. */
+  label?: string;
+  status: "running" | "done" | "failed";
 }
 export interface RestoredMessage {
   id: string;
@@ -575,6 +587,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     sending: false,
     withdrawing: [],
     restored: [],
+    toolSteps: [],
     streamUnavailable: false,
     intentOverlays: {},
     intentNotice: null,
@@ -1303,17 +1316,37 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     if (frame.type === "tool.call" || frame.type === "planning-read") {
       if (!keptFrames.has(frame)) retryKeptReads(readFailed);
       const conversationId = state.conversationId;
+      const call = frame.type === "tool.call" ? frame.call : undefined;
+      // A step keeps its place: it is added once, then its status changes.
+      const step = (status: ToolStep["status"]) => {
+        if (!call || !current()) return;
+        const next = {
+          id: call.id,
+          ...(call.label && { label: call.label }),
+          status,
+        };
+        const at = state.toolSteps.findIndex((shown) => shown.id === call.id);
+        update({
+          toolSteps:
+            at < 0
+              ? [...state.toolSteps, next]
+              : state.toolSteps.map((shown, index) =>
+                  index === at ? next : shown,
+                ),
+        });
+      };
       const current = () =>
         !isDisposed() &&
         !scope.aborted &&
         conversationId === state.conversationId;
+      step("running");
       return (async () => {
         if (readFailed) throw { ...STREAM_READS_UNAVAILABLE };
         const reads = config.reads;
         if (!reads)
           return report({ code: "invalid-read", id: "read-unavailable" });
         // Once loaded, the read starts in this turn, in arrival order.
-        await (readCode ?? (await loadReads())).answerRead(
+        const answered = await (readCode ?? (await loadReads())).answerRead(
           frame,
           reads,
           conversationId,
@@ -1321,7 +1354,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           report,
           (reply) => sendReply(scope, reply),
         );
+        step(answered === false ? "failed" : "done");
       })().catch((error: unknown) => {
+        step("failed");
         if (!current()) return;
         if ((error as Problem | undefined)?.id !== STREAM_READS_UNAVAILABLE.id)
           return report({ code: "invalid-read", id: "read-failed" });
@@ -2122,7 +2157,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         }
         return;
       }
-      update({ sending: true });
+      update({ sending: true, toolSteps: [] });
       try {
         const extensions: Record<string, unknown> = {};
         const hints: string[] = [];
@@ -2612,6 +2647,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       problem: null,
       sending: false,
       streamUnavailable: false,
+      toolSteps: [],
     });
     derive();
     const scope = conversationScope.signal;

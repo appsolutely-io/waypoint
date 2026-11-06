@@ -388,6 +388,7 @@ export interface ClientSnapshot {
     // (undocumented)
     status: string;
     streamUnavailable: boolean;
+    toolSteps: readonly ToolStep[];
     withdrawing: readonly string[];
 }
 
@@ -1950,6 +1951,7 @@ export interface TimedPlan {
 export interface ToolCall {
     // (undocumented)
     id: string;
+    label?: string;
     // (undocumented)
     method: string;
     // (undocumented)
@@ -1960,6 +1962,15 @@ export interface ToolCall {
     query?: {
         [k: string]: string;
     };
+}
+
+// @public
+export interface ToolStep {
+    // (undocumented)
+    id: string;
+    label?: string;
+    // (undocumented)
+    status: "running" | "done" | "failed";
 }
 
 // @public (undocumented)

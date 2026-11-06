@@ -63,6 +63,17 @@ test("a finished reply can be copied and rated", async ({ page }) => {
   ).toHaveAttribute("aria-pressed", "true");
 });
 
+test("tool steps are named in plain words and expand to the list", async ({
+  page,
+}) => {
+  await page.goto("/?state=tools");
+  const steps = page.locator("[data-tool-steps]");
+  await expect(steps).toContainText("Reading 3 orders…");
+  await expect(steps).toContainText("Checking stock for order 1043…");
+  await steps.getByRole("button", { name: "Show all 2 steps" }).click();
+  await expect(steps.getByRole("listitem")).toHaveCount(2);
+});
+
 test("a reply that never starts is overdue", async ({ page }) => {
   await page.goto("/?state=overdue");
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "overdue");

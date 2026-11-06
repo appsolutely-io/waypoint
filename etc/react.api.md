@@ -485,6 +485,7 @@ export interface ClientSnapshot {
     // (undocumented)
     status: string;
     streamUnavailable: boolean;
+    toolSteps: readonly ToolStep[];
     withdrawing: readonly string[];
 }
 
@@ -2328,7 +2329,7 @@ export interface ReplyMessage {
 }
 
 // @public (undocumented)
-export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting" | "chat.message.actions" | "chat.message.copy" | "chat.message.copied" | "chat.message.regenerate" | "chat.message.edit" | "chat.message.editLabel" | "chat.message.resend" | "chat.message.good" | "chat.message.bad" | "chat.message.previous" | "chat.message.next" | "chat.message.version";
+export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting" | "chat.tool.working" | "chat.tool.running" | "chat.tool.done" | "chat.tool.failed" | "chat.tool.show" | "chat.tool.hide" | "chat.message.actions" | "chat.message.copy" | "chat.message.copied" | "chat.message.regenerate" | "chat.message.edit" | "chat.message.editLabel" | "chat.message.resend" | "chat.message.good" | "chat.message.bad" | "chat.message.previous" | "chat.message.next" | "chat.message.version";
 
 // @public
 export type ReplyOutcome = {
@@ -2592,6 +2593,7 @@ export type Tone = "neutral" | "progress" | "warning" | "success";
 export interface ToolCall {
     // (undocumented)
     id: string;
+    label?: string;
     // (undocumented)
     method: string;
     // (undocumented)
@@ -2602,6 +2604,15 @@ export interface ToolCall {
     query?: {
         [k: string]: string;
     };
+}
+
+// @public
+export interface ToolStep {
+    // (undocumented)
+    id: string;
+    label?: string;
+    // (undocumented)
+    status: "running" | "done" | "failed";
 }
 
 // @public (undocumented)

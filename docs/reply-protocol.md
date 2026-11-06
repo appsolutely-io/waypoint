@@ -4,6 +4,13 @@ What a host implements so the chat can show a reply as it is written and let the
 
 The key words "MUST", "MUST NOT", "SHOULD", "SHOULD NOT" and "MAY" in this document are to be interpreted as described in [BCP 14](https://www.rfc-editor.org/info/bcp14) ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals.
 
+## Naming a step
+
+A `tool.call` frame asks the client to read data for the reply it is writing. Its call MAY carry `label`, the host's plain words for the step, such as "Reading 3 orders…". The chat shows the latest step on one line above the reply row, and every step since the user's last message behind "Show all 2 steps"; each is running, done or failed. Without a label the step reads "Looking this up…".
+
+- A host SHOULD give every call a `label`, in the conversation's language, at most 200 characters.
+- A label is shown as plain text, never as markup. It MUST NOT carry data the user may not see.
+
 ## Stopping a reply
 
 A client offers the `reply-stop` capability; a host that implements stopping echoes it in its negotiation answer. Only then does the chat show Stop while a reply is written.

@@ -11,6 +11,7 @@ export const choices = {
     "done",
     "stopped",
     "versions",
+    "tools",
     "overdue",
     "reply-failed",
     "reply-unavailable",

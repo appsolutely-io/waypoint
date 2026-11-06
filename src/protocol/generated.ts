@@ -801,6 +801,10 @@ export interface ToolCall {
   query?: {
     [k: string]: string;
   };
+  /**
+   * The host's plain words for the read, shown to the user while it runs, for example "Reading 3 orders…". Optional.
+   */
+  label?: string;
 }
 export interface FrameMessageStart {
   type: 'message.start';

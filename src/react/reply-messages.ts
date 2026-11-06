@@ -3,6 +3,12 @@
 export type ReplyMessageKey =
   | "chat.reply.stop"
   | "chat.reply.keepWaiting"
+  | "chat.tool.working"
+  | "chat.tool.running"
+  | "chat.tool.done"
+  | "chat.tool.failed"
+  | "chat.tool.show"
+  | "chat.tool.hide"
   | "chat.message.actions"
   | "chat.message.copy"
   | "chat.message.copied"
@@ -19,6 +25,12 @@ export type ReplyCatalogue = Readonly<Record<ReplyMessageKey, string>>;
 export const replyEnglish: ReplyCatalogue = {
   "chat.reply.stop": "Stop",
   "chat.reply.keepWaiting": "Keep waiting",
+  "chat.tool.working": "Looking this up…",
+  "chat.tool.running": "Running",
+  "chat.tool.done": "Done",
+  "chat.tool.failed": "Failed",
+  "chat.tool.show": "Show all {count} steps",
+  "chat.tool.hide": "Hide the steps",
   "chat.message.actions": "Message actions",
   "chat.message.copy": "Copy",
   "chat.message.copied": "Copied",
@@ -35,6 +47,12 @@ export const replyEnglish: ReplyCatalogue = {
 export const replySimplifiedChinese: ReplyCatalogue = {
   "chat.reply.stop": "停止",
   "chat.reply.keepWaiting": "继续等待",
+  "chat.tool.working": "正在查询…",
+  "chat.tool.running": "进行中",
+  "chat.tool.done": "已完成",
+  "chat.tool.failed": "失败",
+  "chat.tool.show": "显示全部 {count} 个步骤",
+  "chat.tool.hide": "隐藏步骤",
   "chat.message.actions": "消息操作",
   "chat.message.copy": "复制",
   "chat.message.copied": "已复制",

@@ -1,5 +1,9 @@
 import type { FixtureTurn } from "../fixtures/server/index";
-import type { PlanRecord, Problem } from "../src/protocol/generated";
+import type {
+  ManifestEntry,
+  PlanRecord,
+  Problem,
+} from "../src/protocol/generated";
 import type { View } from "./state";
 
 /** The title every reply-state conversation is created with. */
@@ -40,6 +44,8 @@ const copy = {
     form: "I need the order number before I can look this up.",
     orderLabel: "Order number",
     noteLabel: "Note",
+    reading: "Reading 3 orders…",
+    stock: "Checking stock for order 1043…",
     answer:
       "This is the local preview's mock host. It streams an answer to every message, so you can watch a reply arrive. Pick a **reply state** in the toolbar to see the others.",
   },
@@ -64,12 +70,45 @@ const copy = {
     form: "我需要订单号才能查询。",
     orderLabel: "订单号",
     noteLabel: "备注",
+    reading: "正在读取 3 个订单…",
+    stock: "正在查询订单 1043 的库存…",
     answer:
       "这是本地预览的模拟服务。它会逐段回复每条消息，方便观察回复的过程。在工具栏中选择**回复状态**可以查看其他状态。",
   },
 };
 
 export type ReplyState = View["state"];
+
+// The reads the mock host asks the playground for, and what it may read.
+const ORDERS_CALL = {
+  operation: "orders.list",
+  method: "GET",
+  path: "/orders",
+};
+const STOCK_CALL = {
+  operation: "stock.read",
+  method: "GET",
+  path: "/stock/1043",
+};
+export const manifest: ManifestEntry[] = [
+  [ORDERS_CALL, "orders"],
+  [STOCK_CALL, "stock"],
+].map(([call, resource]) => {
+  const { operation, method, path } = call as typeof ORDERS_CALL;
+  return {
+    id: operation,
+    kind: "read",
+    method: method as "GET",
+    path,
+    resource: resource as string,
+    fields: { title: "low" },
+    returns: ["title"],
+    filterable: [],
+    permission: operation,
+    view: path,
+    undo: "none",
+  };
+});
 
 /** What the host does with the question a reply state asks. */
 export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
@@ -86,6 +125,16 @@ export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
       return { chunks: pieces(text.long), interval: 220 };
     case "stopped":
       return { chunks: pieces(text.long), interval: 60 };
+    case "tools":
+      return {
+        tools: [
+          { ...ORDERS_CALL, id: "read-orders", label: text.reading },
+          { ...STOCK_CALL, id: "read-stock", label: text.stock },
+        ],
+        toolTime: 1200,
+        chunks: pieces(text.short),
+        interval: 40,
+      };
     case "versions":
     case "done":
       return { chunks: pieces(text.short), interval: 15 };

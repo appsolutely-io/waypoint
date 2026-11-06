@@ -2273,7 +2273,9 @@ function ChatBody({
               <div ref={replyRow} role="status" data-reply-state={row}>
                 {heldRow === "none" ? null : <p>{t(`reply.${heldRow}`)}</p>}
               </div>
-              {row === "writing" || row === "overdue" ? (
+              {row === "writing" ||
+              row === "overdue" ||
+              state.toolSteps.length ? (
                 <ReplyControls client={client} row={row} />
               ) : null}
             </Part>

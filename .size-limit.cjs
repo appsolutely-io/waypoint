@@ -237,8 +237,9 @@ const budgets = [
   {
     name: "lazy reply controls",
     path: "dist/reply-controls-*.js",
-    // Stop, Keep waiting and Retry: 631 B measured, plus 3%, rounded down.
-    limit: "649 B",
+    // The tool steps, Stop, Keep waiting and Retry: 969 B measured, plus
+    // 3%, rounded down.
+    limit: "998 B",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],
@@ -364,8 +365,8 @@ module.exports = withSharedChunks(budgets, {
     {
       name: "lazy reply messages",
       source: "src/react/reply-messages.ts",
-      // 441 B measured.
-      limit: "454 B",
+      // 613 B measured.
+      limit: "631 B",
       gzip: true,
       brotli: false,
       ignore: ["react", "react-dom", "./chunk-*"],

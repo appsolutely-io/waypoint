@@ -14,6 +14,7 @@ import type {
   Conversation,
   Message,
   Problem,
+  ToolCall,
 } from "../../src/protocol/generated";
 export interface FixtureTurn {
   content?: string;
@@ -28,6 +29,12 @@ export interface FixtureTurn {
   interval?: number;
   /** How a streamed reply ends; `held` leaves it being written. */
   ending?: "completed" | "failed" | "unavailable" | "held";
+  /**
+   * Reads the reply asks the client for (tool calls) before its text, each
+   * `toolTime` ms after the previous.
+   */
+  tools?: ToolCall[];
+  toolTime?: number;
   /** Accept the message and never start a reply. */
   silent?: boolean;
   /** The accepted message was asked this many ms ago. */
@@ -107,6 +114,7 @@ export async function createFixtureServer(options: {
     turn: FixtureTurn,
   ) => {
     const pieces = [...(turn.chunks ?? [])];
+    const tools = [...(turn.tools ?? [])];
     let timer: ReturnType<typeof setTimeout> | undefined;
     writing.set(message.id, () => {
       if (timer) {
@@ -115,7 +123,7 @@ export async function createFixtureServer(options: {
       }
       writing.delete(message.id);
     });
-    const step = (at: number) => {
+    const step = (at: number, delay = turn.interval ?? 120) => {
       timer = setTimeout(() => {
         timers.delete(timer!);
         if (at === 0)
@@ -124,6 +132,11 @@ export async function createFixtureServer(options: {
             messageId: message.id,
             role: "assistant",
           });
+        const call = tools.shift();
+        if (call) {
+          publish(conversation.id, { type: "tool.call", call });
+          return step(at + 1, turn.toolTime ?? 900);
+        }
         const text = pieces.shift();
         if (text !== undefined) {
           message.content += text;
@@ -149,7 +162,7 @@ export async function createFixtureServer(options: {
           messageId: message.id,
           status: "completed",
         });
-      }, turn.interval ?? 120);
+      }, delay);
       timers.add(timer);
     };
     step(0);

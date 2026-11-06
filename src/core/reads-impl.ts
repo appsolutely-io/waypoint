@@ -122,7 +122,7 @@ export async function answerRead(
   current: () => boolean,
   report: (problem: Problem) => void,
   send: (reply: ReplyInput) => Promise<unknown>,
-): Promise<void> {
+): Promise<boolean | void> {
   const ask =
     <C, R>(request: (call: C) => Promise<R>) =>
     async (call: C) => {
@@ -148,7 +148,8 @@ export async function answerRead(
       result: result.kind === "result" ? result.result : null,
       ...(problem ? { problem } : {}),
     });
-    return;
+    // Whether the read was answered with its result.
+    return !problem;
   }
   const planning = reads.planning;
   const template = await planning?.template(frame.planId, frame.stepId);

@@ -76,11 +76,20 @@ const fnv = (text: string, seed: number) => {
   }
   return hash.toString(16).padStart(8, "0");
 };
+// Each UTF-16 code unit outside `[A-Za-z0-9_.~-]` as `%` and four hex
+// digits: it cannot throw, even on an unpaired surrogate, and no part's
+// characters can make two cards one.
+const encodePart = (part: string) =>
+  part.replace(
+    /[^\w.~-]/g,
+    (unit) => `%${(unit.charCodeAt(0) + 0x10000).toString(16).slice(1)}`,
+  );
 /**
  * A card answer's reply id: the same for the same answer to the same card,
  * so a host deduplicates a resend; `#2`, `#3` for an attempt after a
- * refusal. Its parts are URI-encoded, so no id can make two cards one, and
- * one longer than the protocol allows is a digest of the same parts.
+ * refusal. Its parts are escaped by code unit (`:` is `%003a`), so no id
+ * can make two cards one, and one longer than 128 characters is a digest
+ * of the parts.
  */
 export function cardReplyId(
   conversationId: string,
@@ -89,7 +98,7 @@ export function cardReplyId(
   attempt: number,
 ): string {
   const id =
-    `card:${[conversationId, messageId, blockId].map(encodeURIComponent).join(":")}` +
+    `card:${[conversationId, messageId, blockId].map(encodePart).join(":")}` +
     (attempt > 1 ? `#${attempt}` : "");
   return id.length <= MAX_REPLY_ID
     ? id
@@ -135,30 +144,29 @@ export function useBlockReply(client?: WaypointClient): BlockReply {
         attempt: 1,
       };
       if (card.locked) return;
+      const attempt = card.attempt;
+      // Built before the lock is taken, so nothing below it can throw.
+      const reply = {
+        ...answer,
+        blockId: typeof answer.blockId === "string" ? answer.blockId : block.id,
+        clientReplyId: cardReplyId(
+          conversationId,
+          messageId,
+          block.id,
+          attempt,
+        ),
+      } as ReplyInput;
       card.locked = true;
       locks.cards.set(key, card);
       changed(locks);
-      const attempt = card.attempt;
-      void store
-        .replyOutcome({
-          ...answer,
-          blockId:
-            typeof answer.blockId === "string" ? answer.blockId : block.id,
-          clientReplyId: cardReplyId(
-            conversationId,
-            messageId,
-            block.id,
-            attempt,
-          ),
-        } as ReplyInput)
-        .then((outcome) => {
-          if (outcome.accepted) return;
-          // Only a definitive refusal (nothing applied) starts a new
-          // attempt; any other failure leaves the same answer's id.
-          if (outcome.problem?.code === "refused") card.attempt = attempt + 1;
-          card.locked = false;
-          changed(locks);
-        });
+      void store.replyOutcome(reply).then((outcome) => {
+        if (outcome.accepted) return;
+        // Only a definitive refusal (nothing applied) starts a new
+        // attempt; any other failure leaves the same answer's id.
+        if (outcome.problem?.code === "refused") card.attempt = attempt + 1;
+        card.locked = false;
+        changed(locks);
+      });
     },
     [store, locks, conversationId],
   );

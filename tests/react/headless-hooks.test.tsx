@@ -3,7 +3,7 @@
 // renderer-neutral entry without a provider, as a React Native host would.
 import { describe, it, expect, afterEach } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { usePlanView, useBlockReply } from "../../src/hooks/index";
+import { usePlanView, useBlockReply, cardReplyId } from "../../src/hooks/index";
 import * as react from "../../src/react/index";
 import { createWaypointClient } from "../../src/core/client";
 import type { Block, PlanRecord } from "../../src/protocol/generated";
@@ -236,4 +236,36 @@ describe("card reply ids and locks never collide", () => {
     expect(sent[0]!.length).toBeLessThanOrEqual(128);
     client.dispose();
   });
+});
+
+it("a card id with a lone surrogate gets a reply id and is sent", async () => {
+  const base = config();
+  const sent: string[] = [];
+  const client = createWaypointClient({
+    ...base,
+    transport: {
+      ...base.transport,
+      send: async (reply) => {
+        sent.push(reply.clientReplyId);
+        return { id: reply.clientReplyId };
+      },
+    },
+  });
+  await client.ready;
+  const { result } = renderHook(() => useBlockReply(client));
+  expect(() =>
+    act(() =>
+      result.current.reply(
+        { id: "q\ud800" },
+        { kind: "action", actionId: "accept" },
+      ),
+    ),
+  ).not.toThrow();
+  await waitFor(() => expect(sent).toHaveLength(1));
+  // Unpaired units are escaped on their own, so they never meet another id.
+  expect(sent[0]).toBe("card:conversation-a::q%d800");
+  expect(cardReplyId("a", "", "\udc00x", 1)).not.toBe(
+    cardReplyId("a", "", "\ufffdx", 1),
+  );
+  client.dispose();
 });

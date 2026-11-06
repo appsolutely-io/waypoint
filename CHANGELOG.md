@@ -29,6 +29,7 @@
 - A message's actions, a failed message's controls and its problem's details end with the chat's spacing (`space`), so they no longer touch the next message or the saved-request tabs below.
 - A card answer whose call failed outright, with no outcome, no longer keeps its reply id held back from the alert, which hid any later problem reported with that id.
 - `waypoint-conformance` fails a card whose `answer` is `null` or not an object without throwing inside the check.
+- A problem's Refresh (for `replaced`) is named "Refresh" (`chat.problem.refresh`, in the problem messages) before a plan's confirmation has loaded; it was an empty button until then.
 
 ## 0.1.1-next.0 - 2026-11-06
 

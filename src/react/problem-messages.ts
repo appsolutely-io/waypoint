@@ -19,7 +19,8 @@ export type ProblemMessageKey =
   | "chat.problem.answered"
   | "chat.problem.details"
   | "chat.problem.code"
-  | "chat.problem.reference";
+  | "chat.problem.reference"
+  | "chat.problem.refresh";
 export type ProblemCatalogue = Readonly<Record<ProblemMessageKey, string>>;
 export const problemEnglish: ProblemCatalogue = {
   "chat.problem.signIn": "Sign in again to continue.",
@@ -48,6 +49,7 @@ export const problemEnglish: ProblemCatalogue = {
   "chat.problem.details": "Details",
   "chat.problem.code": "Error code: {code}",
   "chat.problem.reference": "Reference: {id}",
+  "chat.problem.refresh": "Refresh",
 };
 export const problemSimplifiedChinese: ProblemCatalogue = {
   "chat.problem.signIn": "请重新登录后继续。",
@@ -69,4 +71,5 @@ export const problemSimplifiedChinese: ProblemCatalogue = {
   "chat.problem.details": "详情",
   "chat.problem.code": "错误代码：{code}",
   "chat.problem.reference": "参考编号：{id}",
+  "chat.problem.refresh": "刷新",
 };

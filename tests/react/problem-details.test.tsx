@@ -128,3 +128,23 @@ it("a message not sent because the chat was replaced keeps the problem's Refresh
   expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(1);
   client.dispose();
 });
+
+// The Refresh a problem asks for is named with the problem's own words,
+// which load with the chat, not with a plan's confirmation.
+for (const [locale, name] of [
+  [undefined, "Refresh"],
+  ["zh-CN", "刷新"],
+] as const)
+  it(`a problem's Refresh is named without a plan (${locale ?? "en"})`, async () => {
+    const client = createWaypointClient(config());
+    await client.ready;
+    render(<WaypointChat client={client} locale={locale} />);
+    client.report({ code: "replaced", id: "conversation-read" });
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-announcement] [data-action="status"]')
+          ?.textContent,
+      ).toBe(name),
+    );
+    client.dispose();
+  });

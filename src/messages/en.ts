@@ -378,6 +378,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.problem.details": "Details",
   "chat.problem.code": "Error code: {code}",
   "chat.problem.reference": "Reference: {id}",
+  "chat.problem.refresh": "Refresh",
   "chat.reply.stop": "Stop",
   "chat.reply.keepWaiting": "Keep waiting",
   "chat.tool.working": "Looking this up…",

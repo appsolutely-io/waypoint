@@ -335,6 +335,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.problem.details": "详情",
   "chat.problem.code": "错误代码：{code}",
   "chat.problem.reference": "参考编号：{id}",
+  "chat.problem.refresh": "刷新",
   "chat.reply.stop": "停止",
   "chat.reply.keepWaiting": "继续等待",
   "chat.tool.working": "正在查询…",

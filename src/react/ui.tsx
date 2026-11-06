@@ -805,8 +805,7 @@ function ProblemAction({
     <ActionButton
       action={{
         id: "status",
-        labelKey:
-          action === "retry" ? "chat.retry" : "chat.confirmation.refresh",
+        labelKey: action === "retry" ? "chat.retry" : "chat.problem.refresh",
         available: !waiting && !refresh.busy,
         busy: refresh.busy,
         ...(waiting && { reasonKey: "chat.problem.rateLimited" as MessageKey }),

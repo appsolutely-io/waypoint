@@ -212,3 +212,16 @@ test.describe("on a phone", () => {
       expect(small).toEqual([]);
     });
 });
+
+test("the reply row's buttons keep a gap from what follows", async ({
+  page,
+}) => {
+  await page.goto("/?state=reply-ended-failed");
+  const retry = page.getByRole("button", { name: "Retry", exact: true });
+  await expect(retry).toBeVisible();
+  const below = page.locator('[data-part="flowTabs"] [role="tab"]').first();
+  const gap =
+    (await below.boundingBox())!.y -
+    ((await retry.boundingBox())!.y + (await retry.boundingBox())!.height);
+  expect(gap).toBeGreaterThanOrEqual(4);
+});

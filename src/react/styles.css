@@ -728,6 +728,10 @@
   align-items: center;
   gap: var(--wp-space1);
 }
+/* The reply's buttons keep the chat's spacing from the row below. */
+.waypoint [data-reply-controls] {
+  margin-block-end: var(--wp-space);
+}
 /* Previous points the way the reading goes back. */
 .waypoint[dir="rtl"] [data-version-walk] > button {
   transform: scaleX(-1);

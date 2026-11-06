@@ -102,3 +102,46 @@ it("useBlockReply sends one answer per card and frees a refused one", async () =
   expect(result.current.answered.has("question-a")).toBe(true);
   client.dispose();
 });
+
+it("the lock outlives a re-mount while the answer is in flight", async () => {
+  const base = config();
+  const sent: string[] = [];
+  let release: () => void = () => {};
+  const client = createWaypointClient({
+    ...base,
+    transport: {
+      ...base.transport,
+      send: (reply) => {
+        sent.push(reply.clientReplyId);
+        return new Promise((resolve) => {
+          release = () => resolve({ id: reply.clientReplyId });
+        });
+      },
+    },
+  });
+  await client.ready;
+  const first = renderHook(() => useBlockReply(client));
+  act(() =>
+    first.result.current.reply(card, { kind: "action", actionId: "accept" }),
+  );
+  await waitFor(() => expect(sent).toHaveLength(1));
+  first.unmount();
+  const again = renderHook(() => useBlockReply(client));
+  expect(again.result.current.answered.has("question-a")).toBe(true);
+  expect(again.result.current.isAnswered(card)).toBe(true);
+  act(() =>
+    again.result.current.reply(card, { kind: "action", actionId: "accept" }),
+  );
+  await act(async () => release());
+  expect(sent).toHaveLength(1);
+  client.dispose();
+});
+
+it("isAnswered counts a card the host already marks answered", async () => {
+  const client = createWaypointClient(config());
+  await client.ready;
+  const { result } = renderHook(() => useBlockReply(client));
+  expect(result.current.isAnswered(card)).toBe(false);
+  expect(result.current.isAnswered({ ...card, answered: true })).toBe(true);
+  client.dispose();
+});

@@ -231,6 +231,7 @@ export interface BlockPlan {
 // @public (undocumented)
 export interface BlockReply {
     answered: ReadonlySet<string>;
+    isAnswered(block: Pick<Block, "id" | "answered">): boolean;
     reply(block: Pick<Block, "id">, answer: BlockAnswer): void;
 }
 

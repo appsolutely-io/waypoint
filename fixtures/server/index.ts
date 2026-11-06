@@ -31,6 +31,14 @@ export type FixtureFault =
   | "second-answer"
   // Names another answer than the one it applied in the card's `answer`.
   | "wrong-answer"
+  // Names the card's `answer` as something other than an answer object.
+  | "malformed-answer"
+  // Names the applied answer with its keys in another order (as Postgres
+  // `jsonb` stores them): still a conforming host.
+  | "reordered-answer"
+  // Names the applied answer with a field the schema allows besides its
+  // own: still a conforming host.
+  | "extended-answer"
   // Answers the same reply id with another body with 422, as the
   // Idempotency-Key draft does: still a conforming host.
   | "changed-422"
@@ -386,12 +394,19 @@ export async function createFixtureServer(options: {
         if (card) {
           const answer = { ...body };
           delete answer.protocol;
+          // Every reader sees `answer`: a form's values stay out of it.
+          delete answer.values;
           card.answered = true;
-          card.answer = (
-            options.fault === "wrong-answer"
-              ? { ...answer, actionId: "other" }
-              : answer
-          ) as Block["answer"];
+          const faults: Record<string, unknown> = {
+            "wrong-answer": { ...answer, actionId: "other" },
+            "malformed-answer": "accept",
+            "reordered-answer": Object.fromEntries(
+              Object.entries(answer).reverse(),
+            ),
+            "extended-answer": { ...answer, appliedAt: 1 },
+          };
+          card.answer = (faults[options.fault ?? ""] ??
+            answer) as Block["answer"];
         }
         replies.set(key, { body: text, result: { id: `reply-${++next}` } });
       }

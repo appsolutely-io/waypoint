@@ -13,6 +13,7 @@ for (const fault of [
   "shared-answer",
   "second-answer",
   "wrong-answer",
+  "malformed-answer",
 ] as const)
   it(`HTTP protocol ${fault ?? "clean"}`, async () => {
     const host = await createFixtureServer({ testMode: true, fault });
@@ -28,6 +29,23 @@ for (const fault of [
       expect(result.passed, result.failures.join(",")).toBe(
         fault === undefined,
       );
+    } finally {
+      await host.close();
+    }
+  });
+for (const fault of ["reordered-answer", "extended-answer"] as const)
+  it(`a host whose card answer is ${fault === "reordered-answer" ? "in another key order" : "extended by an allowed field"} conforms`, async () => {
+    const host = await createFixtureServer({ testMode: true, fault });
+    try {
+      const result = await runConformance({
+        baseUrl: host.url,
+        profile: "admin-host",
+        request: async (path, init) => {
+          const r = await fetch(host.url + path, init);
+          return { status: r.status, body: await r.json() };
+        },
+      });
+      expect(result.passed, result.failures.join(", ")).toBe(true);
     } finally {
       await host.close();
     }

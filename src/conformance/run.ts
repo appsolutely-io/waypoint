@@ -201,15 +201,19 @@ export async function runConformance(
       (refused(changed) || changed.status === 422) &&
       refused(other) &&
       card?.answered === true &&
-      // An answer the host names is optional, and the one it applied.
-      (!card.answer ||
-        JSON.stringify(card.answer) ===
-          JSON.stringify({
-            kind: "action",
-            clientReplyId: "card-answer-a",
-            blockId: "card-answer-choice",
-            actionId: "accept",
-          }))
+      // An answer the host names is optional, and the one it applied: the
+      // fields `CardAnswer` requires of an action, in any key order, beside
+      // any others the schema allows.
+      (card.answer === undefined ||
+        Object.entries({
+          kind: "action",
+          clientReplyId: "card-answer-a",
+          blockId: "card-answer-choice",
+          actionId: "accept",
+        }).every(
+          ([key, value]) =>
+            (card.answer as Record<string, unknown>)[key] === value,
+        ))
     );
   });
   await check("agreement binding", async () => {

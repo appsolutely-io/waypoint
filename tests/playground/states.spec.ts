@@ -144,6 +144,12 @@ test("a plan shows its steps", async ({ page }) => {
   await page.goto("/?state=plan");
   await expect(page.locator("[data-plan]")).toBeVisible();
   await expect(page.locator('[data-part="stepRow"]').first()).toBeVisible();
+  // Named in the host's words, as a host passes them in `planLabels`.
+  const first = page.locator('[data-part="stepRow"]').first();
+  await expect(first).toContainText("Order 1");
+  await expect(first).toContainText("Status");
+  await expect(page.locator("[data-plan]")).not.toContainText("Change 1");
+  await expect(page.locator("[data-plan]")).not.toContainText("Value 1");
 });
 
 test("a plan whose step failed says which, why, and whether it can be retried", async ({

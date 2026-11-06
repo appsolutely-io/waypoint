@@ -24,6 +24,7 @@ import "../src/react/styles.css";
 import "./styles.css";
 
 import { previewCopy } from "./copy";
+import { statePlanLabels } from "./reply-states";
 
 const preference = matchMedia("(prefers-color-scheme: dark)");
 const subscribe = (changed: () => void) => {
@@ -39,6 +40,7 @@ function PreviewSurface({ view, preview }: { view: View; preview: Preview }) {
     ...(view.skin === "antd" ? antdSkin : {}),
     locale: view.lang,
     dir: view.dir,
+    planLabels: statePlanLabels(view.lang),
     ...(view.scheme === "system" ? {} : { colorScheme: view.scheme }),
   };
   if (preview.form)

@@ -4,6 +4,7 @@ import type {
   PlanRecord,
   Problem,
 } from "../src/protocol/generated";
+import type { PlanLabels } from "../src/react/index";
 import type { View } from "./state";
 
 /** The title every reply-state conversation is created with. */
@@ -284,6 +285,19 @@ export function stateFailedPlan(
     ],
   };
 }
+
+// The host's words for the plan's resource and fields, by language.
+const planWords = {
+  en: { orders: "Order", status: "Status", note: "Note" },
+  "zh-CN": { orders: "订单", status: "状态", note: "备注" },
+} as const;
+/** What a host passes as `planLabels`: its own words for the plan's steps. */
+export const statePlanLabels = (lang: View["lang"]): PlanLabels => ({
+  resource: (resource) =>
+    resource === "orders" ? planWords[lang].orders : undefined,
+  field: (_resource, field) =>
+    field === "status" || field === "note" ? planWords[lang][field] : undefined,
+});
 
 /** The plan the plan state shows, as the host would send it. */
 export function statePlan(conversationId: string): PlanRecord {

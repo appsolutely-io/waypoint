@@ -1,0 +1,43 @@
+name: Check
+on: [push, pull_request]
+jobs:
+  privacy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test tests/protocol/privacy.test.mjs
+      - run: node scripts/privacy.mjs
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 2
+      matrix:
+        peers: [lowest, latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - if: matrix.peers == 'lowest'
+        run: npm install --no-save react@19.0.0 react-dom@19.0.0 antd@5.0.0 @testing-library/react@16.1.0
+      - if: matrix.peers == 'latest'
+        run: npm install --no-save react@19 react-dom@19 antd@5 @testing-library/react@16
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: node scripts/generate.mjs --check
+      - run: npx changeset status --since=origin/master
+      - run: npm test -- tests/protocol tests/conformance tests/core tests/react tests/skin-antd tests/package
+      - run: npm run build
+      - run: npm run api:check
+      - run: npm run size
+      - run: npx playwright install --with-deps chromium --only-shell
+      - run: npm run test:browser
+      - run: npm install --global pnpm@10
+      - run: node scripts/consumer.mjs .api-temp/consumers

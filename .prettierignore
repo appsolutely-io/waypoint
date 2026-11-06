@@ -1,0 +1,6 @@
+node_modules
+dist
+.api-temp
+src/protocol/generated.ts
+etc
+package-lock.json

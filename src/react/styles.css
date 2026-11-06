@@ -739,7 +739,13 @@
   align-items: center;
   gap: var(--wp-space1);
 }
-/* The reply's buttons keep the chat's spacing from the row below. */
+/* What ends a message (its actions, a failed message's controls and its
+   problem's details) and the reply's controls end with the chat's spacing,
+   as a bubble does, so they never touch the next message or the row
+   below. */
+.waypoint [data-part="messageActions"] [role="group"],
+.waypoint [data-part="failedSendControls"]:not(:empty),
+.waypoint article > [data-problem-details],
 .waypoint [data-reply-controls] {
   margin-block-end: var(--wp-space);
 }

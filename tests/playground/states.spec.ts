@@ -281,3 +281,42 @@ test("the reply row's buttons keep a gap from what follows", async ({
     ((await retry.boundingBox())!.y + (await retry.boundingBox())!.height);
   expect(gap).toBeGreaterThanOrEqual(4);
 });
+
+// The chat's spacing token (`space`, 0.75rem) between what ends a message
+// (its actions; a failed message's problem details) and whatever follows.
+for (const skin of ["neutral", "antd"])
+  for (const [state, last] of [
+    [
+      "details",
+      'article[data-role="assistant"] [data-part="messageActions"] [role="group"]',
+    ],
+    ["error-retryable", 'article[data-role="pending"] [data-problem-details]'],
+  ] as const)
+    test(`the end of a message keeps the chat's spacing from the tabs: ${state}, ${skin}`, async ({
+      page,
+    }) => {
+      await page.goto(`/?state=${state}&skin=${skin}`);
+      const end = page.locator(last).last();
+      await expect(end).toBeVisible();
+      const tab = page.locator('[data-part="flowTabs"] [role="tab"]').first();
+      const above = (await end.boundingBox())!;
+      const gap = (await tab.boundingBox())!.y - (above.y + above.height);
+      expect(gap).toBeGreaterThanOrEqual(11.5);
+    });
+
+test("a user's message keeps the chat's spacing from the reply after it", async ({
+  page,
+}) => {
+  await page.goto("/?state=done");
+  const copy = page
+    .locator('article[data-role="user"] [data-part="messageActions"]')
+    .last();
+  const button = copy.getByRole("button", { name: "Copy" });
+  await expect(button).toBeVisible();
+  await expect(reply(page)).not.toHaveAttribute("aria-busy", "true");
+  const box = (await button.boundingBox())!;
+  const next = (await reply(page)
+    .locator('[data-part="bubble"]')
+    .boundingBox())!;
+  expect(next.y - (box.y + box.height)).toBeGreaterThanOrEqual(11.5);
+});

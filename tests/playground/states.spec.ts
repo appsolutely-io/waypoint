@@ -115,9 +115,14 @@ test("a reply the host ends with a failed message says it failed", async ({
     "Reply failed",
   );
   await expect(replyRow(page)).toHaveText("");
+  // The playground has no versions port: a read would show the same ended
+  // reply, so there is no Retry, and the composer is where the user goes on.
   await expect(
     page.getByRole("button", { name: "Retry", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("textbox", { name: "Message", exact: true }),
+  ).toBeEditable();
 });
 
 for (const state of ["reply-failed", "reply-unavailable"] as const)
@@ -330,7 +335,7 @@ test.describe("on a phone", () => {
 test("the reply row's buttons keep a gap from what follows", async ({
   page,
 }) => {
-  await page.goto("/?state=reply-ended-failed");
+  await page.goto("/?state=reply-failed");
   const retry = page.getByRole("button", { name: "Retry", exact: true });
   await expect(retry).toBeVisible();
   const below = page.locator('[data-part="flowTabs"] [role="tab"]').first();

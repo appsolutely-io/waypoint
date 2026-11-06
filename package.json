@@ -97,6 +97,7 @@
     "test:consumer": "node scripts/consumer.mjs",
     "test:native": "node scripts/native-smoke.mjs && node scripts/native-smoke.mjs dist/hooks/index.js --allow-react --forbid=intl-messageformat && node scripts/native-smoke.mjs dist/messages/index.js && node scripts/native-smoke.mjs dist/messages/en/index.js && node scripts/native-smoke.mjs dist/messages/zh-Hans/index.js",
     "playground": "node --import tsx scripts/playground.mjs",
+    "perf": "node scripts/perf.mjs",
     "test:playground": "playwright test --config playground/playwright.config.ts --workers=1"
   },
   "peerDependencies": {

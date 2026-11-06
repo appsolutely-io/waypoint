@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import {
+  Profiler,
   useEffect,
   useState,
   useSyncExternalStore,
@@ -25,6 +26,7 @@ import "./styles.css";
 
 import { previewCopy } from "./copy";
 import { statePlanLabels } from "./reply-states";
+import { measuring } from "./perf";
 
 const preference = matchMedia("(prefers-color-scheme: dark)");
 const subscribe = (changed: () => void) => {
@@ -71,7 +73,28 @@ function PreviewSurface({ view, preview }: { view: View; preview: Preview }) {
         </section>
       </WaypointProvider>
     );
-  return <WaypointChat {...props} layout={view.layout} />;
+  const chat = <WaypointChat {...props} layout={view.layout} />;
+  return measuring ? (
+    <Profiler id="chat" onRender={recordCommit}>
+      {chat}
+    </Profiler>
+  ) : (
+    chat
+  );
+}
+// The chat's React commits, for `npm run perf`.
+function recordCommit(_id: string, _phase: string, duration: number) {
+  const totals = ((
+    globalThis as { __wpPerfCommits?: Commits }
+  ).__wpPerfCommits ??= { count: 0, total: 0, max: 0 });
+  totals.count++;
+  totals.total += duration;
+  totals.max = Math.max(totals.max, duration);
+}
+interface Commits {
+  count: number;
+  total: number;
+  max: number;
 }
 
 function Scenario({ view }: { view: View }) {

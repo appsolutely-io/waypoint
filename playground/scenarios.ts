@@ -11,6 +11,7 @@ import type { View } from "./state";
 import type { FixtureTurn } from "../fixtures/server/index";
 
 import { translatePreview } from "./copy";
+import { measuring, perf, perfTurn, withPerf } from "./perf";
 import { localizeConversation, localizeForm } from "./localize";
 import {
   STATE_TITLE,
@@ -199,8 +200,10 @@ export async function createPreview(
         return transport.send(reply, ...rest);
       },
       read: async (...args) =>
-        withVersions(
-          localizeConversation(await transport.read(...args), locale),
+        withPerf(
+          withVersions(
+            localizeConversation(await transport.read(...args), locale),
+          ),
         ),
     },
     formSession: form,
@@ -294,6 +297,9 @@ export async function createPreview(
       : {}),
   });
   await client.ready;
+  // The harness reads what the client holds while it measures.
+  if (measuring)
+    (globalThis as { __wpPerfClient?: unknown }).__wpPerfClient = client;
   if (!client.getSnapshot().conversation) {
     client.dispose();
     form?.dispose();
@@ -301,7 +307,7 @@ export async function createPreview(
   }
   if (staged) {
     // The host is told what to do with the next message, then it is asked.
-    await script(stateTurn(replyState, language));
+    await script(perf.tokens ? perfTurn() : stateTurn(replyState, language));
     scripted = true;
     await client.setDraft(stateQuestion(language));
     await client.send();

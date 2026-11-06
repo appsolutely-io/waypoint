@@ -172,11 +172,18 @@ export interface MessageVersionPort {
   regenerate(input: MessageVersionInput): MaybePromise<void>;
   select(input: MessageVersionInput & { index: number }): MaybePromise<void>;
 }
+/** The user's rating of a reply, with the reply it rates. */
 export interface FeedbackInput extends MessageVersionInput {
+  /** Good response (`positive`) or Bad response (`negative`). */
   rating: "positive" | "negative";
 }
 /** Where a host takes the user's rating of a reply. */
 export interface FeedbackPort {
+  /**
+   * Records a rating. The same rating of the same reply is not sent again
+   * while one is in flight, and each call has a new `clientReplyId`; a
+   * throw is reported as the press's problem.
+   */
   send(input: FeedbackInput): MaybePromise<void>;
 }
 export interface FlowSource {

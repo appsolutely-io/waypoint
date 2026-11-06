@@ -534,15 +534,33 @@ export interface BlockCard {
  * Supporting detail behind a disclosure: closed until the user opens it, so the answer comes first.
  */
 export interface BlockDetails {
+  /**
+   * The block's type: `details`.
+   */
   type: 'details';
+  /**
+   * The block's id, unique in its message.
+   */
   id: string;
+  /**
+   * Plain text shown by a client that does not know the type.
+   */
   fallback: string;
+  /**
+   * The disclosure's words and what it holds.
+   */
   body: {
+    /**
+     * The words on the closed disclosure.
+     */
     summary: string;
+    /**
+     * The supporting detail, shown when the disclosure is open.
+     */
     blocks: Block[];
   };
   /**
-   * Whether the host holds an answer to this card; it holds one at most (see the README's Card answers).
+   * Whether the host holds an answer to a card nested in this block, named in `answer`. An answer marks the message's own block, so a details block that holds a form or buttons is the one marked (see the README's Card answers).
    */
   answered?: boolean;
   answer?: CardAnswer;

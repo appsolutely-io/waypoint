@@ -142,16 +142,12 @@ export interface BlockDetails {
     // (undocumented)
     answer?: CardAnswer;
     answered?: boolean;
-    // (undocumented)
     body: {
         summary: string;
         blocks: Block[];
     };
-    // (undocumented)
     fallback: string;
-    // (undocumented)
     id: string;
-    // (undocumented)
     type: 'details';
 }
 
@@ -886,15 +882,13 @@ export interface ExtensionBlock {
     type: string;
 }
 
-// @public (undocumented)
+// @public
 export interface FeedbackInput extends MessageVersionInput {
-    // (undocumented)
     rating: "positive" | "negative";
 }
 
 // @public
 export interface FeedbackPort {
-    // (undocumented)
     send(input: FeedbackInput): MaybePromise<void>;
 }
 

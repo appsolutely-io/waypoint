@@ -1117,14 +1117,17 @@
       "description": "Supporting detail behind a disclosure: closed until the user opens it, so the answer comes first.",
       "properties": {
         "type": {
-          "const": "details"
+          "const": "details",
+          "description": "The block's type: `details`."
         },
         "id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "The block's id, unique in its message."
         },
         "fallback": {
-          "type": "string"
+          "type": "string",
+          "description": "Plain text shown by a client that does not know the type."
         },
         "body": {
           "type": "object",
@@ -1132,20 +1135,23 @@
             "summary": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 200
+              "maxLength": 200,
+              "description": "The words on the closed disclosure."
             },
             "blocks": {
               "type": "array",
               "items": {
                 "$ref": "#/$defs/Block"
-              }
+              },
+              "description": "The supporting detail, shown when the disclosure is open."
             }
           },
-          "required": ["summary", "blocks"]
+          "required": ["summary", "blocks"],
+          "description": "The disclosure's words and what it holds."
         },
         "answered": {
           "type": "boolean",
-          "description": "Whether the host holds an answer to this card; it holds one at most (see the README's Card answers)."
+          "description": "Whether the host holds an answer to a card nested in this block, named in `answer`. An answer marks the message's own block, so a details block that holds a form or buttons is the one marked (see the README's Card answers)."
         },
         "answer": {
           "$ref": "#/$defs/CardAnswer"

@@ -295,11 +295,14 @@ it("a host's problemText words an answer refused because the card was answered e
   render(
     <WaypointChat
       client={here}
-      problemText={(problem) => ({ text: `Host: ${problem.code}` })}
+      problemText={(problem, context) => ({
+        text: `Host: ${problem.code}${context?.answeredElsewhere ? ", answered elsewhere" : ""}`,
+      })}
     />,
   );
   fireEvent.click(await screen.findByRole("button", { name: "Decline" }));
-  await screen.findByText("Host: refused");
+  // The host can tell the card was answered elsewhere, as the chat can.
+  await screen.findByText("Host: refused, answered elsewhere");
   here.dispose();
   elsewhere.dispose();
 });

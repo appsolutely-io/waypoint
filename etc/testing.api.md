@@ -2984,8 +2984,9 @@ export interface WaypointProviderProps {
     planLabels?: PlanLabels;
     // (undocumented)
     primitives?: Partial<PrimitiveComponents>;
-    // (undocumented)
-    problemText?: (problem: Problem) => {
+    problemText?: (problem: Problem, context?: {
+        answeredElsewhere: boolean;
+    }) => {
         text: string;
         action?: ReactNode;
     };

@@ -357,7 +357,15 @@ export interface WaypointProviderProps {
   markdownImages?: MarkdownImagePolicy;
   extraUrlSchemes?: readonly string[];
   flowTabLabel?: (labelKey: string) => string;
-  problemText?: (problem: Problem) => { text: string; action?: ReactNode };
+  /**
+   * A host's words for a problem. `context.answeredElsewhere`: a card
+   * answer was refused because the read after it shows the card answered
+   * elsewhere (another tab, an earlier page).
+   */
+  problemText?: (
+    problem: Problem,
+    context?: { answeredElsewhere: boolean },
+  ) => { text: string; action?: ReactNode };
   format?: FormatMessage;
   locale?: string;
   dir?: "ltr" | "rtl";
@@ -1788,10 +1796,14 @@ function ChatBody({
         removed: pressed,
       });
   }, [settledCards]);
+  const elsewhere =
+    !!state.problem && state.problem === answeredElsewhere.current;
   const problem =
     state.problem && !checking.current.has(state.problem.id)
-      ? (provider.problemText?.(state.problem) ??
-        (state.problem === answeredElsewhere.current
+      ? (provider.problemText?.(state.problem, {
+          answeredElsewhere: elsewhere,
+        }) ??
+        (elsewhere
           ? { text: t("chat.problem.answered") || t("chat.failure") }
           : defaultProblemText(state.problem, t)))
       : null;

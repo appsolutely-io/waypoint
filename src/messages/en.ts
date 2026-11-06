@@ -373,5 +373,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.problem.needsAttention":
     "This plan needs your attention. Review its status.",
   "chat.problem.answered": "This question was already answered.",
+  "chat.problem.details": "Details",
+  "chat.problem.code": "Error code: {code}",
+  "chat.problem.reference": "Reference: {id}",
 });
 export default messages;

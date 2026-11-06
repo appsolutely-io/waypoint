@@ -16,7 +16,10 @@ export type ProblemMessageKey =
   | "chat.problem.inDoubt"
   | "chat.problem.replaced"
   | "chat.problem.needsAttention"
-  | "chat.problem.answered";
+  | "chat.problem.answered"
+  | "chat.problem.details"
+  | "chat.problem.code"
+  | "chat.problem.reference";
 export type ProblemCatalogue = Readonly<Record<ProblemMessageKey, string>>;
 export const problemEnglish: ProblemCatalogue = {
   "chat.problem.signIn": "Sign in again to continue.",
@@ -42,6 +45,9 @@ export const problemEnglish: ProblemCatalogue = {
   "chat.problem.needsAttention":
     "This plan needs your attention. Review its status.",
   "chat.problem.answered": "This question was already answered.",
+  "chat.problem.details": "Details",
+  "chat.problem.code": "Error code: {code}",
+  "chat.problem.reference": "Reference: {id}",
 };
 export const problemSimplifiedChinese: ProblemCatalogue = {
   "chat.problem.signIn": "请重新登录后继续。",
@@ -60,4 +66,7 @@ export const problemSimplifiedChinese: ProblemCatalogue = {
   "chat.problem.replaced": "已有更新的版本。请刷新查看。",
   "chat.problem.needsAttention": "此计划需要您处理。请查看它的状态。",
   "chat.problem.answered": "此问题已被回答。",
+  "chat.problem.details": "详情",
+  "chat.problem.code": "错误代码：{code}",
+  "chat.problem.reference": "参考编号：{id}",
 };

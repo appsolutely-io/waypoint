@@ -330,5 +330,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.problem.replaced": "已有更新的版本。请刷新查看。",
   "chat.problem.needsAttention": "此计划需要您处理。请查看它的状态。",
   "chat.problem.answered": "此问题已被回答。",
+  "chat.problem.details": "详情",
+  "chat.problem.code": "错误代码：{code}",
+  "chat.problem.reference": "参考编号：{id}",
 });
 export default messages;

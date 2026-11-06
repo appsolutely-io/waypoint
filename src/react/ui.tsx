@@ -1843,6 +1843,19 @@ function ChatBody({
       : null;
   const plan = state.plan;
   const planView = recovery.view;
+  // The problem the alert says, when it says one.
+  const shownProblem =
+    problem &&
+    state.problem?.id !== "conversation-unavailable" &&
+    // The recovery panel states a protected plan's stop itself.
+    !(state.problem?.code === "stopped" && planView?.status) &&
+    // A confirmation refusal is shown with the confirmation.
+    !state.problem?.confirmation &&
+    !(
+      state.conversationUnavailable && state.problem?.id === "conversation-read"
+    )
+      ? state.problem
+      : undefined;
   const confirmEntry = planView?.actions.find(
     (entry) => entry.id === "confirm",
   );
@@ -2565,16 +2578,7 @@ function ChatBody({
                   </B>
                 </span>
               )}
-              {problem &&
-              state.problem?.id !== "conversation-unavailable" &&
-              // The recovery panel states a protected plan's stop itself.
-              !(state.problem?.code === "stopped" && planView?.status) &&
-              // A confirmation refusal is shown with the confirmation.
-              !state.problem?.confirmation &&
-              !(
-                state.conversationUnavailable &&
-                state.problem?.id === "conversation-read"
-              ) ? (
+              {shownProblem && problem ? (
                 <span key={state.announcement}>
                   {problem.text}
                   {problem.action ??
@@ -2587,6 +2591,15 @@ function ChatBody({
                 </span>
               ) : null}
             </div>
+            {/* The code and reference, for whoever needs them, outside the
+                alert so it says only the plain words. */}
+            {shownProblem && t("chat.problem.details") ? (
+              <details data-problem-details="" key={state.announcement}>
+                <summary>{t("chat.problem.details")}</summary>
+                <p>{t("chat.problem.code", { code: shownProblem.code })}</p>
+                <p>{t("chat.problem.reference", { id: shownProblem.id })}</p>
+              </details>
+            ) : null}
           </main>
           {narrow ? null : planPanel}
           {extraPanels ? <Part name="extraPanels" slots={slots} /> : null}

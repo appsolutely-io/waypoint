@@ -2168,7 +2168,7 @@ export interface Problem {
 export type ProblemCatalogue = Readonly<Record<ProblemMessageKey, string>>;
 
 // @public (undocumented)
-export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered";
+export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered" | "chat.problem.details" | "chat.problem.code" | "chat.problem.reference";
 
 // @public
 export interface ReaderRequestContext {

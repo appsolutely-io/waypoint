@@ -21,6 +21,11 @@
 - An overdue reply offers "Keep waiting" and "Retry". `client.keepWaiting()` puts the reply row back to `writing` until another 15 seconds pass without progress; `client.retryReply()` does the same and reads the conversation again, so a retry never sends the message twice. `replyRow` takes `heldUntil` for a reply being written as well.
 - Confirm is named by the number of changes the host's record lists: "Apply 2 changes", "Schedule 1 change" ("应用 2 项修改"), and "Apply these changes" when it lists none. A host's `actionLabel` still names it verbatim. For a UI drawn from `/hooks`, `ActionEntry.countedLabelKey` (`chat.confirmation.applyCount`, `chat.confirmation.scheduleCount`) takes the count in `ActionEntry.labelValues`; `labelKey` alone still gives "Apply these changes", so a UI that passes no values keeps working.
 
+### Changed
+
+- Exported unions are wider, which breaks an exhaustive `switch` in TypeScript: `Block` has `BlockDetails`, `Reply` has `ReplyStop`, `Message.status` and `FrameMessageEnd.status` have `stopped`, and `CAPABILITIES` has `reply-stop`. On the wire every addition is optional.
+- `WaypointClient` has new required members (`stopReply`, `canStopReply`, `keepWaiting`, `retryReply`, `canRetryReply`, `sendFeedback`, `canSendFeedback`, `canChangeVersions`), and `ClientSnapshot` has `toolSteps`. A hand-written client or snapshot, such as a test fake, adds them.
+
 ### Fixed
 
 - A reply the host ends with `message.end` status `failed` or `unavailable` is no longer shown as finished with an empty reply row: the reply says "Reply failed" or "Reply unavailable", as the row does for the conversation's `replyStatus`. A screen reader hears it once, from the message announcements; the row's live region stays quiet for it.

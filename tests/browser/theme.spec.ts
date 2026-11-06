@@ -10,6 +10,9 @@ for (const skin of ["neutral", "antd"])
     const field = page.getByRole("textbox", { name: "Message" });
     await field.fill("Keep my draft");
     await field.focus();
+    // The plan's steps render from their own chunk: compare the chat once
+    // it has settled, not while the steps are still loading.
+    await expect(page.locator('[data-part="stepRow"]').first()).toBeVisible();
     const before = await page.evaluate(() => {
       const root = document.querySelector(".waypoint")!;
       const transcript = root.querySelector(".wp-transcript")!;

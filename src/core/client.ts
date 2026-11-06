@@ -1305,6 +1305,18 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const shown =
       "messageId" in frame &&
       state.conversation?.messages.find((m) => m.id === frame.messageId);
+    // A new reply starts: what a read said about the reply before it
+    // (failed, unavailable) no longer describes the reply now.
+    if (
+      frame.type === "message.start" &&
+      frame.role === "assistant" &&
+      state.conversation &&
+      (state.conversation.replyStatus === "failed" ||
+        state.conversation.replyStatus === "unavailable")
+    )
+      update({
+        conversation: { ...state.conversation, replyStatus: undefined },
+      });
     if (frame.type === "text.delta") {
       // A reply that went on after its mark was dropped is written again.
       const again = mark && mark.binding === stream && !mark.status;

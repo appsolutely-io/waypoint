@@ -478,3 +478,22 @@ describe("a reply that stops arriving", () => {
     h.client.dispose();
   });
 });
+
+describe("a reply status from a read describes that reply only", () => {
+  it("a new reply started after a read that said failed is being written", async () => {
+    const h = harness();
+    h.host.messages = [
+      { ...h.shown("u", "Question"), role: "user" },
+      h.shown("m", "Part", "failed"),
+    ];
+    h.host.replyStatus = "failed";
+    await h.ready();
+    expect(h.client.getSnapshot().replyState).not.toBe("writing");
+    // The host tries again, on the stream, with no read in between.
+    h.start("m2");
+    h.delta("m2", "New");
+    await flush();
+    expect(h.client.getSnapshot().replyState).toBe("writing");
+    h.client.dispose();
+  });
+});

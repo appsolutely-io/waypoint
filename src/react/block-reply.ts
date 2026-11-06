@@ -81,20 +81,24 @@ export function useBlockReply(client?: WaypointClient): BlockReply {
       const key = `${conversationId}:${block.id}`;
       if (locks.keys.has(key)) return;
       setLock(locks, key, true);
-      // The first answer's id is the card's, so the same answer sent again
-      // (after a reload) is the same reply; an answer after a refusal is a
-      // new reply with its own id, never a changed replay of the refused one.
-      const attempt = (locks.attempts.get(key) ?? 0) + 1;
-      locks.attempts.set(key, attempt);
+      // The same answer keeps its reply id, so the host can tell it already
+      // has it: a resend after a reload, a drop, a timeout or any failure
+      // that leaves unknown whether the host applied it. Only a definitive
+      // refusal (nothing applied) makes the next answer a new attempt with
+      // its own id, never a changed replay of the refused one.
+      const attempt = locks.attempts.get(key) ?? 1;
       void store
-        .reply({
+        .replyOutcome({
           ...answer,
           blockId:
             typeof answer.blockId === "string" ? answer.blockId : block.id,
           clientReplyId: attempt === 1 ? key : `${key}:${attempt}`,
         } as ReplyInput)
-        .then((accepted) => {
-          if (!accepted) setLock(locks, key, false);
+        .then((outcome) => {
+          if (outcome.accepted) return;
+          if (outcome.problem?.code === "refused")
+            locks.attempts.set(key, attempt + 1);
+          setLock(locks, key, false);
         });
     },
     [store, locks, conversationId],

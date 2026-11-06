@@ -2330,6 +2330,14 @@ export interface ReplyMessage {
     protocol: string;
 }
 
+// @public
+export type ReplyOutcome = {
+    accepted: true;
+} | {
+    accepted: false;
+    problem?: Problem;
+};
+
 // @public (undocumented)
 export interface ReplyPlanValues {
     // (undocumented)
@@ -2775,6 +2783,7 @@ export interface WaypointClient {
     regenerate(messageId: string): Promise<void>;
     // (undocumented)
     reply(reply: ReplyInput): Promise<boolean>;
+    replyOutcome(reply: ReplyInput): Promise<ReplyOutcome>;
     // (undocumented)
     report(problem: Problem): void;
     // (undocumented)

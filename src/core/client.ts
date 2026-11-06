@@ -290,6 +290,9 @@ export type ReplyInput = Reply extends infer R
     ? Omit<R, "protocol"> & { protocol?: string }
     : never
   : never;
+/** How a reply ended: accepted, or not, and why when something was sent. */
+export type ReplyOutcome =
+  { accepted: true } | { accepted: false; problem?: Problem };
 export class ConversationReadError extends Error {
   /** A validated typed problem from the response, without any raw body. */
   readonly problem?: Problem;
@@ -332,6 +335,11 @@ export interface WaypointClient {
   discardRestored(id: string): Promise<void>;
   dismiss(id: string): Promise<void>;
   reply(reply: ReplyInput): Promise<boolean>;
+  /**
+   * Sends a reply and says how it ended: accepted, or not, with the problem
+   * the host or the network gave (none when nothing was sent).
+   */
+  replyOutcome(reply: ReplyInput): Promise<ReplyOutcome>;
   refresh(): Promise<ConversationReadResult>;
   switchConversation(id: string): Promise<ConversationReadResult>;
   report(problem: Problem): void;
@@ -2162,6 +2170,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       await persist();
     },
     reply: (reply) => sendReply(undefined, reply),
+    replyOutcome: (reply) => sendReplyOutcome(undefined, reply),
     refresh: () => {
       // An explicit refresh is the Retry of a stream that gave up.
       if (stream?.gaveUp && negotiated && !isDisposed()) connect();
@@ -2404,7 +2413,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     owner: ScopeSignal | undefined,
     reply: ReplyInput,
     delivered?: (delivery: ReplyDelivery) => void,
-  ): Promise<boolean> => {
+  ): Promise<boolean> =>
+    (await sendReplyOutcome(owner, reply, delivered)).accepted;
+  const sendReplyOutcome = async (
+    owner: ScopeSignal | undefined,
+    reply: ReplyInput,
+    delivered?: (delivery: ReplyDelivery) => void,
+  ): Promise<ReplyOutcome> => {
+    const notSent = { accepted: false } as const;
     const conversationId = state.conversationId;
     const scope = conversationScope.signal;
     const current = () =>
@@ -2414,15 +2430,15 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       conversationId === state.conversationId;
     await ready;
     if (!negotiated || state.conversationUnavailable || !current())
-      return false;
-    if (restricted() && reply.kind !== "form-fill") return false;
+      return notSent;
+    if (restricted() && reply.kind !== "form-fill") return notSent;
     if (
       reply.kind === "form-fill" &&
       (!formMode() ||
         state.protocol !== "1.1" ||
         !state.capabilities.includes("form-fill"))
     )
-      return false;
+      return notSent;
     emit({
       type: "reply",
       conversationId,
@@ -2438,13 +2454,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       if (current()) delivered?.(delivery);
       if (current()) boundResponse(bound);
       if (current()) await refresh(owner);
-      return true;
+      return { accepted: true };
     } catch (error) {
       // A refused reply or confirmation is never resent automatically, and
       // a reply from a retired conversation cannot disturb the current one.
-      if (current()) report(asProblem(error, reply.clientReplyId));
+      const problem = asProblem(error, reply.clientReplyId);
+      if (current()) report(problem);
       if (current() && isAgreementRefusal(error)) bindingRefused(bound);
-      return false;
+      return { accepted: false, problem };
     }
   };
   // A navigation may be owned by work such as a flow run: if that owner is

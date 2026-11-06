@@ -147,3 +147,31 @@ it("isAnswered counts a card the host already marks answered", async () => {
   expect(result.current.isAnswered({ ...card, answered: true })).toBe(true);
   client.dispose();
 });
+
+it("an answer sent again after an uncertain failure keeps its reply id", async () => {
+  const base = config();
+  const sent: string[] = [];
+  const client = createWaypointClient({
+    ...base,
+    transport: {
+      ...base.transport,
+      send: async (reply) => {
+        sent.push(reply.clientReplyId);
+        // The host may have applied it; the answer was lost on the way back.
+        if (sent.length === 1) throw new TypeError("Failed to fetch");
+        return { id: reply.clientReplyId };
+      },
+    },
+  });
+  await client.ready;
+  const { result } = renderHook(() => useBlockReply(client));
+  act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
+  await waitFor(() =>
+    expect(result.current.answered.has("question-a")).toBe(false),
+  );
+  act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
+  await waitFor(() => expect(sent).toHaveLength(2));
+  // The same answer, so the host can tell it already has it.
+  expect(sent[1]).toBe(sent[0]);
+  client.dispose();
+});

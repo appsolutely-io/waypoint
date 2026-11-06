@@ -921,7 +921,7 @@ class RenderBoundary extends Component<
       : this.props.children;
   }
 }
-function StockMarkdown({ text }: { text: string }) {
+function StockMarkdown({ text, writing }: { text: string; writing?: boolean }) {
   const provider = context();
   const t = provider.format;
   const failures = useContext(RenderFailures);
@@ -949,6 +949,7 @@ function StockMarkdown({ text }: { text: string }) {
     >
       <Rendered
         text={text}
+        writing={writing}
         images={provider.markdownImages}
         extraSchemes={provider.extraUrlSchemes}
         scrollLabel={t("chat.scrollRegion")}
@@ -956,9 +957,13 @@ function StockMarkdown({ text }: { text: string }) {
     </RenderBoundary>
   );
 }
-function Markdown({ text }: { text: string }) {
+function Markdown({ text, writing }: { text: string; writing?: boolean }) {
   const Renderer = context().renderers?.markdown;
-  return Renderer ? <Renderer text={text} /> : <StockMarkdown text={text} />;
+  return Renderer ? (
+    <Renderer text={text} />
+  ) : (
+    <StockMarkdown text={text} writing={writing} />
+  );
 }
 // The client's default words for each problem code (a host's
 // `problemText` replaces them).
@@ -2107,7 +2112,10 @@ function ChatBody({
                               )}
                             </span>
                             <BodyOf.Provider value={message.id}>
-                              <Markdown text={message.content} />
+                              <Markdown
+                                text={message.content}
+                                writing={message.id === writingId}
+                              />
                             </BodyOf.Provider>
                             {/* Seen in the bubble; said once, by the reply
                                 row. */}

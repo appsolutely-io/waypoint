@@ -111,8 +111,27 @@ export function visibleText(
   walk(tree);
   return parts.join("").replace(/\s+/g, " ").trim();
 }
+/**
+ * Closes, for display, what a reply still being written has opened and not
+ * yet closed: a code fence, or `**`, `~~` and `` ` `` in its last paragraph.
+ * The text itself is never changed.
+ */
+export function closeOpenMarkdown(text: string): string {
+  const fences = text.match(/^ {0,3}(?:```|~~~)/gm) ?? [];
+  if (fences.length % 2) return `${text}\n${fences.at(-1)!.trim()}`;
+  // Escaped characters close nothing.
+  const last = text.slice(text.lastIndexOf("\n\n") + 1).replace(/\\./g, "");
+  if ((last.match(/`/g) ?? []).length % 2) return `${text}\``;
+  const outside = last.replace(/`[^`]*`/g, "");
+  let closing = "";
+  for (const marker of ["**", "~~"])
+    if ((outside.split(marker).length - 1) % 2) closing = marker + closing;
+  return text + closing;
+}
 interface MarkdownProps {
   text: string;
+  /** The reply is still being written: open markers are closed for display. */
+  writing?: boolean;
   images?: MarkdownImagePolicy;
   extraSchemes?: readonly string[];
   // The name of a code block's own sideways scroller.
@@ -181,7 +200,7 @@ export default function Markdown(props: MarkdownProps) {
         urlTransform={(url) => (isSafeUrl(url, extraSchemes) ? url : undefined)}
         components={components}
       >
-        {text}
+        {props.writing ? closeOpenMarkdown(text) : text}
       </ReactMarkdown>
     </div>
   );

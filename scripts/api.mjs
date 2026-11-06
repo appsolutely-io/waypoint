@@ -6,6 +6,7 @@ mkdirSync("etc", { recursive: true });
 for (const part of [
   "index",
   "react/index",
+  "hooks/index",
   "skin-default/index",
   "skin-antd/index",
   "testing/index",

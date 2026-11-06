@@ -6,6 +6,7 @@ A pre-release, published under the `next` dist-tag.
 
 ### Added
 
+- The `/hooks` entry: `usePlanView` (the plan view and its presses, including the hold on a Stop or Decline until the client shows it) and `useBlockReply` (one answer per card, freed again when the client refuses it), with `useWaypointSnapshot`, `planView` and their types. It needs React and nothing that needs a DOM, a stylesheet or a skin, so a React Native UI gets the same behaviour as the chat. The `/react` entry exports the same hooks. `npm run test:native` checks both the core's and the hooks' graphs, in CI too.
 - Size budgets for each lazy chunk the React chunks share (block messages, value formatting, the guarded submit) and for the lazy frame decoder; the size check finds shared chunks through the build's ESM metafile (`dist/metafile-esm.json`, not packed) and refuses a build with an ESM browser output no budget measures.
 
 - Plan protocol and host adoption guide, complete adapter upgrade signatures, and a documented quality backlog.

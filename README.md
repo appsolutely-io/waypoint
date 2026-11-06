@@ -80,6 +80,7 @@ Every client owns its state, listeners, streams and send failures. Providers cha
 | `FlowSource`           | `flowSource: { list, setFavourite, run }`, `tabs: ['presets', 'favourites']`                                                                                                                             |
 | Parsed flow documents  | Add `flowSource.load: id => fetchDocument(id)` and `flowOperations: ['items.update']`; `run(id, values, document)` receives validated JSON without loading YAML                                          |
 | Headless React         | `useConversation`, `useComposer`, `usePlan`, `useFlows` inside `WaypointProvider`, or pass a client directly to each hook                                                                                |
+| Renderer-neutral hooks | `usePlanView(client)` and `useBlockReply(client)` from `/hooks` (also from `/react`): the plan's presses and the one-answer-per-card lock, with React only and no DOM, for React Native or any other UI  |
 | Theme tokens           | `theme: { accent: '#245ad1' }`; `themeProperties(theme)` derives CSS custom properties from the same typed source                                                                                        |
 | Direction and scheme   | `locale="zh-CN" dir="rtl" colorScheme="dark"`; `colorScheme` is host-driven and preserves state                                                                                                          |
 | Layout                 | `layout="panel"`, `"page"`, `"floating"` or `"sheet"`; container queries respond to the instance's available width                                                                                       |
@@ -106,8 +107,8 @@ Integrations not included in this release:
 - Form-popup images use the injected `PrivateAttachmentPort` upload/remove adapter. General composer attachments remain an unimplemented seam through the protocol `AttachmentPort` and `ComposerContribution`.
 - The command/mention registry: **seam exists, not implemented**. Contributions supply hints, hold decisions and payloads; no registry implementation ships.
 - The `/element` custom-element wrapper: **seam exists, not implemented**. The framework-free `subscribe` / `getSnapshot` contract can drive a future wrapper; there is no `/element` export.
-- A React Native UI: **seam exists, not implemented**. The core's injected platform/storage/transport ports require no DOM; native rendering is outside this package.
-- **Not implemented yet:** continuing a plan's remaining steps, selected undo and continuing a confirmed undo, decision time limits, per-account plan capacity and its account screen, account deletion handling, background recovery checks and operator diagnostics, scheduled-work recovery, execution identity across windows, custom step kinds, the conformance scenarios for these, and the renderer-neutral `./hooks` entry.
+- A React Native UI: **seam exists, not implemented**. The core's injected platform/storage/transport ports require no DOM, and the `/hooks` entry gives a native UI the plan presses and the card answer lock; native rendering is outside this package.
+- **Not implemented yet:** continuing a plan's remaining steps, selected undo and continuing a confirmed undo, decision time limits, per-account plan capacity and its account screen, account deletion handling, background recovery checks and operator diagnostics, scheduled-work recovery, execution identity across windows, custom step kinds and the conformance scenarios for these.
 
 ## Versions and distribution
 
@@ -117,7 +118,7 @@ For the package, a **0.x minor = breaking** release; patch releases preserve its
 
 The package is published to npm with prebuilt `dist`. There are no install/prepare lifecycle builds. `npm run release-build` generates and verifies the artifact, and `prepublishOnly` runs it before every publish; it does not commit, tag, push or publish by itself. Local consumer verification uses an equivalent packed prebuilt artifact, with both npm and pnpm, and verifies installed file hashes and all explicit exports.
 
-The **initial core** has its own budget, set in `.size-limit.cjs` and checked by `npm run size`. Lazy recovery code has separate caps and an additional deduplicated aggregate regression guard allowing 3% above the measured size, rounded down. The **parser chunk** keeps its separate 15 kB cap; parsing a server-supplied JSON flow avoids YAML entirely. React, CSS, skins, testing and the schema retain their approved limits in `.size-limit.cjs`. Run `npm run size` for current measurements. See [the measurement method and package checks](docs/plan-protocol.md#packaging-acceptance).
+The **initial core** has its own budget, set in `.size-limit.cjs` and checked by `npm run size`. Lazy recovery code has separate caps and an additional deduplicated aggregate regression guard allowing 3% above the measured size, rounded down. The **parser chunk** keeps its separate 15 kB cap; parsing a server-supplied JSON flow avoids YAML entirely. React, the renderer-neutral hooks, CSS, skins, testing and the schema retain their approved limits in `.size-limit.cjs`. Run `npm run size` for current measurements. See [the measurement method and package checks](docs/plan-protocol.md#packaging-acceptance).
 
 ### Upgrading
 

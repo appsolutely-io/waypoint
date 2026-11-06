@@ -39,6 +39,11 @@
       "import": "./dist/react/index.js",
       "require": "./dist/react/index.cjs"
     },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "import": "./dist/hooks/index.js",
+      "require": "./dist/hooks/index.cjs"
+    },
     "./skin-default": {
       "types": "./dist/skin-default/index.d.ts",
       "import": "./dist/skin-default/index.js",
@@ -62,7 +67,7 @@
   },
   "scripts": {
     "test": "vitest run --maxWorkers=2",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p playground/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p tsconfig.hooks.json && tsc --noEmit -p playground/tsconfig.json",
     "lint": "eslint . && prettier --check . && node scripts/privacy.mjs",
     "format": "prettier --write .",
     "generate": "node scripts/generate.mjs",
@@ -75,7 +80,7 @@
     "changeset": "changeset",
     "test:browser": "playwright test --workers=1 && npm run test:playground",
     "test:consumer": "node scripts/consumer.mjs",
-    "test:native": "node scripts/native-smoke.mjs",
+    "test:native": "node scripts/native-smoke.mjs && node scripts/native-smoke.mjs dist/hooks/index.js --allow-react",
     "playground": "node --import tsx scripts/playground.mjs",
     "test:playground": "playwright test --config playground/playwright.config.ts --workers=1"
   },

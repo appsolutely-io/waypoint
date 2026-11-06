@@ -142,6 +142,17 @@ const budgets = [
     ],
   },
   {
+    name: "hooks",
+    path: "dist/hooks/index.js",
+    // The renderer-neutral hooks with the client code they import; React
+    // is the host's. Measured with Node 22's zlib (4,377 B), plus 3%,
+    // rounded down.
+    limit: "4.508 kB",
+    gzip: true,
+    brotli: false,
+    ignore: ["react"],
+  },
+  {
     name: "lazy markdown",
     path: "dist/markdown-*.js",
     // Measured at 43.12 kB with the supported GFM (tables, strikethrough,

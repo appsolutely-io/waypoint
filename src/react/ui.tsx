@@ -34,13 +34,7 @@ import { excerpt } from "./excerpt";
 import { ExcerptCache } from "./excerpt-cache";
 import { useTranscriptPosition } from "./transcript";
 import { useAnnouncements, useHeldWhileInert } from "./announcements";
-import {
-  confirmationOf,
-  flowTabId,
-  type WaypointClient,
-  type ReplyInput,
-  type ClientSnapshot,
-} from "../core/client";
+import { confirmationOf, flowTabId, type WaypointClient } from "../core/client";
 import type { Capability } from "../protocol/index";
 import {
   ChatFocusContext,
@@ -77,6 +71,9 @@ import {
 } from "./i18n";
 import { isSafeUrl } from "./urls";
 import { usePlanView, type KeepSheet } from "./recovery";
+import { ClientContext, clientOf, useWaypointSnapshot } from "./headless";
+import { useBlockReply } from "./block-reply";
+export { clientOf, useWaypointSnapshot };
 import type { ActionEntry, ActionId, PlanView } from "./plan-view";
 import type { BlockSummary } from "./plan-view";
 import type { MarkdownImagePolicy } from "./markdown";
@@ -515,7 +512,9 @@ export function WaypointProvider(props: WaypointProviderProps) {
   );
   const Wrapper = props.wrapper;
   const content = (
-    <Context.Provider value={value}>{props.children}</Context.Provider>
+    <ClientContext.Provider value={props.client}>
+      <Context.Provider value={value}>{props.children}</Context.Provider>
+    </ClientContext.Provider>
   );
   return Wrapper ? (
     <Wrapper
@@ -540,16 +539,6 @@ export function context() {
 }
 export function useWaypointClient(): WaypointClient {
   return context().client;
-}
-export function useWaypointSnapshot(client?: WaypointClient): ClientSnapshot {
-  const inherited = useContext(Context);
-  const store = client ?? inherited?.client;
-  if (!store) throw new Error("A client is required");
-  return useSyncExternalStore(
-    store.subscribe,
-    store.getSnapshot,
-    store.getSnapshot,
-  );
 }
 export function useConversation(client?: WaypointClient) {
   const inherited = useContext(Context);
@@ -592,13 +581,6 @@ export function usePlan(client?: WaypointClient) {
     // The same view every renderer reads (status, steps, actions, notices).
     view,
   };
-}
-/** The client from the argument or the provider (internal). */
-export function clientOf(client?: WaypointClient): WaypointClient {
-  const inherited = useContext(Context);
-  const store = client ?? inherited?.client;
-  if (!store) throw new Error("A client is required");
-  return store;
 }
 export function useFlows(client?: WaypointClient) {
   const inherited = useContext(Context);
@@ -1348,9 +1330,7 @@ function ChatBody({
     }),
     [renderRetry, failedBodies],
   );
-  const [answered, setAnswered] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
+  const { answered, reply: answerCard } = useBlockReply(client);
   const [confirming, setConfirming] = useState(false);
   // The token this window found replaced at its press.
   const [changed, setChanged] = useState<string>();
@@ -1358,7 +1338,6 @@ function ChatBody({
   // The problem's Retry: owned here, so a new problem keeps it reserved.
   const retrying = useRefresh(() => client.refresh());
   const recovery = usePlanView(client);
-  const answerLocks = useRef(new Set<string>());
   const B = provider.primitives.button;
   const T = provider.primitives.textarea;
   // A host's own panels, beside the transcript: only when it gives some.
@@ -1711,24 +1690,8 @@ function ChatBody({
   const replyRow = useRef<HTMLDivElement>(null);
   const heldRow = useHeldWhileInert(row, replyRow);
   const respond =
-    (block: Block) =>
-    (reply: Pick<Reply, "kind"> & Record<string, unknown>) => {
-      if (answerLocks.current.has(block.id)) return;
-      answerLocks.current.add(block.id);
-      setAnswered(new Set(answerLocks.current));
-      void client
-        .reply({
-          ...reply,
-          blockId: typeof reply.blockId === "string" ? reply.blockId : block.id,
-          clientReplyId: `${state.conversationId}:${block.id}`,
-        } as ReplyInput)
-        .then((accepted) => {
-          if (!accepted) {
-            answerLocks.current.delete(block.id);
-            setAnswered(new Set(answerLocks.current));
-          }
-        });
-    };
+    (block: Block) => (reply: Pick<Reply, "kind"> & Record<string, unknown>) =>
+      answerCard(block, reply);
   const problem = state.problem
     ? (provider.problemText?.(state.problem) ??
       defaultProblemText(state.problem, t))

@@ -75,6 +75,17 @@ for (const manager of ["npm", "pnpm"]) {
       { encoding: "utf8" },
     ),
   );
+  process.stdout.write(
+    execFileSync(
+      process.execPath,
+      [
+        resolve("scripts/native-smoke.mjs"),
+        join(installedRoot, "dist/hooks/index.js"),
+        "--allow-react",
+      ],
+      { encoding: "utf8" },
+    ),
+  );
   assert.deepEqual(installed.exports, manifest.exports);
   assert.equal(existsSync(join(dir, "node_modules/react")), false);
   // Development-only checks stay decidable by the consumer's bundler: the
@@ -91,7 +102,7 @@ for (const manager of ["npm", "pnpm"]) {
     "--input-type=module",
     "-e",
     `import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';import {SUPPORTED_PROTOCOLS} from '${name}';assert.deepEqual(SUPPORTED_PROTOCOLS,['1.1','1.0']);for(const entry of ['react','skin-default','skin-antd','testing','schema.json','styles.css'])assert.ok(import.meta.resolve('${name}/'+entry));`,
+import {createHash} from 'node:crypto';import {SUPPORTED_PROTOCOLS} from '${name}';assert.deepEqual(SUPPORTED_PROTOCOLS,['1.1','1.0']);for(const entry of ['react','hooks','skin-default','skin-antd','testing','schema.json','styles.css'])assert.ok(import.meta.resolve('${name}/'+entry));`,
   ]);
   run("node", ["-e", `require('${name}');require('${name}/skin-default');`]);
   run(
@@ -119,11 +130,11 @@ import {createHash} from 'node:crypto';import {SUPPORTED_PROTOCOLS} from '${name
   run("node", [
     "--input-type=module",
     "-e",
-    `for(const entry of ['react','skin-default','skin-antd','testing'])await import('${name}/'+entry);`,
+    `for(const entry of ['react','hooks','skin-default','skin-antd','testing'])await import('${name}/'+entry);const hooks=await import('${name}/hooks');for(const name of ['usePlanView','useBlockReply'])if(typeof hooks[name]!=='function')throw new Error(name);`,
   ]);
   run("node", [
     "-e",
-    `for(const entry of ['react','skin-default','skin-antd','testing'])require('${name}/'+entry);`,
+    `for(const entry of ['react','hooks','skin-default','skin-antd','testing'])require('${name}/'+entry);`,
   ]);
   process.stdout.write(
     manager + ": prebuilt exports install and load without lifecycle scripts\n",

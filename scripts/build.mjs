@@ -11,7 +11,7 @@ const entry = {
   "storage-commit": "src/core/storage-commit.ts",
   "frame-decoder": "src/core/frame-decoder.ts",
 };
-for (const part of ["react", "skin-default", "skin-antd", "testing"]) {
+for (const part of ["react", "hooks", "skin-default", "skin-antd", "testing"]) {
   try {
     await access(`src/${part}/index.ts`);
     entry[`${part}/index`] = `src/${part}/index.ts`;

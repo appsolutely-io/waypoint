@@ -55,6 +55,9 @@ export interface AttachmentPort {
 // @public (undocumented)
 export type Block = BlockMarkdown | BlockCard | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | BlockFormFill | ExtensionBlock;
 
+// @public
+export type BlockAnswer = Pick<Reply, "kind"> & Record<string, unknown>;
+
 // @public (undocumented)
 export interface BlockButtons {
     // (undocumented)
@@ -233,6 +236,12 @@ export interface BlockPlan {
     id: string;
     // (undocumented)
     type: 'plan';
+}
+
+// @public (undocumented)
+export interface BlockReply {
+    answered: ReadonlySet<string>;
+    reply(block: Pick<Block, "id">, answer: BlockAnswer): void;
 }
 
 // @public (undocumented)
@@ -2504,6 +2513,9 @@ export interface TransportPort {
     subscribe(conversationId: string, listener: (event: TransportEvent) => void, context?: ReaderRequestContext): () => void;
 }
 
+// @public
+export function useBlockReply(client?: WaypointClient): BlockReply;
+
 // @public (undocumented)
 export function useComposer(client?: WaypointClient): {
     draft: string;
@@ -2546,6 +2558,13 @@ export function usePlan(client?: WaypointClient): {
     setPlan: (plan: PlanRecord) => void;
     reply: (reply: ReplyInput) => Promise<boolean>;
     view: PlanView | null;
+};
+
+// @public
+export function usePlanView(client?: WaypointClient): {
+    view: PlanView | null;
+    press: (id: ActionId | "retry") => void;
+    sheet: KeepSheet | null;
 };
 
 // @public (undocumented)

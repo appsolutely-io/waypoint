@@ -6,6 +6,7 @@ it("public entry points are explicit and every peer is optional", () => {
     [
       ".",
       "./react",
+      "./hooks",
       "./skin-default",
       "./skin-antd",
       "./testing",

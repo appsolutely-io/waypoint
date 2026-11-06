@@ -37,6 +37,7 @@ jobs:
       - run: npm run build
       - run: npm run api:check
       - run: npm run size
+      - run: npm run test:native
       - run: npx playwright install --with-deps chromium --only-shell
       - run: npm run test:browser
       - run: npm install --global pnpm@10

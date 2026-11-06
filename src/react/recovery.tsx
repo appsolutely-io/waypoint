@@ -14,7 +14,7 @@ import {
   type ActionId,
   type ViewMessage,
 } from "./plan-view";
-import { clientOf, useWaypointSnapshot } from "./ui";
+import { clientOf, useWaypointSnapshot } from "./headless";
 
 export interface KeepSheet {
   messages: ViewMessage[];

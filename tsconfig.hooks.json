@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "lib": ["ES2022"], "types": [] },
+  "include": ["src/hooks", "scripts/hooks-globals.d.ts"],
+  "exclude": ["dist", "node_modules"]
+}

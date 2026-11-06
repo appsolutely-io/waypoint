@@ -47,6 +47,9 @@ export type {
   ViewMessage,
 } from "./plan-view";
 export type { KeepSheet } from "./recovery";
+export { usePlanView } from "./recovery";
+export { useBlockReply } from "./block-reply";
+export type { BlockAnswer, BlockReply } from "./block-reply";
 export type {
   RecoveryCatalogue,
   RecoveryMessageKey,

@@ -77,6 +77,8 @@ export type FixtureFault =
   | "loses-stopped-text"
   // Does not offer reply-stop.
   | "no-stop"
+  // Takes one stop per message: a stop with a new id is refused.
+  | "stops-once-per-message"
   | FormFault;
 export async function createFixtureServer(options: {
   testMode: boolean;
@@ -92,6 +94,8 @@ export async function createFixtureServer(options: {
   const conversations = new Map<string, Conversation>();
   // Applied card answers by conversation and reply id, with their body.
   const replies = new Map<string, { body: string; result: { id: string } }>();
+  // Messages a stop has reached, for the one-stop-per-message fault.
+  const stoppedMessages = new Set<string>();
   // Each agreement keeps the answer it was issued with.
   const agreements = new Map<string, { protocol: string }>();
   // Live event streams and the agreement each was opened under; ending an
@@ -506,6 +510,14 @@ export async function createFixtureServer(options: {
         send(200, seen.result);
         return;
       }
+      if (
+        options.fault === "stops-once-per-message" &&
+        stoppedMessages.has(String(body.messageId))
+      ) {
+        send(409, { id: String(body.clientReplyId), code: "refused" });
+        return;
+      }
+      stoppedMessages.add(String(body.messageId));
       const message = conversation.messages.find(
         (item) => item.id === body.messageId && item.role === "assistant",
       );

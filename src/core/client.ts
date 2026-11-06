@@ -1070,9 +1070,11 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         setStatus(id, mark.read);
       }
   };
-  // Replies the user stopped: a read that still says the host is writing
-  // shows them stopped, and text that arrives for them is dropped.
-  const stopped = new Set<string>();
+  // Replies the user stopped, each with the id of its stop request: a read
+  // that still says the host is writing shows them stopped, and text that
+  // arrives for them is dropped. A new version of the message is a new
+  // attempt, with its own stop.
+  const stopped = new Map<string, string>();
   const withStops = (message: Message): Message =>
     stopped.has(message.id) && message.status === "writing"
       ? { ...message, status: "stopped" }
@@ -2011,6 +2013,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           emit,
           refresh,
           stopped: (id) => stoppedPlans.has(id),
+          versionAsked: (id) => stopped.delete(id),
           refusedPending,
           readOnly: (id) => readOnly(adoptedRecord(id)),
           confirmedDigest: (id) => confirmedDigests.get(approvalKey(id)),
@@ -2509,9 +2512,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     stopReply() {
       const message = stoppable();
       if (!message || !client.canStopReply()) return Promise.resolve();
-      stopped.add(message.id);
+      const replyId = config.platform.ids();
+      stopped.set(message.id, replyId);
       setStatus(message.id, "stopped");
-      return later((actions) => actions.stopReply(message.id));
+      return later((actions) => actions.stopReply(message.id, replyId));
     },
     prepareFlow(id) {
       const scope = conversationScope.signal;

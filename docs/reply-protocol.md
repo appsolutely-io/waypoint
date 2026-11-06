@@ -39,11 +39,14 @@ A client offers the `reply-stop` capability; a host that implements stopping ech
 
 Stop is an ordinary reply, `{ "kind": "stop", "clientReplyId": "…", "messageId": "…" }`, sent to the conversation's replies route (`ReplyStop` in the schema). The client marks the reply `stopped` at once and drops any text that still arrives for it.
 
+A stop's `clientReplyId` names one attempt at the reply: the version of the message being written when the user pressed Stop. The client repeats that id only when it repeats that request. Once a new version of the message is asked for (`regenerate`, see [message versions](message-versions.md)) or starts on the stream (`message.start`), a stop of it is a new request with a new `clientReplyId`, for the same `messageId`.
+
 A host that answered `reply-stop`:
 
 - MUST accept a stop of the assistant message it is writing, stop writing it, and end it with the status `stopped` (on the stream, `message.end` with `status: "stopped"`; in every later read, the message's `status`).
 - MUST keep the text the message had when it stopped. It MUST NOT blank it or replace it with another version.
 - MUST answer a repeated stop with the same `clientReplyId` with its first response, as for any reply.
+- MUST treat a stop with a new `clientReplyId` as a new request, even for a message it stopped before, and stop the version of that message it is writing then.
 - SHOULD accept a stop of a message that has already ended, changing nothing.
 - MUST NOT send `stopped` to a client that did not negotiate `reply-stop`.
 

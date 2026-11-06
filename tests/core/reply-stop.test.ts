@@ -168,3 +168,90 @@ it("the scripted host ends a reply being written as stopped and keeps its text",
   expect(reply.content).toBe("Half an answer");
   client.dispose();
 });
+
+// Each version of a reply is its own attempt: stopping a regenerated one
+// is a new request, never a replay of the stop of the version before it.
+async function versioned(startsOnStream: boolean) {
+  const sent: Reply[] = [];
+  let listener: ((event: TransportEvent) => void) | undefined;
+  let stored: Message = { ...writing, versionIndex: 1, versionCount: 1 };
+  const base = config();
+  const start = () =>
+    listener!({
+      type: "frame",
+      frame: {
+        type: "message.start",
+        protocol: "1.0",
+        sequence: 100,
+        messageId: "a",
+        role: "assistant",
+      },
+    });
+  const client = createWaypointClient({
+    ...base,
+    versions: {
+      edit: async () => {},
+      select: async () => {},
+      regenerate: async () => {
+        stored = {
+          ...stored,
+          content: "",
+          status: "writing",
+          versionIndex: 2,
+          versionCount: 2,
+        };
+        if (startsOnStream) start();
+      },
+    },
+    transport: {
+      ...base.transport,
+      negotiate: async () => ({
+        protocol: "1.0",
+        capabilities: ["reply-stop"],
+      }),
+      read: async (): Promise<Conversation> => ({
+        protocol: "1.0",
+        id: "conversation-a",
+        title: "Chat",
+        messages: [
+          { id: "u", role: "user", content: "Hi", blocks: [], createdAt: 0 },
+          stored,
+        ],
+      }),
+      send: async (reply) => {
+        sent.push(reply);
+        if (reply.kind === "stop") stored = { ...stored, status: "stopped" };
+        return { id: reply.clientReplyId };
+      },
+      subscribe: (_id, next) => {
+        listener = next;
+        return () => {};
+      },
+    },
+  });
+  await client.ready;
+  await flush();
+  return { client, sent };
+}
+
+it.each([
+  ["the new version starts on the stream", true],
+  ["a read shows the new version first", false],
+])(
+  "asks the host again to stop a regenerated reply when %s",
+  async (_name, startsOnStream) => {
+    const { client, sent } = await versioned(startsOnStream);
+    await client.stopReply();
+    await client.regenerate("a");
+    await flush();
+    expect(client.canStopReply()).toBe(true);
+    await client.stopReply();
+    const stops = sent.filter((reply) => reply.kind === "stop");
+    expect(stops).toHaveLength(2);
+    expect(stops[0]!.clientReplyId).not.toBe(stops[1]!.clientReplyId);
+    expect(client.getSnapshot().conversation!.messages.at(-1)!.status).toBe(
+      "stopped",
+    );
+    client.dispose();
+  },
+);

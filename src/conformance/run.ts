@@ -309,12 +309,21 @@ export async function runConformance(
       };
       const first = await post(`/conversations/${id}/replies`, stop);
       const replay = await post(`/conversations/${id}/replies`, stop);
+      // Each version of a reply is stopped with its own id: a new stop of
+      // the same message is a new request, accepted, changing nothing once
+      // the message has ended.
+      const again = await post(`/conversations/${id}/replies`, {
+        ...stop,
+        clientReplyId: "stop-a-reply-2",
+      });
       const after = await read();
       return (
         first.status >= 200 &&
         first.status < 300 &&
         replay.status === first.status &&
         JSON.stringify(replay.body) === JSON.stringify(first.body) &&
+        again.status >= 200 &&
+        again.status < 300 &&
         after?.id === reply.id &&
         after.status === "stopped" &&
         after.content === "Partial answer"

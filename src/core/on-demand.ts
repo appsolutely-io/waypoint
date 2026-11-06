@@ -33,6 +33,9 @@ export interface OnDemandContext {
   emit(event: WaypointEvent): void;
   refresh(): Promise<unknown>;
   stopped(planId: string): boolean;
+  // A new version of the message was asked for: a stop of the version
+  // before it no longer describes the reply.
+  versionAsked(messageId: string): void;
   refusedPending(planId: string): boolean;
   // A plan shown but not controllable here: nothing is sent for it.
   readOnly(planId: string): boolean;
@@ -116,11 +119,12 @@ export function createOnDemand(context: OnDemandContext) {
       return attempt;
     },
     // Asks the host to stop writing a reply the client already shows
-    // stopped; the reply id is the message's, so a repeat is a replay.
-    async stopReply(messageId: string) {
+    // stopped. The reply id is that version's stop, so a repeat of it is a
+    // replay and the stop of a later version is a new request.
+    async stopReply(messageId: string, clientReplyId: string) {
       await context.sendReply(undefined, {
         kind: "stop",
-        clientReplyId: `stop-${messageId}`,
+        clientReplyId,
         messageId,
       });
     },
@@ -181,6 +185,7 @@ export function createOnDemand(context: OnDemandContext) {
             await config.versions!.regenerate(input);
           else await config.versions!.select({ ...input, index: index! });
           versionAttempts.delete(key);
+          if (operation === "regenerate") context.versionAsked(messageId);
           if (!scope.aborted) await context.refresh();
         } catch (error) {
           if (!scope.aborted) report(asProblem(error, input.clientReplyId));

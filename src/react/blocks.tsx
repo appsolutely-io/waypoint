@@ -41,6 +41,8 @@ export function PlanSteps({
     <ol>
       {record.plan.steps.map((step, index) => {
         const outcome = record.outcomes.find((each) => each.stepId === step.id);
+        // Numbered either way, so two steps on one resource read apart.
+        const name = planLabels?.resource?.(step.resource);
         const undo = step.undo.startsWith("inverse:")
           ? "chat.block.undoInverse"
           : UNDO[step.undo];
@@ -68,8 +70,9 @@ export function PlanSteps({
                 }}
               >
                 <strong>
-                  {planLabels?.resource?.(step.resource) ||
-                    t("chat.stepName", { index: index + 1 })}
+                  {name
+                    ? t("chat.stepNamed", { name, index: index + 1 })
+                    : t("chat.stepName", { index: index + 1 })}
                 </strong>
                 {changesShown ? null : (
                   <dl>

@@ -109,6 +109,10 @@ describe.each([
           resource === "items" && field === "title" ? "Title" : undefined,
       },
     });
+    // Two steps on the same resource still read apart.
+    expect(
+      rows().map((row) => row.querySelector("strong")!.textContent),
+    ).toEqual(["Tasks 1", "Tasks 2"]);
     const [first, second] = rows();
     expect(words(first!)).toEqual(expect.arrayContaining(["Tasks", "Title"]));
     expect(first!.textContent).toContain("Quarterly plan");

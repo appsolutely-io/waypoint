@@ -609,6 +609,7 @@ export const english: {
     readonly "chat.messageUnavailable": "This message cannot be shown right now.";
     readonly "chat.changesTo": "changes to";
     readonly "chat.stepName": "Change {index}";
+    readonly "chat.stepNamed": "{name} {index}";
     readonly "chat.fieldName": "Value {index}";
     readonly "chat.scrollRegion": "Scrollable content";
     readonly "chat.conversationReadFailed": "This conversation could not be loaded.";

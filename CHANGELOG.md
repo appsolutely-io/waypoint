@@ -7,7 +7,7 @@ A pre-release, published under the `next` dist-tag.
 ### Added
 
 - The `/hooks` entry: `usePlanView` (the plan view and its presses, including the hold on a Stop or Decline until the client shows it) and `useBlockReply` (one answer per card, freed again when the client refuses it; the lock belongs to the client, so it holds across a re-mount, and `isAnswered(block)` also counts a card the host marks answered; an answer after a refusal is a new reply, `clientReplyId` `conversation:card:2` and on), with `useWaypointSnapshot`, `planView` and their types, and a `createFormatter` that has the text of every message key (labels, statuses, reasons and problems), since a host without the web chat loads none of its message chunks. It needs React and nothing that needs a DOM, a stylesheet or a skin, so a React Native UI gets the same behaviour as the chat. The `/react` entry exports the same hooks. `npm run test:native` checks both the core's and the hooks' graphs, in CI too.
-- `planLabels` on the provider names a plan step's resource and fields in the host's words (`PlanLabels`); without a label the step list says "Change 1" or "Value 1" instead of the internal key. Catalogue: new keys `chat.stepName` and `chat.fieldName`.
+- `planLabels` on the provider names a plan step's resource and fields in the host's words (`PlanLabels`); steps are numbered either way ("Task 1", "Task 2"; "Change 1" without a label), and an unlabelled field says "Value 1", never the internal key. Catalogue: new keys `chat.stepName`, `chat.stepNamed` and `chat.fieldName`.
 - Part data is typed: `PartProps<N>` gives each part `PartData[N]` (`PartDataMap`, `PartMessage`, `PartPending`, `PartStep`), and the README lists what each part receives.
 - Size budgets for each lazy chunk the React chunks share (block messages, value formatting, the guarded submit) and for the lazy frame decoder; the size check finds shared chunks through the build's ESM metafile (`dist/metafile-esm.json`, not packed) and refuses a build with an ESM browser output no budget measures.
 
@@ -104,7 +104,7 @@ A pre-release, published under the `next` dist-tag.
 
 - A theme that sets `space3` or `space4` drops them: they were never read. A stylesheet that used `--wp-space3` or `--wp-space4` uses its own length (they were `1rem` and `1.5rem`).
 - A slot or part typed `(props: PartProps) => …` keeps working; one that read `props.data` as `Record<string, unknown>` reads its typed fields instead (`PartProps<"stepRow">`, `PartData`). A `PlanDiagram` caller passes a `PlanView` (or nothing) as `view`.
-- A custom catalogue and a host `format` add the keys `chat.stepName` ("Change {index}") and `chat.fieldName` ("Value {index}").
+- A custom catalogue and a host `format` add the keys `chat.stepName` ("Change {index}"), `chat.stepNamed` ("{name} {index}") and `chat.fieldName` ("Value {index}").
 - A custom catalogue (for example one typed `Record<keyof typeof english, string>`) and a host `format` add the key `chat.conversationsFailed` ("Your conversations could not be loaded.").
 - Code that named `ActionButton`, `clientOf`, `context`, `ContextValue`, `HOST_KEYS`, `LoadFailure`, `OVERLAY_KEYS`, `Part`, `problemAction`, `useColorScheme` or `useRefresh` from `/testing` stops using them: they are type-only and not exported by any public entry. Every type the React entry exports is still available from `/testing`.
 - A strict schema validator registers the `date-time` format as well as the `x-open-enum` annotation (Ajv: `ajv-formats` and `ajv.addKeyword("x-open-enum")`).

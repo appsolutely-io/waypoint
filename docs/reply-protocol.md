@@ -48,11 +48,11 @@ A host that answered `reply-stop`:
 - MUST answer a repeated stop with the same `clientReplyId` with its first response, as for any reply.
 - MUST treat a stop with a new `clientReplyId` as a new request, even for a message it stopped before, and stop the version of that message it is writing then.
 - SHOULD accept a stop of a message that has already ended, changing nothing.
-- MUST NOT send `stopped` to a client that did not negotiate `reply-stop`.
+- MUST NOT send `stopped` to a client that did not negotiate `reply-stop`. In every read and every `message.end` it sends under an agreement that does not include `reply-stop`, it MUST give a stopped message the status `failed` instead, with the text it kept. Reads are shared by every client of the conversation, and `failed` is the status such a client knows that never shows a reply that is not whole as finished (see [When a reply fails](#when-a-reply-fails)). A request under no agreement cannot be told apart, so this applies only to hosts that issue agreements.
 
 A stopped reply is a finished reply: the chat shows its text with a "Stopped" mark and the reply row is empty.
 
-`waypoint-conformance` checks these rules when the host answers `reply-stop`. It needs the test script to support a reply left being written: a turn `{ "chunks": ["Partial answer"], "ending": "held" }` streams those pieces into an assistant message and leaves it `writing`.
+`waypoint-conformance` checks these rules when the host answers `reply-stop`, reading the stopped reply under an agreement with `reply-stop` and, when the host issues agreements, under one without it. It needs the test script to support a reply left being written: a turn `{ "chunks": ["Partial answer"], "ending": "held" }` streams those pieces into an assistant message and leaves it `writing`.
 
 ## When a reply fails
 

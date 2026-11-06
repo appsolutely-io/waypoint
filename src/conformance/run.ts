@@ -287,10 +287,21 @@ export async function runConformance(
         clientMessageId: "stop-a",
         content: "Request",
       });
-      const read = async () =>
+      // Read as the client that negotiated reply-stop, or as one that did
+      // not.
+      const as = (agreementId?: string) =>
+        agreementId
+          ? { ...headers, "Waypoint-Agreement": agreementId }
+          : headers;
+      const stopAgreement = (stopPeer.body as { agreementId?: string })
+        .agreementId;
+      const read = async (agreementId = stopAgreement) =>
         (
-          (await config.request(`/conversations/${id}`, { headers }))
-            .body as Conversation
+          (
+            await config.request(`/conversations/${id}`, {
+              headers: as(agreementId),
+            })
+          ).body as Conversation
         ).messages.at(-1);
       // Read again, a bounded number of times, until the pieces arrived.
       let reply = await read();
@@ -317,7 +328,18 @@ export async function runConformance(
         clientReplyId: "stop-a-reply-2",
       });
       const after = await read();
+      // A client that did not negotiate reply-stop never sees `stopped`: it
+      // sees `failed`, with the text kept. Told apart only by agreement.
+      const plain = (
+        (await post("/negotiate", {
+          supported: SUPPORTED_PROTOCOLS,
+          offer: { capabilities: ["plans"] },
+        })) as { body: { agreementId?: string } }
+      ).body.agreementId;
+      const older = stopAgreement && plain ? await read(plain) : undefined;
       return (
+        (!older ||
+          (older.status === "failed" && older.content === "Partial answer")) &&
         first.status >= 200 &&
         first.status < 300 &&
         replay.status === first.status &&

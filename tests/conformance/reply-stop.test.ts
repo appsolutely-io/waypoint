@@ -7,7 +7,8 @@ const run = async (
     | "ignores-stop"
     | "loses-stopped-text"
     | "no-stop"
-    | "stops-once-per-message",
+    | "stops-once-per-message"
+    | "stopped-to-all",
 ) => {
   const host = await createFixtureServer({ testMode: true, fault });
   try {
@@ -49,5 +50,11 @@ it("a host that does not offer reply-stop is not asked to stop", async () => {
 it("a host that takes only one stop per message fails", async () => {
   // Each version of a reply is stopped with its own id.
   const result = await run("stops-once-per-message");
+  expect(result.failures).toEqual(["reply stop"]);
+});
+
+it("a host that shows a stopped reply as stopped to a client without reply-stop fails", async () => {
+  // Such a client sees it as failed: never as finished, in a status it knows.
+  const result = await run("stopped-to-all");
   expect(result.failures).toEqual(["reply stop"]);
 });

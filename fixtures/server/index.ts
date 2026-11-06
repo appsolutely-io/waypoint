@@ -79,6 +79,8 @@ export type FixtureFault =
   | "no-stop"
   // Takes one stop per message: a stop with a new id is refused.
   | "stops-once-per-message"
+  // Sends `stopped` to clients that did not negotiate reply-stop.
+  | "stopped-to-all"
   | FormFault;
 export async function createFixtureServer(options: {
   testMode: boolean;
@@ -97,7 +99,14 @@ export async function createFixtureServer(options: {
   // Messages a stop has reached, for the one-stop-per-message fault.
   const stoppedMessages = new Set<string>();
   // Each agreement keeps the answer it was issued with.
-  const agreements = new Map<string, { protocol: string }>();
+  const agreements = new Map<string, { protocol: string; stops: boolean }>();
+  // What a client that did not negotiate reply-stop is sent for a stopped
+  // message: `failed`, a status it knows and never shows as finished.
+  const asStopped = (stops: boolean | undefined) =>
+    stops === false && options.fault !== "stopped-to-all"
+      ? (status: string | undefined) =>
+          status === "stopped" ? "failed" : status
+      : (status: string | undefined) => status;
   // Live event streams and the agreement each was opened under; ending an
   // agreement ends its streams without waiting for another request.
   const streams = new Set<{ agreement: string | undefined; end(): void }>();
@@ -265,6 +274,9 @@ export async function createFixtureServer(options: {
       return;
     }
     let answered = protocol;
+    // Whether the presented agreement includes reply-stop; a request under
+    // no agreement is not told apart.
+    let stops: boolean | undefined;
     // Terminal intents never depend on an agreement: an expired one cannot
     // block a Stop or Cancel of an already provisioned protected plan.
     const safetyControl = /^\/plans\/[^/]+\/safety-control$/.test(path);
@@ -298,6 +310,7 @@ export async function createFixtureServer(options: {
       }
       const bound = presented ? agreements.get(presented) : undefined;
       if (bound && options.fault !== "shared-answer") answered = bound.protocol;
+      stops = bound?.stops;
     }
     if (path === "/__conformance/script") {
       turns = (body.turns as FixtureTurn[] | undefined) ?? [];
@@ -378,7 +391,10 @@ export async function createFixtureServer(options: {
         protocol = answer.protocol;
         const agreementId = offer ? `agreement-${++issued}` : undefined;
         if (agreementId)
-          agreements.set(agreementId, { protocol: answer.protocol });
+          agreements.set(agreementId, {
+            protocol: answer.protocol,
+            stops: answer.capabilities.includes("reply-stop"),
+          });
         send(200, {
           ...answer,
           ...(agreementId ? { agreementId } : {}),
@@ -425,8 +441,20 @@ export async function createFixtureServer(options: {
       res.write(
         `data: ${JSON.stringify({ protocol: answered, sequence: 1, type: "stale", reads: ["conversation"] })}\n\n`,
       );
+      const status = asStopped(
+        agreement ? agreements.get(agreement)?.stops : undefined,
+      );
       const write = (frame: object) =>
-        res.write(`data: ${JSON.stringify(frame)}\n\n`);
+        res.write(
+          `data: ${JSON.stringify(
+            (frame as { type?: string }).type === "message.end"
+              ? {
+                  ...frame,
+                  status: status((frame as { status?: string }).status),
+                }
+              : frame,
+          )}\n\n`,
+        );
       let writers = live.get(conversation.id);
       if (!writers) live.set(conversation.id, (writers = new Set()));
       writers.add(write);
@@ -593,7 +621,16 @@ export async function createFixtureServer(options: {
       send(200, replies.get(key)!.result);
       return;
     }
-    send(200, { ...conversation, protocol: answered });
+    const status = asStopped(stops);
+    send(200, {
+      ...conversation,
+      protocol: answered,
+      messages: conversation.messages.map((message) =>
+        message.status === "stopped"
+          ? { ...message, status: status(message.status) }
+          : message,
+      ),
+    });
   };
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return {

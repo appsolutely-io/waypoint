@@ -41,6 +41,9 @@ const copy = {
       "Here is a short summary: **3 orders**, all paid, one waiting for stock.",
     partial: "I started reading the orders, and then ",
     plan: "I prepared a plan. Review the change before anything runs.",
+    planFailed:
+      "I applied the plan. One change did not go through; it is marked below.",
+    stepFailed: "The order changed since the plan was made.",
     form: "I need the order number before I can look this up.",
     orderLabel: "Order number",
     noteLabel: "Note",
@@ -76,6 +79,8 @@ const copy = {
     short: "简要总结：**3 个订单**均已付款，其中一个在等待到货。",
     partial: "我开始读取订单，然后",
     plan: "我准备了一个计划。执行前请先检查改动。",
+    planFailed: "计划已执行。其中一项修改没有完成，已在下方标出。",
+    stepFailed: "制定计划后，这个订单已有变化。",
     form: "我需要订单号才能查询。",
     orderLabel: "订单号",
     noteLabel: "备注",
@@ -205,6 +210,8 @@ export function stateTurn(state: ReplyState, lang: View["lang"]): FixtureTurn {
       };
     case "plan":
       return { content: text.plan };
+    case "plan-step-failed":
+      return { content: text.planFailed };
     case "form":
       return {
         content: text.form,
@@ -240,6 +247,32 @@ export const defaultTurn = (lang: View["lang"]): FixtureTurn => ({
 });
 
 export const stateQuestion = (lang: View["lang"]) => copy[lang].question;
+
+/**
+ * The plan after it ran, one step applied and one refused: the host's
+ * reason for the failed step, and that it can be tried again.
+ */
+export function stateFailedPlan(
+  conversationId: string,
+  lang: View["lang"],
+): PlanRecord {
+  const record = statePlan(conversationId);
+  delete record.confirmation;
+  return {
+    ...record,
+    state: "needs-attention",
+    outcomes: [
+      { stepId: "step-1043", status: 200, attributed: true, version: "v2" },
+      {
+        stepId: "step-1044",
+        status: 409,
+        attributed: true,
+        reason: copy[lang].stepFailed,
+        retryable: true,
+      },
+    ],
+  };
+}
 
 /** The plan the plan state shows, as the host would send it. */
 export function statePlan(conversationId: string): PlanRecord {

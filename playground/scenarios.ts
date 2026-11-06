@@ -18,6 +18,7 @@ import {
   manifest,
   stateQuestion,
   statePlan,
+  stateFailedPlan,
   stateTurn,
 } from "./reply-states";
 
@@ -305,6 +306,8 @@ export async function createPreview(
     await client.setDraft(stateQuestion(language));
     await client.send();
     if (replyState === "plan") client.setPlan(statePlan(conversation.id));
+    if (replyState === "plan-step-failed")
+      client.setPlan(stateFailedPlan(conversation.id, language));
     // Stopped once the reply has written a few lines.
     if (replyState === "stopped") {
       const stopWhenWritten = () => {

@@ -29,6 +29,7 @@ export const choices = {
     "error-in-doubt",
     "error-replaced",
     "plan",
+    "plan-step-failed",
     "form",
   ],
 } as const;

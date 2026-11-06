@@ -146,6 +146,21 @@ test("a plan shows its steps", async ({ page }) => {
   await expect(page.locator('[data-part="stepRow"]').first()).toBeVisible();
 });
 
+test("a plan whose step failed says which, why, and whether it can be retried", async ({
+  page,
+}) => {
+  await page.goto("/?state=plan-step-failed");
+  const failed = page.locator('[data-part="stepRow"]').filter({
+    hasText: "The order changed since the plan was made.",
+  });
+  await expect(failed).toBeVisible();
+  await expect(failed).toContainText("It can be tried again");
+  await expect(failed).toContainText("Failed");
+  await expect(page.locator('[data-part="stepRow"]').first()).toContainText(
+    "Done",
+  );
+});
+
 test("a form asks for what is missing inline", async ({ page }) => {
   await page.goto("/?state=form");
   await expect(

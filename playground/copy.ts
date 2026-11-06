@@ -59,6 +59,7 @@ const english = {
     "error-in-doubt": "Error: in doubt",
     "error-replaced": "Error: replaced",
     plan: "Plan with steps",
+    "plan-step-failed": "Plan step failed",
     form: "Form in a reply",
   } as Record<string, string>,
 };
@@ -120,6 +121,7 @@ const chinese: typeof english = {
     "error-in-doubt": "错误：结果未知",
     "error-replaced": "错误：已被替换",
     plan: "带步骤的计划",
+    "plan-step-failed": "计划步骤失败",
     form: "回复中的表单",
   },
 };

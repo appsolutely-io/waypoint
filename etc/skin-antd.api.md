@@ -747,6 +747,8 @@ export const english: {
     readonly "chat.messageLoading": "Loading message…";
     readonly "chat.messageUnavailable": "This message cannot be shown right now.";
     readonly "chat.changesTo": "changes to";
+    readonly "chat.stepName": "Change {index}";
+    readonly "chat.fieldName": "Value {index}";
     readonly "chat.scrollRegion": "Scrollable content";
     readonly "chat.conversationReadFailed": "This conversation could not be loaded.";
     readonly "chat.conversationsFailed": "Your conversations could not be loaded.";
@@ -1747,6 +1749,7 @@ export function PlanDiagram(props: PlanDiagramProps): react.JSX.Element;
 
 // @public (undocumented)
 export interface PlanDiagramProps {
+    changesShown?: boolean;
     // (undocumented)
     record: PlanRecord;
     // (undocumented)
@@ -1800,6 +1803,14 @@ export interface PlanIntentReply {
     slotVersion: number;
     // (undocumented)
     winner?: IntentWinner;
+}
+
+// @public
+export interface PlanLabels {
+    // (undocumented)
+    field?(resource: string, field: string): string | undefined;
+    // (undocumented)
+    resource?(resource: string): string | undefined;
 }
 
 // @public
@@ -2692,6 +2703,7 @@ export interface WaypointProviderProps {
     messageExcerpt?: (message: Message) => string | undefined;
     // (undocumented)
     parts?: Partial<Record<PartName, ComponentType<PartProps>>>;
+    planLabels?: PlanLabels;
     // (undocumented)
     primitives?: Partial<PrimitiveComponents>;
     // (undocumented)

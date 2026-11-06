@@ -28,13 +28,18 @@ const stateLabel = (t: FormatMessage, state: PlanState) =>
     status: t(`chat.block.state.${state}` as BlockMessageKey),
   });
 /** The steps of a plan record, each with its facts in labelled words. */
-export function PlanSteps({ record, slots, view }: PlanDiagramProps) {
-  const { format: t, extraUrlSchemes } = context();
+export function PlanSteps({
+  record,
+  slots,
+  view,
+  changesShown,
+}: PlanDiagramProps) {
+  const { format: t, extraUrlSchemes, planLabels } = context();
   if (record.plan.kind !== "immediate")
     return <p>{stateLabel(t, record.state)}</p>;
   return (
     <ol>
-      {record.plan.steps.map((step) => {
+      {record.plan.steps.map((step, index) => {
         const outcome = record.outcomes.find((each) => each.stepId === step.id);
         const undo = step.undo.startsWith("inverse:")
           ? "chat.block.undoInverse"
@@ -62,36 +67,46 @@ export function PlanSteps({ record, slots, view }: PlanDiagramProps) {
                   },
                 }}
               >
-                <strong>{step.resource}</strong>
-                <dl>
-                  {step.fields.map((field) => (
-                    <div key={field}>
-                      <dt>{field}</dt>
-                      <dd>
-                        <Value
-                          value={
-                            (
-                              step.before as Record<string, unknown> | undefined
-                            )?.[field]
-                          }
-                          t={t}
-                        />{" "}
-                        <span aria-hidden="true">→</span>
-                        <span className="wp-sr-only">
-                          {t("chat.changesTo")}
-                        </span>{" "}
-                        <Value
-                          value={
-                            (
-                              step.after as Record<string, unknown> | undefined
-                            )?.[field]
-                          }
-                          t={t}
-                        />
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
+                <strong>
+                  {planLabels?.resource?.(step.resource) ||
+                    t("chat.stepName", { index: index + 1 })}
+                </strong>
+                {changesShown ? null : (
+                  <dl>
+                    {step.fields.map((field, at) => (
+                      <div key={field}>
+                        <dt>
+                          {planLabels?.field?.(step.resource, field) ||
+                            t("chat.fieldName", { index: at + 1 })}
+                        </dt>
+                        <dd>
+                          <Value
+                            value={
+                              (
+                                step.before as
+                                  Record<string, unknown> | undefined
+                              )?.[field]
+                            }
+                            t={t}
+                          />{" "}
+                          <span aria-hidden="true">→</span>
+                          <span className="wp-sr-only">
+                            {t("chat.changesTo")}
+                          </span>{" "}
+                          <Value
+                            value={
+                              (
+                                step.after as
+                                  Record<string, unknown> | undefined
+                              )?.[field]
+                            }
+                            t={t}
+                          />
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
                 <ul className="wp-step-facts">
                   <li>
                     {t(

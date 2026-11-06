@@ -255,8 +255,20 @@ export interface WidgetRegistration {
   type: string;
   render: ComponentType<WidgetProps>;
 }
+/**
+ * The names a plan's steps are shown with. The protocol names a step's
+ * resource and fields by their internal keys; a host that wants them shown
+ * returns the words its users know, else the chat shows a neutral name
+ * ("Change 1", "Value 1"), never the key.
+ */
+export interface PlanLabels {
+  resource?(resource: string): string | undefined;
+  field?(resource: string, field: string): string | undefined;
+}
 export interface WaypointProviderProps {
   client: WaypointClient;
+  /** Display names for the plan steps' resources and fields. */
+  planLabels?: PlanLabels;
   children?: ReactNode;
   parts?: Partial<Record<PartName, ComponentType<PartProps>>>;
   primitives?: Partial<PrimitiveComponents>;
@@ -1125,6 +1137,11 @@ export interface PlanDiagramProps {
   record: PlanRecord;
   slots?: Slots;
   view?: unknown;
+  /**
+   * The host's confirmation beside the steps already lists each change;
+   * the steps then leave their before and after values out.
+   */
+  changesShown?: boolean;
 }
 export interface WaypointChatProps extends Partial<
   Omit<WaypointProviderProps, "children">
@@ -1729,10 +1746,20 @@ function ChatBody({
   // is read where it is decided: after the messages, before the composer,
   // as a region of the conversation rather than a top-level aside.
   const PlanRegion = narrow ? "section" : "aside";
+  // The host's confirmation lists the changes; the steps then do not.
+  const changesShown =
+    plan?.state === "awaiting-confirmation" &&
+    !planView?.readOnly &&
+    record !== undefined;
   const planPanel =
     enabled("plans") && plan ? (
       <PlanRegion aria-label={t("chat.plan")} data-plan="">
-        <PlanDiagram record={plan} slots={slots} view={planView} />
+        <PlanDiagram
+          record={plan}
+          slots={slots}
+          view={planView}
+          changesShown={changesShown}
+        />
         <Part
           name="confirmBar"
           slots={slots}

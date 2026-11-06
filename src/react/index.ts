@@ -29,6 +29,7 @@ export type {
   WaypointProviderProps,
   ThemeTokensHook,
   PlanDiagramProps,
+  PlanLabels,
   Slots,
   WaypointChatProps,
 } from "./ui";

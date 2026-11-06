@@ -9,7 +9,8 @@ const run = async (
     | "no-stop"
     | "stops-once-per-message"
     | "stopped-to-all"
-    | "stops-any-version",
+    | "stops-any-version"
+    | "stops-without-agreements",
 ) => {
   const host = await createFixtureServer({ testMode: true, fault });
   try {
@@ -63,5 +64,11 @@ it("a host that shows a stopped reply as stopped to a client without reply-stop 
 it("a host that stops a version other than the one a stop names fails", async () => {
   // A stop that arrives late must not stop the version after it.
   const result = await run("stops-any-version");
+  expect(result.failures).toEqual(["reply stop"]);
+});
+
+it("a host that offers reply-stop but issues no agreements fails", async () => {
+  // It cannot tell which clients negotiated reply-stop.
+  const result = await run("stops-without-agreements");
   expect(result.failures).toEqual(["reply stop"]);
 });

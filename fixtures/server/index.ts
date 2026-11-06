@@ -83,6 +83,8 @@ export type FixtureFault =
   | "stopped-to-all"
   // Stops the version being written whatever version a stop names.
   | "stops-any-version"
+  // Offers reply-stop without issuing agreements.
+  | "stops-without-agreements"
   | FormFault;
 export async function createFixtureServer(options: {
   testMode: boolean;
@@ -391,7 +393,10 @@ export async function createFixtureServer(options: {
           offer,
         );
         protocol = answer.protocol;
-        const agreementId = offer ? `agreement-${++issued}` : undefined;
+        const agreementId =
+          offer && options.fault !== "stops-without-agreements"
+            ? `agreement-${++issued}`
+            : undefined;
         if (agreementId)
           agreements.set(agreementId, {
             protocol: answer.protocol,

@@ -45,17 +45,18 @@ A stop names the version it is for in `versionIndex`, numbered as the message's 
 
 A host that answered `reply-stop`:
 
+- MUST issue agreements (an `agreementId` in its negotiation answer). A host that issues none MUST NOT answer `reply-stop`, because it cannot tell which clients negotiated it.
 - MUST accept a stop of the assistant message it is writing, stop writing it, and end it with the status `stopped` (on the stream, `message.end` with `status: "stopped"`; in every later read, the message's `status`).
 - MUST keep the text the message had when it stopped. It MUST NOT blank it or replace it with another version.
 - MUST answer a repeated stop with the same `clientReplyId` with its first response, as for any reply.
 - MUST ignore a stop whose `versionIndex` is not the version of the message it is writing: such a stop changes nothing, and the host SHOULD accept it, as it does a stop of a message that has ended. A stop without `versionIndex` is for the version being written when the stop arrives.
 - MUST treat a stop with a new `clientReplyId` as a new request, even for a message it stopped before, and stop the version of that message it names, or, when it names none, the version it is writing then.
 - SHOULD accept a stop of a message that has already ended, changing nothing.
-- MUST NOT send `stopped` to a client that did not negotiate `reply-stop`. In every read and every `message.end` it sends under an agreement that does not include `reply-stop`, it MUST give a stopped message the status `failed` instead, with the text it kept. Reads are shared by every client of the conversation, and `failed` is the status such a client knows that never shows a reply that is not whole as finished (see [When a reply fails](#when-a-reply-fails)). A request under no agreement cannot be told apart, so this applies only to hosts that issue agreements.
+- MUST NOT send `stopped` under an agreement that does not include `reply-stop`. In every read and every `message.end` it sends under such an agreement, it MUST give a stopped message the status `failed` instead, with the text it kept. Reads are shared by every client of the conversation, and `failed` is the status such a client knows that never shows a reply that is not whole as finished (see [When a reply fails](#when-a-reply-fails)). A request that presents no agreement cannot be told apart, and MAY be sent `stopped`.
 
 A stopped reply is a finished reply: the chat shows its text with a "Stopped" mark and the reply row is empty.
 
-`waypoint-conformance` checks these rules when the host answers `reply-stop`: a stop naming another version must leave the reply being written, and the stopped reply is read under an agreement with `reply-stop` and, when the host issues agreements, under one without it. It needs the test script to support a reply left being written: a turn `{ "chunks": ["Partial answer"], "ending": "held" }` streams those pieces into an assistant message and leaves it `writing`.
+`waypoint-conformance` checks these rules when the host answers `reply-stop`: the host must have issued an agreement, a stop naming another version must leave the reply being written, and the stopped reply is read under an agreement with `reply-stop` and under one without it. It needs the test script to support a reply left being written: a turn `{ "chunks": ["Partial answer"], "ending": "held" }` streams those pieces into an assistant message and leaves it `writing`.
 
 ## When a reply fails
 

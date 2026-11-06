@@ -311,7 +311,13 @@ export async function runConformance(
         tries++
       )
         reply = await read();
-      if (reply?.role !== "assistant" || reply.status !== "writing")
+      // Only a host that issues agreements can tell which clients
+      // negotiated reply-stop.
+      if (
+        !stopAgreement ||
+        reply?.role !== "assistant" ||
+        reply.status !== "writing"
+      )
         return false;
       const version = reply.versionIndex ?? 1;
       // A stop of another version, as one that arrives late does, leaves
@@ -349,7 +355,7 @@ export async function runConformance(
           offer: { capabilities: ["plans"] },
         })) as { body: { agreementId?: string } }
       ).body.agreementId;
-      const older = stopAgreement && plain ? await read(plain) : undefined;
+      const older = plain ? await read(plain) : undefined;
       return (
         other.status < 500 &&
         untouched?.status === "writing" &&

@@ -1445,7 +1445,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     if (
       frame.type === "message.end" &&
       shown &&
-      ["completed", "failed", "unavailable"].includes(frame.status) &&
+      ["completed", "failed", "unavailable", "stopped"].includes(
+        frame.status,
+      ) &&
       (mark
         ? mark.binding === stream
         : !shown.status || shown.status === "writing")

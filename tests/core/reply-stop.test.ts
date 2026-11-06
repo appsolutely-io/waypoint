@@ -53,6 +53,8 @@ async function setup(capabilities: string[], host: Partial<Message> = {}) {
   });
   await client.ready;
   await flush();
+  // Frames in the order sent.
+  let sequence = 10;
   // The host holds what it streamed, until it stops.
   const delta = (text: string) => {
     if (stored.status === "writing")
@@ -62,14 +64,29 @@ async function setup(capabilities: string[], host: Partial<Message> = {}) {
       frame: {
         type: "text.delta",
         protocol: "1.0",
-        sequence: 10 + text.length,
+        sequence: ++sequence,
         messageId: "a",
         text,
       },
     });
   };
   const shown = () => client.getSnapshot().conversation!.messages.at(-1)!;
-  return { client, sent, delta, shown };
+  // Any frame for the reply, as the host's stream would send it.
+  const frame = (value: Record<string, unknown>) =>
+    listener!({
+      type: "frame",
+      frame: {
+        protocol: "1.0",
+        sequence: ++sequence,
+        messageId: "a",
+        ...value,
+      } as never,
+    });
+  // What the host holds, as a later read shows it.
+  const hold = (value: Partial<Message>) => {
+    stored = { ...stored, ...value };
+  };
+  return { client, sent, delta, shown, frame, hold };
 }
 
 it("keeps the partial text, marks it stopped at once and asks the host once", async () => {
@@ -255,3 +272,12 @@ it.each([
     client.dispose();
   },
 );
+
+it("shows a reply stopped elsewhere as stopped when its end says so", async () => {
+  // Another tab stopped it: this one only sees the host's end.
+  const { client, frame, shown } = await setup(["reply-stop"]);
+  frame({ type: "message.end", status: "stopped" });
+  await flush();
+  expect(shown().status).toBe("stopped");
+  client.dispose();
+});

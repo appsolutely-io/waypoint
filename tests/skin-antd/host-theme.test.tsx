@@ -218,7 +218,8 @@ describe("CK-T4 a host theme with low contrast", () => {
   it("its production check is the expression a bundler replaces", () => {
     // Consumers' bundlers replace the literal `process.env.NODE_ENV`; read any
     // other way, a browser build has no process and always warns.
-    const source = readFileSync("src/skin-antd/skin.tsx", "utf8");
+    // The skin and the message formatter share it.
+    const source = readFileSync("src/react/production.ts", "utf8");
     expect(source).toMatch(/process\.env\.NODE_ENV/);
     expect(source).not.toMatch(/process\?\.env/);
   });

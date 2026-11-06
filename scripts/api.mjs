@@ -7,11 +7,16 @@ for (const part of [
   "index",
   "react/index",
   "hooks/index",
+  "messages/index",
+  "messages/en/index",
+  "messages/zh-Hans/index",
   "skin-default/index",
   "skin-antd/index",
   "testing/index",
 ]) {
   const name = part.replace("/index", "");
+  // One report per entry, named flat: `messages/en` reports to messages-en.
+  const report = name.replace(/\//g, "-");
   const only = process.argv.find((arg) => arg.startsWith("--entry="))?.slice(8);
   if (only && only !== name) continue;
   if (!existsSync(`dist/${part}.d.ts`)) {
@@ -27,7 +32,7 @@ for (const part of [
       compiler: { tsconfigFilePath: "<projectFolder>/tsconfig.json" },
       apiReport: {
         enabled: true,
-        reportFileName: `${name}.api.md`,
+        reportFileName: `${report}.api.md`,
         reportFolder: "<projectFolder>/etc",
         reportTempFolder: "<projectFolder>/.api-temp",
       },
@@ -41,7 +46,7 @@ for (const part of [
         },
       },
     },
-    configObjectFullPath: resolve(`.api-temp/${name}.json`),
+    configObjectFullPath: resolve(`.api-temp/${report}.json`),
     packageJsonFullPath: resolve("package.json"),
   });
   const result = Extractor.invoke(config, {
@@ -50,7 +55,7 @@ for (const part of [
   });
   if (!result.succeeded) process.exitCode = 1;
   if (process.argv.includes("--local")) {
-    const file = `etc/${name}.api.md`;
+    const file = `etc/${report}.api.md`;
     writeFileSync(file, readFileSync(file, "utf8").replace(/\r\n/g, "\n"));
   }
 }

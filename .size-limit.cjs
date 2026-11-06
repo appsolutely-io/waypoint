@@ -144,14 +144,41 @@ const budgets = [
   {
     name: "hooks",
     path: "dist/hooks/index.js",
-    // The renderer-neutral hooks with the client code they import, and
-    // the formatter with every catalogue a host needs for their text (a
-    // host that never calls it drops it); React is the host's. Measured
-    // with Node 22's zlib (27,749 B), plus 3%, rounded down.
-    limit: "28.581 kB",
+    // The renderer-neutral hooks with the client code they import: keys
+    // only, no strings and no formatter (those are `messages` and a
+    // locale); React is the host's. Measured with Node 22's zlib (4,923 B),
+    // plus 3%, rounded down.
+    limit: "5.07 kB",
     gzip: true,
     brotli: false,
     ignore: ["react"],
+  },
+  {
+    name: "messages",
+    path: "dist/messages/index.js",
+    // The formatter a host without the web chat formats keys with, and the
+    // ICU runtime it needs. Measured (12,244 B), plus 3%, rounded down.
+    limit: "12.611 kB",
+    gzip: true,
+    brotli: false,
+  },
+  {
+    name: "messages en",
+    path: "dist/messages/en/index.js",
+    // English text of every key the hooks return. Measured (4,853 B), plus
+    // 3%, rounded down.
+    limit: "4.998 kB",
+    gzip: true,
+    brotli: false,
+  },
+  {
+    name: "messages zh-Hans",
+    path: "dist/messages/zh-Hans/index.js",
+    // Simplified Chinese text of the same keys. Measured (5,711 B), plus 3%,
+    // rounded down.
+    limit: "5.882 kB",
+    gzip: true,
+    brotli: false,
   },
   {
     name: "lazy markdown",

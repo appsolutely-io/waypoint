@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { dirname, resolve, join } from "node:path";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { checkPackedDist } from "./packed-dist.mjs";
@@ -82,6 +82,7 @@ for (const manager of ["npm", "pnpm"]) {
         resolve("scripts/native-smoke.mjs"),
         join(installedRoot, "dist/hooks/index.js"),
         "--allow-react",
+        "--forbid=intl-messageformat",
       ],
       { encoding: "utf8" },
     ),
@@ -89,22 +90,39 @@ for (const manager of ["npm", "pnpm"]) {
   assert.deepEqual(installed.exports, manifest.exports);
   assert.equal(existsSync(join(dir, "node_modules/react")), false);
   // Development-only checks stay decidable by the consumer's bundler: the
-  // published code keeps `process.env.NODE_ENV` for it to replace.
-  for (const format of ["js", "cjs"])
-    assert.match(
-      readFileSync(
-        join(dir, `node_modules/${name}/dist/skin-antd/index.${format}`),
-        "utf8",
-      ),
-      /process\.env\.NODE_ENV/,
-    );
+  // published code keeps `process.env.NODE_ENV` for it to replace, in the
+  // entry or a chunk it imports.
+  const withChunks = (file) => {
+    const text = readFileSync(file, "utf8");
+    const chunks = [
+      ...text.matchAll(/(?:from\s*|require\()["'](\.{1,2}\/[^"']+\.c?js)["']/g),
+    ].map((match) => readFileSync(join(dirname(file), match[1]), "utf8"));
+    return [text, ...chunks].join("\n");
+  };
+  for (const entry of ["skin-antd/index", "messages/index"])
+    for (const format of ["js", "cjs"])
+      assert.match(
+        withChunks(join(dir, `node_modules/${name}/dist/${entry}.${format}`)),
+        /process\.env\.NODE_ENV/,
+      );
   run("node", [
     "--input-type=module",
     "-e",
     `import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';import {SUPPORTED_PROTOCOLS} from '${name}';assert.deepEqual(SUPPORTED_PROTOCOLS,['1.1','1.0']);for(const entry of ['react','hooks','skin-default','skin-antd','testing','schema.json','styles.css'])assert.ok(import.meta.resolve('${name}/'+entry));`,
+import {createHash} from 'node:crypto';import {SUPPORTED_PROTOCOLS} from '${name}';assert.deepEqual(SUPPORTED_PROTOCOLS,['1.1','1.0']);for(const entry of ['react','hooks','messages','messages/en','messages/zh-Hans','skin-default','skin-antd','testing','schema.json','styles.css'])assert.ok(import.meta.resolve('${name}/'+entry));`,
   ]);
   run("node", ["-e", `require('${name}');require('${name}/skin-default');`]);
+  // A native host's text, with no UI peer installed: the formatter and the
+  // locale it imports, in both module systems.
+  run("node", [
+    "--input-type=module",
+    "-e",
+    `import assert from 'node:assert/strict';import {createFormatter} from '${name}/messages';import en from '${name}/messages/en';import zh from '${name}/messages/zh-Hans';assert.equal(createFormatter('en',en)('chat.stop'),en['chat.stop']);assert.ok(createFormatter('zh-Hans',zh)('chat.stop'));`,
+  ]);
+  run("node", [
+    "-e",
+    `const assert=require('node:assert/strict');const {createFormatter}=require('${name}/messages');const en=require('${name}/messages/en').default;assert.equal(createFormatter('en',en)('chat.stop'),en['chat.stop']);`,
+  ]);
   run(
     manager,
     manager === "npm"

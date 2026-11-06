@@ -64,40 +64,67 @@ Set `PLAYGROUND_PORT` to an integer from 1024 to 65535 to use another local port
 
 Every client owns its state, listeners, streams and send failures. Providers change rendering without replacing that state. These extension points are public:
 
-| Extension point        | Example                                                                                                                                                                                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createWaypointClient` | `createWaypointClient({ accountId, conversationId, platform, transport })`                                                                                                                                                                    |
-| `PlatformPorts`        | `platform: { clock, online: () => true, visibility: () => true, ids }`; optional `subscribeOnline` / `subscribeVisibility`                                                                                                                    |
-| `MessageVersionPort`   | `versions: { edit, regenerate, select }`; message actions refetch the authoritative sibling after the host operation; the host draws the controls ([docs/message-versions.md](docs/message-versions.md))                                      |
-| `StoragePort`          | `storage: { get, set, remove }`; each operation may return a promise                                                                                                                                                                          |
-| `transport`            | `createSseTransport(request, stream)`, `createFetchStreamTransport(request, stream)` or `createSignalTransport(request, stream)`                                                                                                              |
-| State subscriptions    | `const unsubscribe = client.subscribe(() => draw(client.getSnapshot()))`                                                                                                                                                                      |
-| Typed events           | `client.on(event => recordId(event.type, event))`; events contain ids, never field values                                                                                                                                                     |
-| `beforeSend`           | `beforeSend: async reply => permitted ? { ...reply, content: rewritten } : false`                                                                                                                                                             |
-| `ComposerContribution` | `contributions: [{ id: 'example', evaluate: () => ({ hold, hint, payload }) }]`                                                                                                                                                               |
-| Plan execution         | `plans: { read, request, heartbeat, intent?, stepUp? }`; `stepUp` returns one ephemeral code or cancellation                                                                                                                                  |
-| Plan recovery          | `plans: { ...runnerPorts, intent }`; protected controls use stored intent results; optional legacy `resume` / `retryUndo` remain adapter-driven                                                                                               |
-| `FlowSource`           | `flowSource: { list, setFavourite, run }`, `tabs: ['presets', 'favourites']`                                                                                                                                                                  |
-| Parsed flow documents  | Add `flowSource.load: id => fetchDocument(id)` and `flowOperations: ['items.update']`; `run(id, values, document)` receives validated JSON without loading YAML                                                                               |
-| Headless React         | `useConversation`, `useComposer`, `usePlan`, `useFlows` inside `WaypointProvider`, or pass a client directly to each hook                                                                                                                     |
-| Renderer-neutral hooks | `usePlanView(client)`, `useBlockReply(client)` and `createFormatter(locale)` from `/hooks` (the hooks also from `/react`): the plan's presses, the one-answer-per-card lock and the text of every key they return, with React only and no DOM |
-| Plan step names        | `planLabels={{ resource: key => names[key], field: (resource, key) => fields[resource]?.[key] }}`; steps are numbered ("Task 1", "Task 2"), an unnamed step shows "Change 1" and an unnamed field "Value 1", never its internal key           |
-| Theme tokens           | `theme: { accent: '#245ad1' }`; `themeProperties(theme)` derives CSS custom properties from the same typed source                                                                                                                             |
-| Direction and scheme   | `locale="zh-CN" dir="rtl" colorScheme="dark"`; `colorScheme` is host-driven and preserves state                                                                                                                                               |
-| Layout                 | `layout="panel"`, `"page"`, `"floating"` or `"sheet"`; container queries respond to the instance's available width                                                                                                                            |
-| Slots                  | `slots={{ composer: props => <MyComposer {...props} /> }}`; `messageActions`, `extraPanels` and `stepUpPrompt` are also regions                                                                                                               |
-| Provider replacement   | `parts={{ bubble: MyBubble }}` replaces that part everywhere                                                                                                                                                                                  |
-| Control replacement    | `primitives={{ button: MyButton, textarea: MyTextarea }}`; input, checkbox, datePicker and drawer are replaceable too                                                                                                                         |
-| Widget registry        | `widgets={[{ type: 'example/status', render: StatusWidget }]}`; standard entries use the explicit `standardWidgets` array                                                                                                                     |
-| Markdown               | `renderers={{ markdown: MyMarkdown }}` (`renderers.markdown`); the default renderer is lazy, disables raw HTML and allows only approved link schemes                                                                                          |
-| Problem presentation   | `problemText={problem => ({ text: explain(problem.code), action: recovery })}` over the closed problem union                                                                                                                                  |
-| Messages               | `format={(key, values) => catalogue.format(key, values)}`; typed keys, ICU plurals, English and Simplified Chinese defaults                                                                                                                   |
-| Feature selection      | `features={['widgets', 'flows']}` intersects the negotiated capabilities; unknown capabilities are off                                                                                                                                        |
-| Shortcuts              | `shortcuts={{ focusComposer: '/', send: false }}`; each shortcut can be disabled and focus stays within the chat                                                                                                                              |
-| Skin wrapper           | `wrapper={MyThemeProvider}` receives the scheme and resolved tokens; the antd wrapper maps dark mode to its dark algorithm                                                                                                                    |
-| Skin testing           | `renderWithWaypoint(element, { client, skin })`, `defineSkinContract`, `defineOverrideContract`, `defineAccessibilityContract` from `/testing`                                                                                                |
+| Extension point        | Example                                                                                                                                                                                                                             |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createWaypointClient` | `createWaypointClient({ accountId, conversationId, platform, transport })`                                                                                                                                                          |
+| `PlatformPorts`        | `platform: { clock, online: () => true, visibility: () => true, ids }`; optional `subscribeOnline` / `subscribeVisibility`                                                                                                          |
+| `MessageVersionPort`   | `versions: { edit, regenerate, select }`; message actions refetch the authoritative sibling after the host operation; the host draws the controls ([docs/message-versions.md](docs/message-versions.md))                            |
+| `StoragePort`          | `storage: { get, set, remove }`; each operation may return a promise                                                                                                                                                                |
+| `transport`            | `createSseTransport(request, stream)`, `createFetchStreamTransport(request, stream)` or `createSignalTransport(request, stream)`                                                                                                    |
+| State subscriptions    | `const unsubscribe = client.subscribe(() => draw(client.getSnapshot()))`                                                                                                                                                            |
+| Typed events           | `client.on(event => recordId(event.type, event))`; events contain ids, never field values                                                                                                                                           |
+| `beforeSend`           | `beforeSend: async reply => permitted ? { ...reply, content: rewritten } : false`                                                                                                                                                   |
+| `ComposerContribution` | `contributions: [{ id: 'example', evaluate: () => ({ hold, hint, payload }) }]`                                                                                                                                                     |
+| Plan execution         | `plans: { read, request, heartbeat, intent?, stepUp? }`; `stepUp` returns one ephemeral code or cancellation                                                                                                                        |
+| Plan recovery          | `plans: { ...runnerPorts, intent }`; protected controls use stored intent results; optional legacy `resume` / `retryUndo` remain adapter-driven                                                                                     |
+| `FlowSource`           | `flowSource: { list, setFavourite, run }`, `tabs: ['presets', 'favourites']`                                                                                                                                                        |
+| Parsed flow documents  | Add `flowSource.load: id => fetchDocument(id)` and `flowOperations: ['items.update']`; `run(id, values, document)` receives validated JSON without loading YAML                                                                     |
+| Headless React         | `useConversation`, `useComposer`, `usePlan`, `useFlows` inside `WaypointProvider`, or pass a client directly to each hook                                                                                                           |
+| Renderer-neutral hooks | `usePlanView(client)` and `useBlockReply(client)` from `/hooks` (also from `/react`): the plan's presses and the one-answer-per-card lock, as message keys, with React only and no DOM; see [A UI of your own](#a-ui-of-your-own)   |
+| Plan step names        | `planLabels={{ resource: key => names[key], field: (resource, key) => fields[resource]?.[key] }}`; steps are numbered ("Task 1", "Task 2"), an unnamed step shows "Change 1" and an unnamed field "Value 1", never its internal key |
+| Theme tokens           | `theme: { accent: '#245ad1' }`; `themeProperties(theme)` derives CSS custom properties from the same typed source                                                                                                                   |
+| Direction and scheme   | `locale="zh-CN" dir="rtl" colorScheme="dark"`; `colorScheme` is host-driven and preserves state                                                                                                                                     |
+| Layout                 | `layout="panel"`, `"page"`, `"floating"` or `"sheet"`; container queries respond to the instance's available width                                                                                                                  |
+| Slots                  | `slots={{ composer: props => <MyComposer {...props} /> }}`; `messageActions`, `extraPanels` and `stepUpPrompt` are also regions                                                                                                     |
+| Provider replacement   | `parts={{ bubble: MyBubble }}` replaces that part everywhere                                                                                                                                                                        |
+| Control replacement    | `primitives={{ button: MyButton, textarea: MyTextarea }}`; input, checkbox, datePicker and drawer are replaceable too                                                                                                               |
+| Widget registry        | `widgets={[{ type: 'example/status', render: StatusWidget }]}`; standard entries use the explicit `standardWidgets` array                                                                                                           |
+| Markdown               | `renderers={{ markdown: MyMarkdown }}` (`renderers.markdown`); the default renderer is lazy, disables raw HTML and allows only approved link schemes                                                                                |
+| Problem presentation   | `problemText={problem => ({ text: explain(problem.code), action: recovery })}` over the closed problem union                                                                                                                        |
+| Messages               | `format={(key, values) => catalogue.format(key, values)}`; typed keys, ICU plurals, English and Simplified Chinese defaults                                                                                                         |
+| Feature selection      | `features={['widgets', 'flows']}` intersects the negotiated capabilities; unknown capabilities are off                                                                                                                              |
+| Shortcuts              | `shortcuts={{ focusComposer: '/', send: false }}`; each shortcut can be disabled and focus stays within the chat                                                                                                                    |
+| Skin wrapper           | `wrapper={MyThemeProvider}` receives the scheme and resolved tokens; the antd wrapper maps dark mode to its dark algorithm                                                                                                          |
+| Skin testing           | `renderWithWaypoint(element, { client, skin })`, `defineSkinContract`, `defineOverrideContract`, `defineAccessibilityContract` from `/testing`                                                                                      |
 
 A slot or replacement receives presentation props and callbacks. The client remains the behavior owner. Answering a card answers the whole card and disables it in place. Widget types unknown to the client show their fallback with update guidance and cannot submit a reply. Tokens are scoped to the instance root, never the document root.
+
+### A UI of your own
+
+A host that draws its own UI, React Native included, uses the hooks from `/hooks` and formats the keys they return with `/messages` and the language it needs; nothing else of the web chat is loaded:
+
+```tsx
+import { usePlanView } from "@appsolutely-io/waypoint/hooks";
+import { createFormatter } from "@appsolutely-io/waypoint/messages";
+import en from "@appsolutely-io/waypoint/messages/en";
+
+const t = createFormatter("en", en);
+
+function PlanActions({ client }) {
+  const { view, press } = usePlanView(client);
+  return view?.actions.map((entry) => (
+    <Button
+      key={entry.id}
+      disabled={!entry.available}
+      onPress={() => press(entry.id)}
+    >
+      {t(entry.labelKey)}
+    </Button>
+  ));
+}
+```
+
+Each language is its own entry (`/messages/en`, `/messages/zh-Hans`), so a host ships only the text it shows; a host with its own wording passes its own catalogue. A key the catalogue lacks throws in development and shows the key itself in production. `stepName(t, planLabels, step)` names a plan step the way the web chat does.
 
 ### Part data
 

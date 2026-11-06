@@ -25,6 +25,7 @@ import type {
   ThemeTokensHook,
 } from "../react/ui";
 import type { ResolvedTheme, Theme } from "../tokens/index";
+import { production } from "../react/production";
 function pixels(value: string, fallback: number): number {
   const parsed = parseFloat(value);
   return Number.isFinite(parsed)
@@ -125,15 +126,6 @@ function surfaces(
     ["surface", over(surface, page)],
     ["user surface", over([...mixed, alpha], page)],
   ];
-}
-// Consumers' bundlers replace the literal `process.env.NODE_ENV`; with no
-// bundler there is no process, and the check reads as development.
-function production(): boolean {
-  try {
-    return process.env.NODE_ENV === "production";
-  } catch {
-    return false;
-  }
 }
 const TEXT_CONTRAST = 4.5;
 const DANGER_TEXT_CONTRAST = 4.6;

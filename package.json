@@ -44,6 +44,21 @@
       "import": "./dist/hooks/index.js",
       "require": "./dist/hooks/index.cjs"
     },
+    "./messages": {
+      "types": "./dist/messages/index.d.ts",
+      "import": "./dist/messages/index.js",
+      "require": "./dist/messages/index.cjs"
+    },
+    "./messages/en": {
+      "types": "./dist/messages/en/index.d.ts",
+      "import": "./dist/messages/en/index.js",
+      "require": "./dist/messages/en/index.cjs"
+    },
+    "./messages/zh-Hans": {
+      "types": "./dist/messages/zh-Hans/index.d.ts",
+      "import": "./dist/messages/zh-Hans/index.js",
+      "require": "./dist/messages/zh-Hans/index.cjs"
+    },
     "./skin-default": {
       "types": "./dist/skin-default/index.d.ts",
       "import": "./dist/skin-default/index.js",
@@ -80,7 +95,7 @@
     "changeset": "changeset",
     "test:browser": "playwright test --workers=1 && npm run test:playground",
     "test:consumer": "node scripts/consumer.mjs",
-    "test:native": "node scripts/native-smoke.mjs && node scripts/native-smoke.mjs dist/hooks/index.js --allow-react",
+    "test:native": "node scripts/native-smoke.mjs && node scripts/native-smoke.mjs dist/hooks/index.js --allow-react --forbid=intl-messageformat && node scripts/native-smoke.mjs dist/messages/index.js && node scripts/native-smoke.mjs dist/messages/en/index.js && node scripts/native-smoke.mjs dist/messages/zh-Hans/index.js",
     "playground": "node --import tsx scripts/playground.mjs",
     "test:playground": "playwright test --config playground/playwright.config.ts --workers=1"
   },

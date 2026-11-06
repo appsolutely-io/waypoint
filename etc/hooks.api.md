@@ -539,9 +539,6 @@ export type CreateConversation = {
     clientCreationId?: string;
 };
 
-// @public
-export function createFormatter(locale?: string): FormatMessage;
-
 // @public (undocumented)
 export function createMemoryStorage(asynchronous?: boolean): StoragePort;
 
@@ -1506,14 +1503,6 @@ export interface PlanIntentReply {
 }
 
 // @public
-export interface PlanLabels {
-    // (undocumented)
-    field?(resource: string, field: string): string | undefined;
-    // (undocumented)
-    resource?(resource: string): string | undefined;
-}
-
-// @public
 export class PlanReadRefused extends Error {
     constructor();
 }
@@ -2027,12 +2016,6 @@ export interface StepContext {
     // (undocumented)
     stepUpCode?: string;
 }
-
-// @public
-export function stepName(t: FormatMessage, labels: PlanLabels | undefined, step: {
-    index: number;
-    resource?: string;
-}): string;
 
 // @public (undocumented)
 export interface StepStatus {

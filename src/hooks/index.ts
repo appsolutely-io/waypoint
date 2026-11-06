@@ -1,15 +1,13 @@
-// Renderer-neutral hooks: React only, no DOM, no styles and no skin, for a
-// host that draws its own UI (React Native included). The `./react` entry
-// exports the same functions.
+// Renderer-neutral hooks: React only, no DOM, no styles, no skin and no
+// strings, for a host that draws its own UI (React Native included). They
+// return message keys; `./messages` and a locale entry give their text.
+// The `./react` entry exports the same hooks.
 export { useWaypointSnapshot } from "../react/headless";
 export { usePlanView } from "../react/recovery";
 export type { KeepSheet } from "../react/recovery";
 export { useBlockReply, cardReplyId } from "../react/block-reply";
 export type { BlockAnswer, BlockReply } from "../react/block-reply";
 export { planView, keepSheet } from "../react/plan-view";
-export { createFormatter } from "../react/plan-messages";
-export { stepName } from "../react/step-name";
-export type { PlanLabels } from "../react/step-name";
 export type { FormatMessage, MessageValues } from "../react/i18n";
 export type {
   ActionEntry,

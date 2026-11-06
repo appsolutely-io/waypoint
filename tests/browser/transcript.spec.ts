@@ -155,8 +155,12 @@ for (const skin of ["neutral", "antd"])
             expect(geometry.sideways).toBe(false);
             expect(geometry.live).toBe(false);
             for (const key of ["Enter", "Space"]) {
-              await box(page).focus();
-              await page.keyboard.press("Tab");
+              // The messages hold their own actions; the row is the next
+              // stop back from the composer.
+              await page
+                .getByRole("textbox", { name: "Message", exact: true })
+                .focus();
+              await page.keyboard.press("Shift+Tab");
               await expect(latest(page)).toBeFocused();
               await page.keyboard.press(key);
               await expect(latest(page)).toHaveCount(0);

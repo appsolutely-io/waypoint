@@ -64,7 +64,7 @@ body {
   flex: 1;
   min-block-size: 0;
   overflow: auto;
-  padding: var(--wp-space4);
+  padding: calc(var(--wp-space) * 2);
 }
 .preview-stage > .waypoint {
   max-inline-size: calc(var(--wp-space) * 80);

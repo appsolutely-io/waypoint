@@ -24,7 +24,7 @@ A pre-release, published under the `next` dist-tag.
 - The stock Markdown renderer understands GitHub-flavoured Markdown: tables (in their own named, keyboard-scrollable region), strikethrough, task lists and autolinks; footnote syntax stays plain text. It is parsed by the same parser as the rest of a message, in the markdown chunk, and outline excerpts read messages the same way.
 - `PartProps.describedBy`: a textarea primitive exposes it as `aria-describedby`; the chat passes the ids of the composer's hints. Both bundled skins pass it on.
 - `InputProps.required`: an input primitive exposes it as `aria-required`; the chat puts the visible marker in the label. Both bundled skins pass it on.
-- Theme tokens for spacing (`space1`–`space4` around `space`), type (`fontSizeSm`, `fontSizeLg`), motion (`motionFast`, `motionSlow`, `easing`), focus rings (`focusRing`), input boundaries (`controlBorder`) and status (`success`, `warning`), each with light and dark values; the chat root declares `color-scheme` to match its scheme. The types `ThemeToken` (every token name), `RequiredThemeToken` (the ones a `Theme` must give), `ResolvedTheme` (every token present, as `darkTheme` is typed) and `ThemeTokensHook` (a skin's `useThemeTokens`) are exported with `Theme`.
+- Theme tokens for spacing (`space1` and `space2` below `space`), type (`fontSizeSm`, `fontSizeLg`), motion (`motionFast`, `motionSlow`, `easing`), focus rings (`focusRing`), input boundaries (`controlBorder`) and status (`success`, `warning`), each with light and dark values; the chat root declares `color-scheme` to match its scheme. The types `ThemeToken` (every token name), `RequiredThemeToken` (the ones a `Theme` must give), `ResolvedTheme` (every token present, as `darkTheme` is typed) and `ThemeTokensHook` (a skin's `useThemeTokens`) are exported with `Theme`.
 
 - `messageExcerpt(message)` on the chat provider: plain text naming a message in the outline and in announcements when a replaced Markdown renderer, `bubble` or `transcript` part means the chat cannot tell what the message visibly shows; without it those surfaces name no content.
 - `DrawerProps.closeLabel`, `focusInto(element)` and `restoreFocus(element)`: a drawer primitive names its close control and reports its element, so the chat moves focus into the drawer, and back to its opener, only for a press made in the chat.
@@ -48,6 +48,8 @@ A pre-release, published under the `next` dist-tag.
 
 - A reply that is still streaming in says so: its message is `aria-busy` and shows "Writing" under its text with a pulsing dot (still under reduced motion), and the reply row, a polite status, says "Writing" once. `replyRow` returns `writing` while the last message is an assistant message being written, and never `overdue` for it.
 - At narrow widths (under 40rem of the chat) the plan is shown after the messages and before the composer, as a region named "Plan" in the conversation, instead of after the composer; wide, it keeps its own column.
+- `motionFast` and `motionSlow` are used: the neutral skin's button hover uses `motionFast` and the writing dot `motionSlow`, and the antd skin maps them to `motionDurationFast` and `motionDurationSlow` (`motion` stays `motionDurationMid`).
+- **Breaking:** the `space3` and `space4` tokens are removed; nothing drew with them. See Upgrading.
 - **Breaking:** the `/testing` entry re-exports the React entry's public types instead of every type of the module the React chunks share: the type-only names `ActionButton`, `clientOf`, `context`, `ContextValue`, `HOST_KEYS`, `LoadFailure`, `OVERLAY_KEYS`, `Part`, `problemAction`, `useColorScheme` and `useRefresh` are gone, and `ConversationRail`, `FieldAdornment`, `FormFillFields`, `FormFillPopup`, `isSafeUrl`, `PrivateAttachmentPort`, `useFormFill` and their props types are added.
 - **Breaking:** the conversation list's failure alert says `chat.conversationsFailed` ("Your conversations could not be loaded.") instead of `chat.failure`. Catalogue: new key `chat.conversationsFailed`.
 - A load failure's busy status ("Loading" while its Retry runs) is a status region beside the alert instead of inside it.
@@ -96,6 +98,7 @@ A pre-release, published under the `next` dist-tag.
 
 ### Upgrading
 
+- A theme that sets `space3` or `space4` drops them: they were never read. A stylesheet that used `--wp-space3` or `--wp-space4` uses its own length (they were `1rem` and `1.5rem`).
 - A custom catalogue (for example one typed `Record<keyof typeof english, string>`) and a host `format` add the key `chat.conversationsFailed` ("Your conversations could not be loaded.").
 - Code that named `ActionButton`, `clientOf`, `context`, `ContextValue`, `HOST_KEYS`, `LoadFailure`, `OVERLAY_KEYS`, `Part`, `problemAction`, `useColorScheme` or `useRefresh` from `/testing` stops using them: they are type-only and not exported by any public entry. Every type the React entry exports is still available from `/testing`.
 - A strict schema validator registers the `date-time` format as well as the `x-open-enum` annotation (Ajv: `ajv-formats` and `ajv.addKeyword("x-open-enum")`).

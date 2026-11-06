@@ -46,10 +46,10 @@ describe("CK-M2 antd motion tokens", () => {
         <Probe seen={(value) => (durations = value)} />
       </AntdTheme>,
     );
-    expect(durations).toEqual(["120ms", "120ms", "120ms"]);
+    expect(durations).toEqual(["80ms", "120ms", "200ms"]);
     act(() => change(true));
     expect(durations).toEqual(["0s", "0s", "0s"]);
     act(() => change(false));
-    expect(durations).toEqual(["120ms", "120ms", "120ms"]);
+    expect(durations).toEqual(["80ms", "120ms", "200ms"]);
   });
 });

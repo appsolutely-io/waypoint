@@ -3,6 +3,7 @@
 // custom properties, the contrast of every text and boundary pair, the
 // chat's color-scheme, and an old complete theme still accepted.
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import {
   darkTheme,
@@ -30,8 +31,6 @@ const ratio = (a: string, b: string) => {
 const added = [
   "space1",
   "space2",
-  "space3",
-  "space4",
   "fontSizeSm",
   "fontSizeLg",
   "motionFast",
@@ -53,6 +52,20 @@ describe("CK-K1 the token set", () => {
     expect(properties["--wp-space1"]).toBe("0.25rem");
     expect(properties["--wp-control-border"]).toBe(lightTheme.controlBorder);
     expect(properties["--wp-font-size-sm"]).toBe("0.875rem");
+  });
+  it("has no token the chat does not draw with", () => {
+    // Every token reaches the neutral stylesheet as its custom property,
+    // or the antd skin's theme by name; a token neither reads does nothing.
+    const css = readFileSync("src/react/styles.css", "utf8");
+    const skin = readFileSync("src/skin-antd/skin.tsx", "utf8");
+    const unused = Object.keys(lightTheme).filter(
+      (key) =>
+        !css.includes(`${Object.keys(themeProperties({ [key]: "x" }))[0]})`) &&
+        !new RegExp(`tokens\\.${key}\\b`).test(skin),
+    );
+    expect(unused).toEqual([]);
+    expect(Object.keys(lightTheme)).not.toContain("space3");
+    expect(Object.keys(lightTheme)).not.toContain("space4");
   });
   it("keeps the old tokens' names and values", () => {
     expect(lightTheme.space).toBe("0.75rem");

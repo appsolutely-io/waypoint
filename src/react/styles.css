@@ -218,6 +218,9 @@
   border-radius: var(--wp-radius);
   padding: var(--wp-space1) var(--wp-space2);
 }
+.waypoint button:not(.ant-btn) {
+  transition: border-color var(--wp-motion-fast) var(--wp-easing);
+}
 .waypoint button:not(.ant-btn):hover:not(:disabled, [aria-disabled="true"]) {
   border-color: var(--wp-accent);
 }

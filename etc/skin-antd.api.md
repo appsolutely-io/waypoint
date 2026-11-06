@@ -1523,8 +1523,6 @@ export const lightTheme: {
     readonly motion: "120ms";
     readonly space1: "0.25rem";
     readonly space2: "0.5rem";
-    readonly space3: "1rem";
-    readonly space4: "1.5rem";
     readonly fontSizeSm: "0.875rem";
     readonly fontSizeLg: "1.125rem";
     readonly motionFast: "80ms";

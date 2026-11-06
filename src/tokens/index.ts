@@ -12,11 +12,9 @@ export const lightTheme = {
   fontFamily: "system-ui, sans-serif",
   shadow: "0 0.25rem 1rem #0002",
   motion: "120ms",
-  // The scales around the defaults above.
+  // The steps below the defaults above, and their faster and slower motion.
   space1: "0.25rem",
   space2: "0.5rem",
-  space3: "1rem",
-  space4: "1.5rem",
   fontSizeSm: "0.875rem",
   fontSizeLg: "1.125rem",
   motionFast: "80ms",

@@ -353,9 +353,13 @@ export function AntdTheme({
           colorError: tokens.danger,
           colorSuccess: tokens.success,
           colorWarning: tokens.warning,
-          motionDurationFast: still ? "0s" : tokens.motion,
+          motionDurationFast: still
+            ? "0s"
+            : (tokens.motionFast ?? tokens.motion),
           motionDurationMid: still ? "0s" : tokens.motion,
-          motionDurationSlow: still ? "0s" : tokens.motion,
+          motionDurationSlow: still
+            ? "0s"
+            : (tokens.motionSlow ?? tokens.motion),
         },
       }}
     >

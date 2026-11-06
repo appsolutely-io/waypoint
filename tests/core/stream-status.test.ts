@@ -20,6 +20,7 @@ function harness() {
     messages: [] as Message[],
     hold: undefined as Promise<void> | undefined,
     fail: false,
+    replyStatus: undefined as "failed" | "unavailable" | undefined,
   };
   let sequence = 0;
   const base = config();
@@ -38,7 +39,13 @@ function harness() {
       const fail = host.fail;
       if (held) await held;
       if (fail) throw new Error("network");
-      return { protocol: "1.0", id, title: "Chat", messages };
+      return {
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        messages,
+        ...(host.replyStatus && { replyStatus: host.replyStatus }),
+      };
     },
     subscribe: (_id, listener) => {
       subscriptions.push({ listener });
@@ -395,6 +402,47 @@ describe("stream status after a gap and a failed refresh", () => {
     h.start("u");
     expect(h.message("u")?.content).toBe("Question");
     expect(h.message("u")?.status).toBeUndefined();
+    h.client.dispose();
+  });
+});
+
+describe("a reply being written never outlasts what ended it", () => {
+  const writing = (h: ReturnType<typeof harness>) => [
+    { ...h.shown("u", "Question"), role: "user" as const },
+    h.shown("m", "Part", "writing"),
+  ];
+  it("a reply the host reports failed is failed, not being written", async () => {
+    const h = harness();
+    h.host.messages = writing(h);
+    h.host.replyStatus = "failed";
+    await h.ready();
+    expect(h.message("m")?.status).toBe("writing");
+    expect(h.client.getSnapshot().replyState).toBe("failed");
+    h.client.dispose();
+  });
+  it("a reply the host reports unavailable is unavailable, not being written", async () => {
+    const h = harness();
+    h.host.messages = writing(h);
+    h.host.replyStatus = "unavailable";
+    await h.ready();
+    expect(h.client.getSnapshot().replyState).toBe("unavailable");
+    h.client.dispose();
+  });
+  it("a reply read while streaming is no longer being written once its stream gives up", async () => {
+    const h = harness();
+    h.host.messages = writing(h);
+    await h.ready();
+    expect(h.client.getSnapshot().replyState).toBe("writing");
+    h.host.fail = true;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      h.subscriptions
+        .at(-1)!
+        .listener({ type: "status", status: "reconnecting" });
+      await h.manual.advance(5000);
+      await flush();
+    }
+    expect(h.client.getSnapshot().streamUnavailable).toBe(true);
+    expect(h.client.getSnapshot().replyState).toBe("unavailable");
     h.client.dispose();
   });
 });

@@ -38,3 +38,16 @@ it("a finished or failed reply leaves the row empty", () => {
     "none",
   );
 });
+
+it("a known failure or a lost stream wins over a reply still marked writing", () => {
+  const messages = [user, streaming];
+  expect(replyRow({ messages, pending: [], now: 2000, failed: true })).toBe(
+    "failed",
+  );
+  expect(
+    replyRow({ messages, pending: [], now: 2000, unavailable: true }),
+  ).toBe("unavailable");
+  expect(replyRow({ messages, pending: [], now: 2000, streamLost: true })).toBe(
+    "unavailable",
+  );
+});

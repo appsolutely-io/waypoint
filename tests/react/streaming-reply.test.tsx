@@ -10,7 +10,10 @@ import type { Message } from "../../src/protocol/generated";
 import { config } from "../support/client";
 afterEach(cleanup);
 
-async function chat(last: Partial<Message>) {
+async function chat(
+  last: Partial<Message>,
+  replyStatus?: "failed" | "unavailable",
+) {
   const base = config();
   const client = createWaypointClient({
     ...base,
@@ -31,6 +34,7 @@ async function chat(last: Partial<Message>) {
             ...last,
           } as Message,
         ],
+        ...(replyStatus && { replyStatus }),
       }),
     },
   });
@@ -60,3 +64,20 @@ it("a finished reply is not busy and carries no marker", async () => {
   expect(article.querySelector("[data-writing]")).toBeNull();
   client.dispose();
 });
+
+it.each(["failed", "unavailable"] as const)(
+  "a reply still marked writing that the host reports %s is not busy, and the row says so",
+  async (replyStatus) => {
+    const client = await chat({ status: "writing" }, replyStatus);
+    const article = document.querySelector('[data-message-id="a"]')!;
+    expect(article.hasAttribute("aria-busy")).toBe(false);
+    expect(article.querySelector("[data-writing]")).toBeNull();
+    const row = document.querySelector(
+      '[data-part="replyRow"] [role="status"]',
+    )!;
+    await waitFor(() =>
+      expect(row.textContent).toBe(english[`reply.${replyStatus}`]),
+    );
+    client.dispose();
+  },
+);

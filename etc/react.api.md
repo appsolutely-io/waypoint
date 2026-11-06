@@ -2308,6 +2308,7 @@ export function replyRow(input: {
     heldUntil?: number;
     unavailable?: boolean;
     failed?: boolean;
+    streamLost?: boolean;
 }): ReplyState;
 
 // @public (undocumented)

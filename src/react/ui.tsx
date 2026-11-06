@@ -1763,6 +1763,11 @@ function ChatBody({
     );
   };
   const row = state.replyState;
+  // The reply being written, while the reply row says so: whatever ended it
+  // (a failure, a lost stream) ends its busy state too.
+  const last = messages.at(-1);
+  const writingId =
+    row === "writing" && last?.status === "writing" ? last.id : undefined;
   // Held while a modal drawer makes the row inert; said once it is live.
   const replyRow = useRef<HTMLDivElement>(null);
   const heldRow = useHeldWhileInert(row, replyRow);
@@ -2036,7 +2041,7 @@ function ChatBody({
                           data-role={message.role}
                           // Still streaming in: what it says is not final.
                           aria-busy={
-                            message.status === "writing" ? true : undefined
+                            message.id === writingId ? true : undefined
                           }
                           // Named by its sender, whatever the bubble renders.
                           aria-label={t(
@@ -2081,7 +2086,7 @@ function ChatBody({
                             </BodyOf.Provider>
                             {/* Seen in the bubble; said once, by the reply
                                 row. */}
-                            {message.status === "writing" ? (
+                            {message.id === writingId ? (
                               <span data-writing="" aria-hidden="true">
                                 {t("reply.writing")}
                               </span>

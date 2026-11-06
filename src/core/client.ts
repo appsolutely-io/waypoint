@@ -619,6 +619,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         overdueAt: state.conversation?.replyOverdueAt ?? undefined,
         unavailable: state.conversation?.replyStatus === "unavailable",
         failed: state.conversation?.replyStatus === "failed",
+        streamLost: state.streamUnavailable,
       }),
     };
     const last = state.conversation?.messages.at(-1);
@@ -2922,16 +2923,22 @@ export function replyRow(input: {
   heldUntil?: number;
   unavailable?: boolean;
   failed?: boolean;
+  /** The stream that would carry the rest of the reply gave up. */
+  streamLost?: boolean;
 }): ReplyState {
   const last = input.messages.at(-1);
-  // A reply streaming in is being written for as long as it streams; it
-  // was never late, so it is never overdue.
+  // A reply streaming in is being written while it streams. What the host
+  // or the client knows ended it wins: a failed or unavailable reply, or a
+  // stream that gave up, is never shown as being written.
   if (
     last?.role === "assistant" &&
     last.status === "writing" &&
     !input.pending.some((row) => !row.failure)
-  )
+  ) {
+    if (input.unavailable || input.streamLost) return "unavailable";
+    if (input.failed) return "failed";
     return "writing";
+  }
   if (last?.role !== "user" && !input.pending.some((row) => !row.failure))
     return "none";
   if (input.pending.some((row) => !row.failure)) return "writing";

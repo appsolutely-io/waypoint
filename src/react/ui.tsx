@@ -1399,7 +1399,7 @@ function ChatBody({
     }),
     [renderRetry, failedBodies],
   );
-  const { answered, reply: answerCard } = useBlockReply(client);
+  const { isAnswered, reply: answerCard } = useBlockReply(client);
   const [confirming, setConfirming] = useState(false);
   // The token this window found replaced at its press.
   const [changed, setChanged] = useState<string>();
@@ -1764,8 +1764,9 @@ function ChatBody({
   const replyRow = useRef<HTMLDivElement>(null);
   const heldRow = useHeldWhileInert(row, replyRow);
   const respond =
-    (block: Block) => (reply: Pick<Reply, "kind"> & Record<string, unknown>) =>
-      answerCard(block, reply);
+    (block: Block, messageId: string) =>
+    (reply: Pick<Reply, "kind"> & Record<string, unknown>) =>
+      answerCard(block, reply, messageId);
   const problem = state.problem
     ? (provider.problemText?.(state.problem) ??
       defaultProblemText(state.problem, t))
@@ -2093,8 +2094,7 @@ function ChatBody({
                                 <div
                                   data-open-card={
                                     block.type === "card" &&
-                                    !block.answered &&
-                                    !answered.has(block.id)
+                                    !isAnswered(block, message.id)
                                       ? "true"
                                       : undefined
                                   }
@@ -2103,10 +2103,9 @@ function ChatBody({
                                     block={block}
                                     disabled={
                                       state.conversationUnavailable ||
-                                      Boolean(block.answered) ||
-                                      answered.has(block.id)
+                                      isAnswered(block, message.id)
                                     }
-                                    onReply={respond(block)}
+                                    onReply={respond(block, message.id)}
                                   />
                                 </div>
                               </Part>

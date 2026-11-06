@@ -4,7 +4,7 @@
 export { useWaypointSnapshot } from "../react/headless";
 export { usePlanView } from "../react/recovery";
 export type { KeepSheet } from "../react/recovery";
-export { useBlockReply } from "../react/block-reply";
+export { useBlockReply, cardReplyId } from "../react/block-reply";
 export type { BlockAnswer, BlockReply } from "../react/block-reply";
 export { planView, keepSheet } from "../react/plan-view";
 export { createFormatter } from "../react/plan-messages";

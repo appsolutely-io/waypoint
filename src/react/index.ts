@@ -55,7 +55,7 @@ export type {
 export type { KeepSheet } from "./recovery";
 export { usePlanView } from "./recovery";
 export { stepName } from "./step-name";
-export { useBlockReply } from "./block-reply";
+export { useBlockReply, cardReplyId } from "./block-reply";
 export type { BlockAnswer, BlockReply } from "./block-reply";
 export type {
   RecoveryCatalogue,

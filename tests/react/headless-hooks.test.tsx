@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The plan presses and the one-answer-per-card lock, used through the
 // renderer-neutral entry without a provider, as a React Native host would.
-import { it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { usePlanView, useBlockReply } from "../../src/hooks/index";
 import * as react from "../../src/react/index";
@@ -91,7 +91,9 @@ it("useBlockReply sends one answer per card and frees a refused one", async () =
   act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
   act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
   expect(result.current.answered.has("question-a")).toBe(true);
-  await waitFor(() => expect(sent).toEqual(["conversation-a:question-a"]));
+  await waitFor(() =>
+    expect(sent).toEqual(["card:conversation-a::question-a"]),
+  );
   await act(async () => release(false));
   await waitFor(() =>
     expect(result.current.answered.has("question-a")).toBe(false),
@@ -99,7 +101,7 @@ it("useBlockReply sends one answer per card and frees a refused one", async () =
   act(() => result.current.reply(card, { kind: "action", actionId: "accept" }));
   await waitFor(() => expect(sent).toHaveLength(2));
   // Another answer after a refusal is a new reply, not a replay of it.
-  expect(sent[1]).toBe("conversation-a:question-a:2");
+  expect(sent[1]).toBe("card:conversation-a::question-a#2");
   await act(async () => release(true));
   expect(result.current.answered.has("question-a")).toBe(true);
   client.dispose();
@@ -174,4 +176,64 @@ it("an answer sent again after an uncertain failure keeps its reply id", async (
   // The same answer, so the host can tell it already has it.
   expect(sent[1]).toBe(sent[0]);
   client.dispose();
+});
+
+describe("card reply ids and locks never collide", () => {
+  const refusing = () => {
+    const base = config();
+    const sent: string[] = [];
+    const client = createWaypointClient({
+      ...base,
+      transport: {
+        ...base.transport,
+        send: async (reply) => {
+          sent.push(reply.clientReplyId);
+          if ("blockId" in reply && reply.blockId === "q")
+            throw { id: "p", code: "refused" };
+          return { id: reply.clientReplyId };
+        },
+      },
+    });
+    return { client, sent };
+  };
+  const answer = { kind: "action" as const, actionId: "accept" };
+
+  it("a second attempt at one card and the first answer to another differ", async () => {
+    const { client, sent } = refusing();
+    await client.ready;
+    const { result } = renderHook(() => useBlockReply(client));
+    act(() => result.current.reply({ id: "q" }, answer));
+    await waitFor(() => expect(result.current.answered.has("q")).toBe(false));
+    act(() => result.current.reply({ id: "q" }, answer));
+    await waitFor(() => expect(sent).toHaveLength(2));
+    act(() => result.current.reply({ id: "q:2" }, answer));
+    act(() => result.current.reply({ id: "q#2" }, answer));
+    await waitFor(() => expect(sent).toHaveLength(4));
+    expect(new Set(sent).size).toBe(4);
+    client.dispose();
+  });
+
+  it("a card id used again by a later message is not locked by the first", async () => {
+    const { client } = refusing();
+    await client.ready;
+    const { result } = renderHook(() => useBlockReply(client));
+    act(() => result.current.reply({ id: "same" }, answer, "message-1"));
+    await waitFor(() =>
+      expect(result.current.isAnswered({ id: "same" }, "message-1")).toBe(true),
+    );
+    expect(result.current.isAnswered({ id: "same" }, "message-2")).toBe(false);
+    client.dispose();
+  });
+
+  it("a reply id stays within the protocol's 128 characters", async () => {
+    const { client, sent } = refusing();
+    await client.ready;
+    const { result } = renderHook(() => useBlockReply(client));
+    act(() =>
+      result.current.reply({ id: "b".repeat(200) }, answer, "m".repeat(200)),
+    );
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.length).toBeLessThanOrEqual(128);
+    client.dispose();
+  });
 });

@@ -260,8 +260,8 @@ export interface BlockPlan {
 // @public (undocumented)
 export interface BlockReply {
     answered: ReadonlySet<string>;
-    isAnswered(block: Pick<Block, "id" | "answered">): boolean;
-    reply(block: Pick<Block, "id">, answer: BlockAnswer): void;
+    isAnswered(block: Pick<Block, "id" | "answered">, messageId?: string): boolean;
+    reply(block: Pick<Block, "id">, answer: BlockAnswer, messageId?: string): void;
 }
 
 // @public (undocumented)
@@ -369,6 +369,9 @@ export const CAPABILITIES: readonly ["plans", "flows", "widgets", "step-up", "sc
 
 // @public (undocumented)
 export type Capability = (typeof CAPABILITIES)[number];
+
+// @public
+export function cardReplyId(conversationId: string, messageId: string, blockId: string, attempt: number): string;
 
 // @public
 export function catalogueFor(locale?: string): {

@@ -116,7 +116,7 @@ Each part receives a copy of its own data as `data`, typed by its name (`PartDat
 | `stepRow`            | `{ step }` (`id`, `operation`, `resource`, `view`, `tier`, `undo`, `stepUp`)                                                          |
 | `stepUpPrompt`       | `{ stepUpCount }`                                                                                                                     |
 | `recoveryPanel`      | `{ view }`                                                                                                                            |
-| `stepStatusRow`      | `{ step }`: one step's status in the plan view                                                                                        |
+| `stepStatusRow`      | `{ step }` (`stepId`, `index`, `resource`, `truth`, `textKey`): name it with `stepName(format, planLabels, step)`                     |
 | `recoveryActions`    | `{ actions }`                                                                                                                         |
 
 `FlowSource` defaults to favourites, most-used, recent, presets, in that order, and initially chooses the first nonempty tab. An explicit selection survives subsequent reads. The source owns favourite status and usage; the client does not infer them. `load` optionally returns a parsed `Flow` matching `schema.json`. Both YAML and JSON paths use `validateFlowDocument`; `bindFlow` binds parameters, and `run` asks the host for a proposal. This path never bypasses confirmation or executes arbitrary flow requests directly.

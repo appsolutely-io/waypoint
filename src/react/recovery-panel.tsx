@@ -11,6 +11,7 @@ import {
   recoverySimplifiedChinese,
 } from "./recovery-messages";
 import { ActionButton, Part, context, type Slots } from "./ui";
+import { stepName } from "./step-name";
 import { blockEnglish, blockSimplifiedChinese } from "./block-messages";
 import {
   focusFor,
@@ -76,7 +77,7 @@ export default function RecoveryPanel({
   // Actions another part renders (the confirm bar's Confirm).
   hide?: readonly ActionId[];
 }) {
-  const { format: t, primitives } = context();
+  const { format: t, primitives, planLabels } = context();
   const B = primitives.button;
   const D = primitives.drawer;
   const sheetFocus = useDrawerFocus("keep-sheet");
@@ -323,7 +324,7 @@ export default function RecoveryPanel({
                 data={{ step }}
               >
                 <li data-status={step.truth} data-late={step.lateReport}>
-                  {step.label}: {t(step.textKey)}
+                  {stepName(t, planLabels, step)}: {t(step.textKey)}
                   {step.lateReport ? (
                     <> ({t("chat.recovery.reportedDifferently")})</>
                   ) : null}

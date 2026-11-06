@@ -10,6 +10,7 @@ import {
 } from "./block-messages";
 import { addMessages, type FormatMessage } from "./i18n";
 import { isSafeUrl } from "./urls";
+import { stepName } from "./step-name";
 import { Value } from "./value";
 import { Submit } from "./submit";
 import { Part, context, type PlanDiagramProps, type WidgetProps } from "./ui";
@@ -41,8 +42,6 @@ export function PlanSteps({
     <ol>
       {record.plan.steps.map((step, index) => {
         const outcome = record.outcomes.find((each) => each.stepId === step.id);
-        // Numbered either way, so two steps on one resource read apart.
-        const name = planLabels?.resource?.(step.resource);
         const undo = step.undo.startsWith("inverse:")
           ? "chat.block.undoInverse"
           : UNDO[step.undo];
@@ -70,9 +69,10 @@ export function PlanSteps({
                 }}
               >
                 <strong>
-                  {name
-                    ? t("chat.stepNamed", { name, index: index + 1 })
-                    : t("chat.stepName", { index: index + 1 })}
+                  {stepName(t, planLabels, {
+                    index: index + 1,
+                    resource: step.resource,
+                  })}
                 </strong>
                 {changesShown ? null : (
                   <dl>

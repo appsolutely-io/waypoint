@@ -322,7 +322,8 @@ describe("Table E: evidence reasons", () => {
     });
     expect(result.steps.find((step) => step.stepId === "s1")).toEqual({
       stepId: "s1",
-      label: "Update s1",
+      index: 1,
+      resource: "/items/s1",
       truth: plan.recovery!.steps!.find((step) => step.stepId === "s1")!.truth,
       textKey: expect.any(String),
       lateReport: "contradicted",
@@ -344,7 +345,7 @@ describe("Table R: step rows and the winner line", () => {
     expect(result.steps).toEqual([
       {
         stepId: "s1",
-        label: "Update s1",
+        index: 1,
         truth,
         textKey: `chat.recovery.${truth === "done" ? "done" : truth === "not-done" ? "notDone" : "unknown"}`,
       },

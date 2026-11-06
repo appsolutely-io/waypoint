@@ -27,7 +27,9 @@ export interface ViewMessage {
 export type Tone = "neutral" | "progress" | "warning" | "success";
 export interface StepStatus {
   stepId: string;
-  label: string;
+  /** Its place in the plan, from 1; with `resource`, what `stepName` names it by. */
+  index: number;
+  resource?: string;
   truth: "done" | "not-done" | "unknown";
   // While the plan runs, an unknown step is only not known yet.
   textKey: MessageKey;
@@ -584,16 +586,24 @@ export function planView(input: PlanViewInput): PlanView | null {
       conversationUnavailable: input.conversationUnavailable,
     };
   const view = plan.recovery!;
-  const labels = new Map(
+  // A step is named by its place in the plan and its resource, never by
+  // its id or its link.
+  const planned = new Map(
     plan.plan.kind === "immediate"
-      ? plan.plan.steps.map((step) => [step.id, step.view])
+      ? plan.plan.steps.map((step, at) => [
+          step.id,
+          { index: at + 1, resource: step.resource },
+        ])
       : [],
   );
   const contradicted = new Set(view.contradictedAfterSeal ?? []);
   const live = view.phase === "forward-active";
-  const steps: StepStatus[] = (view.steps ?? []).map((step) => ({
+  const steps: StepStatus[] = (view.steps ?? []).map((step, at) => ({
     stepId: step.stepId,
-    label: labels.get(step.stepId) ?? step.stepId,
+    index: planned.get(step.stepId)?.index ?? at + 1,
+    ...(planned.get(step.stepId)?.resource !== undefined && {
+      resource: planned.get(step.stepId)!.resource,
+    }),
     truth: step.truth,
     textKey: k(
       step.truth === "done"

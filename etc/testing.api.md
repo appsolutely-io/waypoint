@@ -2511,12 +2511,19 @@ export interface StepContext {
     stepUpCode?: string;
 }
 
+// @public
+export function stepName(t: FormatMessage, labels: PlanLabels | undefined, step: {
+    index: number;
+    resource?: string;
+}): string;
+
 // @public (undocumented)
 export interface StepStatus {
-    // (undocumented)
-    label: string;
+    index: number;
     // (undocumented)
     lateReport?: "contradicted";
+    // (undocumented)
+    resource?: string;
     // (undocumented)
     stepId: string;
     // (undocumented)

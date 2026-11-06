@@ -803,7 +803,8 @@ describe("every part boundary on the chat", () => {
       ]);
       const row = (seen.stepStatusRow![0] as { step: object }).step;
       expect(Object.keys(row).sort()).toEqual([
-        "label",
+        "index",
+        "resource",
         "stepId",
         "textKey",
         "truth",

@@ -77,6 +77,8 @@ import { isSafeUrl } from "./urls";
 import { usePlanView, type KeepSheet } from "./recovery";
 import { ClientContext, clientOf, useWaypointSnapshot } from "./headless";
 import { useBlockReply } from "./block-reply";
+import type { PlanLabels } from "./step-name";
+export type { PlanLabels } from "./step-name";
 export { clientOf, useWaypointSnapshot };
 import type { ActionEntry, ActionId, PlanView, StepStatus } from "./plan-view";
 import type { BlockSummary } from "./plan-view";
@@ -308,16 +310,6 @@ export interface WidgetProps {
 export interface WidgetRegistration {
   type: string;
   render: ComponentType<WidgetProps>;
-}
-/**
- * The names a plan's steps are shown with. The protocol names a step's
- * resource and fields by their internal keys; a host that wants them shown
- * returns the words its users know, else the chat shows a neutral name
- * ("Change 1", "Value 1"), never the key.
- */
-export interface PlanLabels {
-  resource?(resource: string): string | undefined;
-  field?(resource: string, field: string): string | undefined;
 }
 export interface WaypointProviderProps {
   client: WaypointClient;

@@ -140,7 +140,12 @@ describe.each(skins)("the recovery panel (%s)", (_, wrap) => {
     expect(rows.map((row) => row.dataset.status)).toEqual(
       base.plan!.recovery!.steps!.map((step) => step.truth),
     );
-    expect(rows[0]!.textContent).toContain("Update s1");
+    // Named like the step list: never its link or its id.
+    expect(rows[0]!.textContent).toContain(
+      english["chat.stepName"].replace("{index}", "1"),
+    );
+    expect(rows[0]!.textContent).not.toContain("Update s1");
+    expect(rows[0]!.textContent).not.toContain("s1:");
   });
   it("CK-AX an unavailable action is described and sends nothing by click, Enter or Space", async () => {
     const { onPress } = await show({
@@ -765,4 +770,27 @@ describe("a Stop pressed before the intent chunk loads", () => {
       await h.close();
     }
   });
+});
+
+it("CK-UI-steps a step row takes the host's label, numbered", async () => {
+  const view = planView(base)!;
+  render(
+    <WaypointProvider
+      client={fakeClient()}
+      planLabels={{
+        resource: (resource) =>
+          resource.startsWith("/items/") ? "Tasks" : undefined,
+      }}
+    >
+      <TestChat>
+        <RecoveryPanel view={view} onPress={vi.fn()} />
+      </TestChat>
+    </WaypointProvider>,
+  );
+  await waitFor(() =>
+    expect(document.querySelectorAll("li[data-status]").length).toBe(2),
+  );
+  const rows = [...document.querySelectorAll("li[data-status]")];
+  expect(rows[0]!.textContent).toContain("Tasks 1");
+  expect(rows[1]!.textContent).toContain("Tasks 2");
 });

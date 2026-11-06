@@ -1503,6 +1503,14 @@ export interface PlanIntentReply {
 }
 
 // @public
+export interface PlanLabels {
+    // (undocumented)
+    field?(resource: string, field: string): string | undefined;
+    // (undocumented)
+    resource?(resource: string): string | undefined;
+}
+
+// @public
 export class PlanReadRefused extends Error {
     constructor();
 }
@@ -2009,12 +2017,19 @@ export interface StepContext {
     stepUpCode?: string;
 }
 
+// @public
+export function stepName(t: FormatMessage, labels: PlanLabels | undefined, step: {
+    index: number;
+    resource?: string;
+}): string;
+
 // @public (undocumented)
 export interface StepStatus {
-    // (undocumented)
-    label: string;
+    index: number;
     // (undocumented)
     lateReport?: "contradicted";
+    // (undocumented)
+    resource?: string;
     // (undocumented)
     stepId: string;
     // (undocumented)

@@ -8,6 +8,8 @@ export { useBlockReply } from "../react/block-reply";
 export type { BlockAnswer, BlockReply } from "../react/block-reply";
 export { planView, keepSheet } from "../react/plan-view";
 export { createFormatter } from "../react/plan-messages";
+export { stepName } from "../react/step-name";
+export type { PlanLabels } from "../react/step-name";
 export type { FormatMessage, MessageValues } from "../react/i18n";
 export type {
   ActionEntry,

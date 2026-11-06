@@ -38,6 +38,7 @@ interface MdastNode {
   alt?: string | null;
   identifier?: string;
   children?: MdastNode[];
+  data?: { hProperties?: Record<string, unknown> };
 }
 const BLOCKS = new Set([
   "paragraph",
@@ -195,6 +196,53 @@ function useReveal(text: string, live: boolean, lang?: string) {
   }, [live, at, text, lang]);
   return shown.current;
 }
+// The property that marks a citation link; raw HTML is skipped, so only
+// the plugin below can set it.
+const CITE = "dataWpCite";
+// Nodes whose text is never a citation: code, and a link's own text.
+const NOT_CITED = new Set(["inlineCode", "code", "link", "linkReference"]);
+/**
+ * Turns `[n]` in the text of a reply into a link to its source n, when that
+ * source may be opened. Only text nodes are read, so code and the text of a
+ * link are left as written.
+ */
+function citations(options: {
+  sources: readonly Source[];
+  safe: (source: Source) => boolean;
+}) {
+  const { sources, safe } = options;
+  const split = (value: string): MdastNode[] => {
+    const nodes: MdastNode[] = [];
+    let from = 0;
+    for (const match of value.matchAll(/\[(\d+)\]/g)) {
+      const n = Number(match[1]);
+      const source = sources[n - 1];
+      if (!source || !safe(source)) continue;
+      if (match.index > from)
+        nodes.push({ type: "text", value: value.slice(from, match.index) });
+      nodes.push({
+        type: "link",
+        url: source.url,
+        children: [{ type: "text", value: match[0] }],
+        data: { hProperties: { [CITE]: n } },
+      });
+      from = match.index + match[0].length;
+    }
+    if (!nodes.length) return [{ type: "text", value }];
+    if (from < value.length)
+      nodes.push({ type: "text", value: value.slice(from) });
+    return nodes;
+  };
+  const walk = (node: MdastNode) => {
+    if (NOT_CITED.has(node.type) || !node.children) return;
+    node.children = node.children.flatMap((child) =>
+      child.type === "text" ? split(child.value ?? "") : (walk(child), [child]),
+    );
+  };
+  return (tree: MdastNode) => {
+    if (sources.length) walk(tree);
+  };
+}
 interface MarkdownProps {
   text: string;
   /** The reply's sources, which `[n]` in its text cites. */
@@ -256,18 +304,20 @@ export default function Markdown(props: MarkdownProps) {
           </a>
         );
       },
-      a: ({ href, children }) => {
-        // A citation opens its source, named by its number and title.
-        const cited = /^#wp-cite-(\d+)$/.exec(href ?? "");
-        const source = cited && current.current.sources?.[Number(cited[1]) - 1];
-        if (source)
+      a: ({ href, children, node }) => {
+        // A citation opens its source, named by its number and title. Only
+        // the citations plugin marks one: author text cannot, and its
+        // address has passed the allow-list like any other.
+        const cited = Number(node?.properties?.[CITE] ?? 0);
+        const source = cited ? current.current.sources?.[cited - 1] : undefined;
+        if (source && href)
           return (
             <a
-              href={source.url}
+              href={href}
               rel="noreferrer noopener"
               target="_blank"
               aria-label={current.current.sourceNames?.item(
-                Number(cited[1]),
+                cited,
                 source.title,
               )}
             >
@@ -288,13 +338,6 @@ export default function Markdown(props: MarkdownProps) {
   const { text, extraSchemes, sources = [] } = props;
   // Sources that may be opened: the others are named but never linked.
   const safe = (source: Source) => isSafeUrl(source.url, extraSchemes);
-  // `[n]` that names a source (not a link's own text) becomes its citation.
-  const cite = (value: string) =>
-    value.replace(/\[(\d+)\](?![(\[:])/g, (whole, n: string) =>
-      sources[Number(n) - 1] && safe(sources[Number(n) - 1]!)
-        ? `[\\[${n}\\]](#wp-cite-${n})`
-        : whole,
-    );
   const reduced = reducedMotion();
   const shown = useReveal(text, !!props.writing && !reduced, props.lang);
   return (
@@ -305,11 +348,11 @@ export default function Markdown(props: MarkdownProps) {
     >
       <ReactMarkdown
         skipHtml
-        remarkPlugins={[gfm]}
+        remarkPlugins={[gfm, [citations, { sources, safe }]]}
         urlTransform={(url) => (isSafeUrl(url, extraSchemes) ? url : undefined)}
         components={components}
       >
-        {cite(props.writing ? closeOpenMarkdown(shown) : text)}
+        {props.writing ? closeOpenMarkdown(shown) : text}
       </ReactMarkdown>
       {sources.length ? (
         <details

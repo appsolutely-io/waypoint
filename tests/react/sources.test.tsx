@@ -88,3 +88,58 @@ it("names sources in Simplified Chinese and never links an unsafe address", asyn
   expect(screen.queryByRole("link")).toBeNull();
   client.dispose();
 });
+
+// Every address that reaches the page passes the same allow-list.
+function hrefs(): string[] {
+  return [...document.querySelectorAll("a[href]")].map((link) =>
+    link.getAttribute("href")!,
+  );
+}
+
+it.each([
+  ["data:text/html,<script>alert(1)</script>"],
+  ["javascript:alert(1)"],
+])(
+  "never turns text written as a citation link into a link to an unsafe source (%s)",
+  async (url) => {
+    const client = await chat({
+      ...reply,
+      content: "Click [here](#wp-cite-1) or cite [1], then [2].",
+      sources: [
+        { id: "s1", title: "Unsafe", url },
+        { id: "s2", title: "Stock report", url: "https://example.test/stock" },
+      ],
+    });
+    await screen.findByRole(
+      "link",
+      { name: "Source 2: Stock report" },
+      { timeout: 5000 },
+    );
+    expect(hrefs().filter((href) => /^(data|javascript):/i.test(href))).toEqual(
+      [],
+    );
+    // Text that only looks like a citation is not named as one.
+    expect(screen.queryByRole("link", { name: /Source 1/ })).toBeNull();
+    client.dispose();
+  },
+);
+
+it("leaves a citation number inside code as written", async () => {
+  const client = await chat({
+    ...reply,
+    content:
+      "Use `arr[2]` here [1].\n\n```\nx = arr[2]\n```\n\nSee [the stock [2]](https://example.test/x).",
+  });
+  await screen.findByRole(
+    "link",
+    { name: "Source 1: Order 1042" },
+    { timeout: 5000 },
+  );
+  const code = [...document.querySelectorAll(".wp-markdown code")].map(
+    (node) => node.textContent,
+  );
+  expect(code).toEqual(["arr[2]", "x = arr[2]\n"]);
+  // A number inside a link's own text is not a second link inside it.
+  expect(document.querySelectorAll(".wp-markdown a a")).toHaveLength(0);
+  client.dispose();
+});

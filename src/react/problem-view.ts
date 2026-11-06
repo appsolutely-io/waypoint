@@ -88,12 +88,13 @@ export interface ReplyRowAction {
 /**
  * The reply row's words and buttons for a `replyState`: Keep waiting and
  * Retry for an overdue reply (`keepWaiting()`, `retryReply()`), Retry for a
- * failed or unavailable one, Stop while one is written when `canStop`
- * (`canStopReply()`, `stopReply()`).
+ * failed or unavailable one unless `canRetry` is false (`canRetryReply()`),
+ * Stop while one is written when `canStop` (`canStopReply()`,
+ * `stopReply()`).
  */
 export function replyRowView(
   state: ReplyState,
-  options: { canStop?: boolean } = {},
+  options: { canStop?: boolean; canRetry?: boolean } = {},
 ): { key?: MessageKey; actions: ReplyRowAction[] } {
   if (state === "none") return { actions: [] };
   const retry: ReplyRowAction = { id: "retry", labelKey: "chat.retry" };
@@ -106,6 +107,8 @@ export function replyRowView(
           ? options.canStop
             ? [{ id: "stop", labelKey: "chat.reply.stop" }]
             : []
-          : [retry],
+          : options.canRetry === false
+            ? []
+            : [retry],
   };
 }

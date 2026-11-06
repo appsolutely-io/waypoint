@@ -440,9 +440,18 @@ export interface WaypointClient {
   /**
    * Waits again and reads the conversation again (`refresh()`). A failed
    * reply is asked for again instead (`regenerate`) when a `versions` port
-   * is given: a new version, with the failed one kept.
+   * is given: a new version, with the failed one kept. A reply the host
+   * ended as `failed` or `unavailable` is only ever asked for again: without
+   * a `versions` port a read would show it unchanged, so this does nothing
+   * (see `canRetryReply()`).
    */
   retryReply(): Promise<void>;
+  /**
+   * Whether `retryReply()` can do anything for the reply row's state: false
+   * only for a reply the host ended as `failed` or `unavailable` when no
+   * `versions` port is given.
+   */
+  canRetryReply(): boolean;
   /**
    * Loads and validates a flow's document, to ask for its parameters, and
    * keeps it for the next `runFlow` of that flow in this conversation (a
@@ -2497,15 +2506,17 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     },
     retryReply() {
       const last = state.conversation?.messages.at(-1);
+      const ended = endedReply();
       if (
-        state.replyState === "failed" &&
-        last?.role === "assistant" &&
-        config.versions
+        ended ||
+        (state.replyState === "failed" && last?.role === "assistant")
       )
-        return client.regenerate(last.id);
+        if (config.versions) return client.regenerate((ended ?? last)!.id);
+        else if (ended) return Promise.resolve();
       client.keepWaiting();
       return client.refresh().then(() => {});
     },
+    canRetryReply: () => !endedReply() || !!config.versions,
     canStopReply: () =>
       !!stoppable() && state.capabilities.includes("reply-stop"),
     // Marked at once, before the host is asked.
@@ -2546,6 +2557,16 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       listeners.clear();
       observers.clear();
     },
+  };
+  // The reply the host ended as failed or unavailable, when the reply row
+  // says so: the last message, from the assistant.
+  const endedReply = () => {
+    const last = state.conversation?.messages.at(-1);
+    return last?.role === "assistant" &&
+      (last.status === "failed" || last.status === "unavailable") &&
+      state.replyState === last.status
+      ? last
+      : undefined;
   };
   // The reply being written, if any: the last message, from the assistant.
   const stoppable = () => {

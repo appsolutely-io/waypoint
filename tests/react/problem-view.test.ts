@@ -53,6 +53,13 @@ it("names the reply row's words and its buttons", () => {
       key: `reply.${state}`,
       actions: [{ id: "retry", labelKey: "chat.retry" }],
     });
+  // A reply the host ended that cannot be asked for again has no Retry.
+  for (const state of ["failed", "unavailable"] as const)
+    expect(replyRowView(state, { canRetry: false })).toEqual({
+      key: `reply.${state}`,
+      actions: [],
+    });
+  expect(replyRowView("overdue", { canRetry: false }).actions).toHaveLength(2);
 });
 
 it("every key they name has text in each locale entry", () => {

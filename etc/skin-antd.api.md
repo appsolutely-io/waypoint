@@ -2815,6 +2815,7 @@ export interface WaypointClient {
     // (undocumented)
     canKeepChanges(id?: string): boolean;
     canPrepareFlow(): boolean;
+    canRetryReply(): boolean;
     canSendFeedback(): boolean;
     canStopReply(): boolean;
     checkIntentStatus(id?: string): Promise<void>;

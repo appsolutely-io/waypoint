@@ -27,7 +27,7 @@ The client calls it through `client.editMessage(id, content)`, `client.regenerat
 
 ## Feedback
 
-A host that takes ratings of replies passes a `FeedbackPort` as `feedback`. The default actions then show Good response and Bad response on each finished reply, and the pressed one stays marked. A reply the host ended as failed or unavailable is not rated, copied or regenerated from its actions; Retry, in the reply row, asks for it again:
+A host that takes ratings of replies passes a `FeedbackPort` as `feedback`. The default actions then show Good response and Bad response on each finished reply, and the pressed one stays marked. A reply the host ended as failed or unavailable is not rated, copied or regenerated from its actions; Retry, in the reply row, asks for it again (with a `versions` port; without one the row offers no Retry):
 
 ```ts
 const client = createWaypointClient({

@@ -61,7 +61,10 @@ export function ReplyControls({
   const B = primitives.button;
   const focus = useContext(ChatFocusContext);
   const steps = client.getSnapshot().toolSteps;
-  const { actions } = replyRowView(row, { canStop: client.canStopReply() });
+  const { actions } = replyRowView(row, {
+    canStop: client.canStopReply(),
+    canRetry: client.canRetryReply(),
+  });
   // The pressed button goes away: focus moves on to the composer.
   const then = (action: () => unknown) => () => {
     const origin = focus?.originFor("reply-wait");

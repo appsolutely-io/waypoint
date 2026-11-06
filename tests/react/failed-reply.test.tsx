@@ -76,29 +76,34 @@ for (const [status, text] of [
     client.dispose();
   });
 
+// Reading the conversation again would show the same ended reply, so
+// Retry is offered only when it can ask for the reply again; otherwise the
+// user goes on from the composer, where the question can be sent again.
 for (const status of ["failed", "unavailable"] as const)
-  it(`a reply ended as ${status} offers Retry, which reads it again`, async () => {
-    const { client, reads } = await ended(status);
-    const retry = await screen.findByRole("button", { name: "Retry" });
-    const before = reads();
-    await userEvent.click(retry);
-    await waitFor(() => expect(reads()).toBe(before + 1));
+  it(`a reply ended as ${status} offers no Retry when the host cannot regenerate`, async () => {
+    const { client, row } = await ended(status);
+    await waitFor(() =>
+      expect(row.getAttribute("data-reply-state")).toBe(status),
+    );
+    expect(client.canRetryReply()).toBe(false);
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
     client.dispose();
   });
 
-it("Retry on a failed reply asks for it again when the host can regenerate", async () => {
-  const regenerate = vi.fn(async () => {});
-  const { client } = await ended("failed", { regenerate });
-  await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
-  await waitFor(() => expect(regenerate).toHaveBeenCalledTimes(1));
-  expect(regenerate).toHaveBeenCalledWith(
-    expect.objectContaining({ messageId: "a" }),
-  );
-  client.dispose();
-});
+for (const status of ["failed", "unavailable"] as const)
+  it(`Retry on a reply ended as ${status} asks for it again when the host can regenerate`, async () => {
+    const regenerate = vi.fn(async () => {});
+    const { client } = await ended(status, { regenerate });
+    await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(regenerate).toHaveBeenCalledTimes(1));
+    expect(regenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ messageId: "a" }),
+    );
+    client.dispose();
+  });
 
 it("names Retry in Simplified Chinese", async () => {
-  const { client } = await ended("failed");
+  const { client } = await ended("failed", { regenerate: async () => {} });
   cleanup();
   render(<WaypointChat client={client} locale="zh-CN" />);
   expect(await screen.findByRole("button", { name: "重试" })).toBeTruthy();

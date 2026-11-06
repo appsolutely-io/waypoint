@@ -305,6 +305,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.block.flowLoading": "正在加载请求……",
   "chat.block.flowsLoading": "正在加载已保存的请求……",
   "chat.block.flowsEmpty": "这里还没有已保存的请求。",
+  "chat.block.answered": "已回答",
+  "chat.block.answeredWith": "已回答：{answer}",
   "chat.problem.signIn": "请重新登录后继续。",
   "chat.problem.retryable": "刚才出了点问题，请重试。",
   "chat.problem.rateLimited": "当前请求过多。请稍等片刻再重试。",
@@ -320,5 +322,6 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.problem.inDoubt": "无法确认刚才的结果。请先查看当前状态，再重试。",
   "chat.problem.replaced": "已有更新的版本。请刷新查看。",
   "chat.problem.needsAttention": "此计划需要您处理。请查看它的状态。",
+  "chat.problem.answered": "此问题已被回答。",
 });
 export default messages;

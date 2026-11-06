@@ -1,13 +1,15 @@
 // One answer per card is the host's rule: it applies the first answer to a
 // card, marks the card answered in its reads and refuses any other answer.
-// This hook only keeps a card from being answered twice while an answer is
-// in flight, and frees it once the client has read the conversation after
-// the answer, whatever the outcome, so the card shows what the host holds.
+// This hook keeps a card from being answered twice while an answer is in
+// flight. A refused or lost answer frees the card once the client has read
+// the conversation after it, so the card shows what the host holds; an
+// accepted one keeps it, since the host said it holds that answer even
+// when the read after it fails.
 // The locks belong to the client, by conversation, message and card, so a
 // screen that mounts again while an answer is in flight finds its card
 // still locked, and a card id a later message uses again is not.
 import { useCallback, useSyncExternalStore } from "react";
-import type { ReplyInput, WaypointClient } from "../core/client";
+import type { ReplyInput, ReplyOutcome, WaypointClient } from "../core/client";
 import type { Block, Reply } from "../protocol/generated";
 import { clientOf, useWaypointSnapshot } from "./headless";
 
@@ -16,14 +18,15 @@ export type BlockAnswer = Pick<Reply, "kind"> & Record<string, unknown>;
 
 export interface BlockReply {
   /**
-   * Ids of this conversation's cards with an answer in flight, by card id
-   * alone; `isAnswered` with a message id tells cards of
+   * Ids of this conversation's cards with an answer in flight or accepted
+   * here, by card id alone; `isAnswered` with a message id tells cards of
    * different messages apart.
    */
   answered: ReadonlySet<string>;
   /**
    * Whether a card takes no answer: the host marks it answered, or one is
-   * in flight here. Pass the card's message id when card ids repeat.
+   * in flight or was accepted here. Pass the card's message id when card
+   * ids repeat.
    */
   isAnswered(
     block: Pick<Block, "id" | "answered">,
@@ -32,15 +35,17 @@ export interface BlockReply {
   /**
    * Sends one answer to the card of `messageId` (when given), with a reply
    * id built from the card and the answer (see `cardReplyId`). A press on a
-   * card with an answer in flight does nothing. Resolves once the client
-   * has read the conversation after the answer, accepted or not; the card
-   * is then shown as the host reports it.
+   * card that takes no answer here does nothing and resolves with nothing.
+   * Otherwise resolves with the outcome once the client has read the
+   * conversation after the answer; a card whose answer was refused or lost
+   * is then shown as the host reports it, and one whose answer was
+   * accepted stays answered.
    */
   reply(
     block: Pick<Block, "id">,
     answer: BlockAnswer,
     messageId?: string,
-  ): Promise<void>;
+  ): Promise<ReplyOutcome | void>;
 }
 
 interface Card {
@@ -85,6 +90,16 @@ const fnv = (text: string, seed: number) => {
   return hash.toString(16).padStart(8, "0");
 };
 const digest = (text: string) => fnv(text, 0x811c9dc5) + fnv(text, 0x2b992ddf);
+// An answer's JSON with the keys of every object in order, so the same
+// answer has one digest whatever order its keys were set in.
+const canonical = (answer: BlockAnswer) =>
+  JSON.stringify(answer, (_, value: unknown) =>
+    value && typeof value == "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value).sort(([a], [b]) => (a < b ? -1 : 1)),
+        )
+      : value,
+  );
 // Each UTF-16 code unit outside `[A-Za-z0-9_.~-]` as `%` and four hex
 // digits: it cannot throw, even on an unpaired surrogate, and no part's
 // characters can make two cards one.
@@ -97,8 +112,8 @@ const encodePart = (part: string) =>
  * A card's reply id: the same for the same answer to the same card, in any
  * page or tab, so a host deduplicates a resend, and another for another
  * answer, which a host that already holds one refuses. It is opaque: its
- * parts and a digest of the answer, escaped by code unit, and a digest of
- * all of it past 128 characters.
+ * parts and a digest of the answer (whatever the order of its keys),
+ * escaped by code unit, and a digest of all of it past 128 characters.
  */
 export function cardReplyId(
   conversationId: string,
@@ -106,7 +121,7 @@ export function cardReplyId(
   blockId: string,
   answer: BlockAnswer,
 ): string {
-  const id = `card:${[conversationId, messageId, blockId].map(encodePart).join(":")}:${digest(JSON.stringify(answer))}`;
+  const id = `card:${[conversationId, messageId, blockId].map(encodePart).join(":")}:${digest(canonical(answer))}`;
   return id.length <= MAX_REPLY_ID ? id : `card~${digest(id)}`;
 }
 
@@ -153,7 +168,10 @@ export function useBlockReply(client?: WaypointClient): BlockReply {
         locks.cards.delete(key);
         changed(locks);
       };
-      return store.replyOutcome(sending).then(free, free);
+      return store.replyOutcome(sending).then((outcome) => {
+        if (!outcome.accepted) free();
+        return outcome;
+      }, free);
     },
     [store, locks, conversationId],
   );

@@ -341,6 +341,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.block.flowLoading": "Loading request…",
   "chat.block.flowsLoading": "Loading saved requests…",
   "chat.block.flowsEmpty": "No saved requests here yet.",
+  "chat.block.answered": "Answered",
+  "chat.block.answeredWith": "Answered: {answer}",
   "chat.problem.signIn": "Sign in again to continue.",
   "chat.problem.retryable": "Something went wrong for a moment. Try again.",
   "chat.problem.rateLimited":
@@ -363,5 +365,6 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.problem.replaced": "A newer version replaced this. Refresh to see it.",
   "chat.problem.needsAttention":
     "This plan needs your attention. Review its status.",
+  "chat.problem.answered": "This question was already answered.",
 });
 export default messages;

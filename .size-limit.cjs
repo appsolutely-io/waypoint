@@ -118,9 +118,10 @@ const budgets = [
     // what a chat needs before any chunk loads: the saved requests' drawer
     // opening on the press, the read-only plan state, held announcements,
     // the form fields' typed editors and guarded Regenerate, the focus
-    // handoffs and the shared load-failure notice whose Retry stays while
-    // it loads again. Measured with Node 22's zlib: 39,427 B, 100 B under
-    // the limit.
+    // handoffs, the shared load-failure notice whose Retry stays while
+    // it loads again, and a card that stays answered once the host accepted
+    // its answer. Measured with Node 22's zlib: 39,441 B, 86 B under the
+    // limit.
     limit: "39.527 KB",
     gzip: true,
     brotli: false,
@@ -148,7 +149,7 @@ const budgets = [
     path: "dist/hooks/index.js",
     // The renderer-neutral hooks with the client code they import: keys
     // only, no strings and no formatter (those are `messages` and a
-    // locale); React is the host's. Measured with Node 22's zlib: 4,911 B.
+    // locale); React is the host's. Measured with Node 22's zlib: 4,991 B.
     // The limit is 3% above an earlier 4,923 B, rounded down.
     limit: "5.07 kB",
     gzip: true,
@@ -168,7 +169,7 @@ const budgets = [
     name: "messages en",
     path: "dist/messages/en/index.js",
     // English text of every key the hooks return. Measured (4,853 B), plus
-    // 3%, rounded down.
+    // 3%, rounded down; 4,886 B now.
     limit: "4.998 kB",
     gzip: true,
     brotli: false,
@@ -177,7 +178,7 @@ const budgets = [
     name: "messages zh-Hans",
     path: "dist/messages/zh-Hans/index.js",
     // Simplified Chinese text of the same keys. Measured (5,711 B), plus 3%,
-    // rounded down.
+    // rounded down; 5,745 B now.
     limit: "5.882 kB",
     gzip: true,
     brotli: false,
@@ -197,9 +198,9 @@ const budgets = [
     name: "lazy blocks",
     path: "dist/blocks-*.js",
     // The plan steps, the required-field and empty-answer rules, the value
-    // formatting and their messages ship in this chunk, not the entry.
-    // Measured with Node 22's zlib: 1.91 kB. The limit is 10% above an
-    // earlier 2.64 kB.
+    // formatting, form fill values, an answered card's chosen answer and
+    // their messages ship in this chunk, not the entry. Measured with Node
+    // 22's zlib: 2.22 kB. The limit is 10% above an earlier 2.64 kB.
     limit: "2.9 KB",
     gzip: true,
     brotli: false,
@@ -330,8 +331,8 @@ module.exports = withSharedChunks(budgets, {
     {
       name: "lazy block messages",
       source: "src/react/block-messages.ts",
-      // 924 B measured.
-      limit: "951 B",
+      // 957 B measured, with an answered card's texts.
+      limit: "985 B",
       gzip: true,
       brotli: false,
       ignore: ["react", "react-dom", "./chunk-*"],

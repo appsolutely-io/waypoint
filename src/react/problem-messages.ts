@@ -15,7 +15,8 @@ export type ProblemMessageKey =
   | "chat.problem.agreement"
   | "chat.problem.inDoubt"
   | "chat.problem.replaced"
-  | "chat.problem.needsAttention";
+  | "chat.problem.needsAttention"
+  | "chat.problem.answered";
 export type ProblemCatalogue = Readonly<Record<ProblemMessageKey, string>>;
 export const problemEnglish: ProblemCatalogue = {
   "chat.problem.signIn": "Sign in again to continue.",
@@ -40,6 +41,7 @@ export const problemEnglish: ProblemCatalogue = {
   "chat.problem.replaced": "A newer version replaced this. Refresh to see it.",
   "chat.problem.needsAttention":
     "This plan needs your attention. Review its status.",
+  "chat.problem.answered": "This question was already answered.",
 };
 export const problemSimplifiedChinese: ProblemCatalogue = {
   "chat.problem.signIn": "请重新登录后继续。",
@@ -57,4 +59,5 @@ export const problemSimplifiedChinese: ProblemCatalogue = {
   "chat.problem.inDoubt": "无法确认刚才的结果。请先查看当前状态，再重试。",
   "chat.problem.replaced": "已有更新的版本。请刷新查看。",
   "chat.problem.needsAttention": "此计划需要您处理。请查看它的状态。",
+  "chat.problem.answered": "此问题已被回答。",
 };

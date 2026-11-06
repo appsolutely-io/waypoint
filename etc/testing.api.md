@@ -211,7 +211,7 @@ export interface BlockMarkdown {
 }
 
 // @public (undocumented)
-export type BlockMessageKey = "chat.block.required" | "chat.block.requiredMissing" | "chat.block.answerMissing" | "chat.block.empty" | "chat.block.tierLow" | "chat.block.tierSensitive" | "chat.block.undoCompareAndSet" | "chat.block.undoArchiveCreated" | "chat.block.undoInverse" | "chat.block.status" | "chat.block.outcomeDone" | "chat.block.outcomeFailed" | "chat.block.state.proposed" | "chat.block.state.awaiting-confirmation" | "chat.block.state.running" | "chat.block.state.undoing" | "chat.block.state.completed" | "chat.block.state.submitted" | "chat.block.state.undone" | "chat.block.state.needs-attention" | "chat.block.state.cancelled" | "chat.block.run" | "chat.block.runMissing" | "chat.block.favourite" | "chat.block.flowLoading" | "chat.block.flowsLoading" | "chat.block.flowsEmpty";
+export type BlockMessageKey = "chat.block.required" | "chat.block.requiredMissing" | "chat.block.answerMissing" | "chat.block.empty" | "chat.block.tierLow" | "chat.block.tierSensitive" | "chat.block.undoCompareAndSet" | "chat.block.undoArchiveCreated" | "chat.block.undoInverse" | "chat.block.status" | "chat.block.outcomeDone" | "chat.block.outcomeFailed" | "chat.block.state.proposed" | "chat.block.state.awaiting-confirmation" | "chat.block.state.running" | "chat.block.state.undoing" | "chat.block.state.completed" | "chat.block.state.submitted" | "chat.block.state.undone" | "chat.block.state.needs-attention" | "chat.block.state.cancelled" | "chat.block.run" | "chat.block.runMissing" | "chat.block.favourite" | "chat.block.flowLoading" | "chat.block.flowsLoading" | "chat.block.flowsEmpty" | "chat.block.answered" | "chat.block.answeredWith";
 
 // @public (undocumented)
 export interface BlockNotice {
@@ -252,7 +252,7 @@ export interface BlockPlan {
 export interface BlockReply {
     answered: ReadonlySet<string>;
     isAnswered(block: Pick<Block, "id" | "answered">, messageId?: string): boolean;
-    reply(block: Pick<Block, "id">, answer: BlockAnswer, messageId?: string): Promise<void>;
+    reply(block: Pick<Block, "id">, answer: BlockAnswer, messageId?: string): Promise<ReplyOutcome | void>;
 }
 
 // @public (undocumented)
@@ -2150,7 +2150,7 @@ export interface Problem {
 export type ProblemCatalogue = Readonly<Record<ProblemMessageKey, string>>;
 
 // @public (undocumented)
-export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention";
+export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered";
 
 // @public
 export interface ReaderRequestContext {

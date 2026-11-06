@@ -182,3 +182,70 @@ it("after a refusal that leaves the card open, focus returns to the pressed answ
   await waitFor(() => expect(document.activeElement).toBe(pressed));
   client.dispose();
 });
+it("after an accepted answer whose read fails, the card stays answered and the read error offers a retry", async () => {
+  let failing = false;
+  const host = createCardHost({ fail: () => failing, answer: true });
+  const client = host.client();
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  failing = true;
+  fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+  await screen.findByText("This conversation could not be loaded.");
+  const other = screen.getByRole("button", {
+    name: "Decline",
+  }) as HTMLButtonElement;
+  expect(other.disabled).toBe(true);
+  fireEvent.click(other);
+  expect(host.sent).toEqual(["accept"]);
+  failing = false;
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await screen.findByText("Answered: Accept");
+  expect(other.disabled).toBe(true);
+  client.dispose();
+});
+const answerElsewhere = (actionId: string) => ({
+  kind: "action" as const,
+  blockId: "question-a",
+  actionId,
+  clientReplyId: "another-tab",
+});
+it("an answer refused because the card was answered elsewhere says so instead of the generic refusal", async () => {
+  const host = createCardHost();
+  const here = host.client();
+  const elsewhere = host.client();
+  await Promise.all([here.ready, elsewhere.ready]);
+  await elsewhere.replyOutcome(answerElsewhere("accept"));
+  render(<WaypointChat client={here} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Decline" }));
+  await screen.findByText("This question was already answered.");
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(screen.queryByText("The site refused this request.")).toBeNull();
+  expect(host.applied).toEqual(["accept"]);
+  here.dispose();
+  elsewhere.dispose();
+});
+for (const [name, answer, actionId, text] of [
+  ["names the answer the host applied", true, "accept", "Answered: Accept"],
+  ["says answered when the host names no answer", false, "accept", "Answered"],
+  [
+    "says answered when the named answer is not on the card",
+    true,
+    "gone",
+    "Answered",
+  ],
+] as const)
+  it(`an answered card ${name}`, async () => {
+    const host = createCardHost({ answer });
+    const client = host.client();
+    await client.ready;
+    await client.replyOutcome(answerElsewhere(actionId));
+    render(<WaypointChat client={client} />);
+    await screen.findByText(text);
+    expect(
+      (screen.getByRole("button", { name: "Accept" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    client.dispose();
+  });

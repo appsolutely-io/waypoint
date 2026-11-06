@@ -1,8 +1,13 @@
-// The transcript blocks that hold form state or structured values (table,
-// diff, form, choice and plan): a lazy chunk, loaded when the first one is
-// shown.
+// The transcript blocks that hold form state or structured values (form
+// fill values, table, diff, form, choice and plan): a lazy chunk, loaded
+// when the first one is shown.
 import { useId, useState } from "react";
-import type { PlanState } from "../protocol/generated";
+import type {
+  Block as BlockType,
+  BlockFormFill,
+  CardAnswer,
+  PlanState,
+} from "../protocol/generated";
 import {
   blockEnglish,
   blockSimplifiedChinese,
@@ -154,12 +159,81 @@ export function PlanSteps({
 // Submit, unavailable while the answer is incomplete but still focusable,
 // with the reason said beside it.
 
+// The label of the action a card's `answer` names, found in the card.
+const answerLabel = (
+  block: BlockType,
+  answer: CardAnswer,
+): string | undefined =>
+  block.id === answer.blockId
+    ? (
+        block.body as { actions?: { id: string; label: string }[] }
+      )?.actions?.find(
+        (action) => "actionId" in answer && action.id === answer.actionId,
+      )?.label
+    : ((block.body as { blocks?: BlockType[] })?.blocks ?? [])
+        .map((child) => answerLabel(child, answer))
+        .find(Boolean);
+// An answered card names the answer the host applied, when the host says
+// which one and it is on the card.
+export function Answered({ block }: { block: BlockType }) {
+  const { format: t } = context();
+  const label = block.answer && answerLabel(block, block.answer);
+  return (
+    <p>
+      {label
+        ? t("chat.block.answeredWith", { answer: label })
+        : t("chat.block.answered")}
+    </p>
+  );
+}
 export default function Block({ block, onReply, disabled }: WidgetProps) {
   const radioName = useId();
   const { format: t, primitives: ui } = context();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const body = block.body as Record<string, unknown>;
   switch (block.type) {
+    case "form.fill": {
+      const fill = block as BlockFormFill;
+      const entries = fill.body?.values;
+      if (
+        !entries ||
+        typeof entries !== "object" ||
+        Array.isArray(entries) ||
+        Object.values(entries).some(
+          (entry) => !entry || typeof entry !== "object",
+        )
+      )
+        return <p>{block.fallback}</p>;
+      return (
+        <dl>
+          {Object.entries(entries).map(([name, entry]) => (
+            <div key={name}>
+              <dt>{typeof entry.label === "string" ? entry.label : name}</dt>
+              <dd>
+                <p>
+                  {typeof entry.value === "string"
+                    ? entry.value
+                    : JSON.stringify(entry.value)}
+                </p>
+                <p>
+                  {t(
+                    entry.validation?.status === "valid"
+                      ? "form.valid"
+                      : "form.invalid",
+                  )}
+                </p>
+                {entry.validation?.messages?.map((message, i) => (
+                  <p key={i}>{message}</p>
+                ))}
+                {entry.validation?.guidance && (
+                  <p>{entry.validation.guidance}</p>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      );
+    }
     case "table":
       return (
         <div

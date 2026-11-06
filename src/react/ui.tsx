@@ -1,9 +1,5 @@
 import { MODAL_SELECTOR } from "./dialog-selectors";
-import type {
-  BlockFormFill,
-  ConfirmationRecord,
-  Step,
-} from "../protocol/generated";
+import type { ConfirmationRecord, Step } from "../protocol/generated";
 import { ConversationRail } from "./conversation-rail";
 import type {
   ConversationSource,
@@ -130,6 +126,13 @@ function useBlocks() {
   const load = useChunk(blocksChunk);
   useEffect(() => blocksChunk.request(), []);
   return load;
+}
+// What an answered card says, from the blocks chunk.
+function Answered({ block }: { block: Block }) {
+  const blocks = useBlocks();
+  return blocks.status === "ready" ? (
+    <blocks.module.Answered block={block} />
+  ) : null;
 }
 // A block from the blocks chunk; its own fallback text if that cannot load.
 function ChunkBlock(props: WidgetProps) {
@@ -995,48 +998,7 @@ function WidgetBody({ block, onReply, disabled }: WidgetProps) {
   const B = ui.button;
   const body = block.body as Record<string, unknown>;
   switch (block.type) {
-    case "form.fill": {
-      const fill = block as BlockFormFill;
-      const entries = fill.body?.values;
-      if (
-        !entries ||
-        typeof entries !== "object" ||
-        Array.isArray(entries) ||
-        Object.values(entries).some(
-          (entry) => !entry || typeof entry !== "object",
-        )
-      )
-        return <p>{block.fallback}</p>;
-      return (
-        <dl>
-          {Object.entries(entries).map(([name, entry]) => (
-            <div key={name}>
-              <dt>{typeof entry.label === "string" ? entry.label : name}</dt>
-              <dd>
-                <p>
-                  {typeof entry.value === "string"
-                    ? entry.value
-                    : JSON.stringify(entry.value)}
-                </p>
-                <p>
-                  {t(
-                    entry.validation?.status === "valid"
-                      ? "form.valid"
-                      : "form.invalid",
-                  )}
-                </p>
-                {entry.validation?.messages?.map((message, i) => (
-                  <p key={i}>{message}</p>
-                ))}
-                {entry.validation?.guidance && (
-                  <p>{entry.validation.guidance}</p>
-                )}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      );
-    }
+    case "form.fill":
     case "table":
     case "diff":
     case "form":
@@ -1405,6 +1367,7 @@ function ChatBody({
   // host. Once the card shows what the host holds, focus goes back to it
   // when the card is open, or on to the composer when it is answered.
   const pressedAnswer = useRef<Element | null>(null);
+  const answeredElsewhere = useRef<Problem | null>(null);
   const [settledCards, settleCard] = useState(0);
   const [confirming, setConfirming] = useState(false);
   // The token this window found replaced at its press.
@@ -1773,7 +1736,19 @@ function ChatBody({
     (block: Block, messageId: string) =>
     (reply: Pick<Reply, "kind"> & Record<string, unknown>) => {
       const pressed = deepActiveElement(document);
-      void answerCard(block, reply, messageId).then(() => {
+      void answerCard(block, reply, messageId).then((outcome) => {
+        const now = client.getSnapshot();
+        // Refused, and the read after it shows the card answered: it was
+        // answered elsewhere (another tab, an earlier page), which the
+        // problem then says instead of the generic refusal.
+        if (
+          outcome?.accepted === false &&
+          outcome.problem?.code === "refused" &&
+          now.conversation?.messages
+            .find((message) => message.id === messageId)
+            ?.blocks.find((shown) => shown.id === block.id)?.answered
+        )
+          answeredElsewhere.current = now.problem;
         pressedAnswer.current = pressed;
         settleCard((count) => count + 1);
       });
@@ -1791,8 +1766,10 @@ function ChatBody({
       });
   }, [settledCards]);
   const problem = state.problem
-    ? (provider.problemText?.(state.problem) ??
-      defaultProblemText(state.problem, t))
+    ? state.problem === answeredElsewhere.current
+      ? { text: t("chat.problem.answered") || t("chat.failure") }
+      : (provider.problemText?.(state.problem) ??
+        defaultProblemText(state.problem, t))
     : null;
   const plan = state.plan;
   const planView = recovery.view;
@@ -2130,6 +2107,9 @@ function ChatBody({
                                     }
                                     onReply={respond(block, message.id)}
                                   />
+                                  {block.answered ? (
+                                    <Answered block={block} />
+                                  ) : null}
                                 </div>
                               </Part>
                             ))}

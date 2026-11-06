@@ -26,7 +26,9 @@ export type BlockMessageKey =
   | "chat.block.favourite"
   | "chat.block.flowLoading"
   | "chat.block.flowsLoading"
-  | "chat.block.flowsEmpty";
+  | "chat.block.flowsEmpty"
+  | "chat.block.answered"
+  | "chat.block.answeredWith";
 export type BlockCatalogue = Readonly<Record<BlockMessageKey, string>>;
 export const blockEnglish: BlockCatalogue = {
   "chat.block.required": "{label} (required)",
@@ -56,6 +58,8 @@ export const blockEnglish: BlockCatalogue = {
   "chat.block.flowLoading": "Loading request…",
   "chat.block.flowsLoading": "Loading saved requests…",
   "chat.block.flowsEmpty": "No saved requests here yet.",
+  "chat.block.answered": "Answered",
+  "chat.block.answeredWith": "Answered: {answer}",
 };
 export const blockSimplifiedChinese: BlockCatalogue = {
   "chat.block.required": "{label}（必填）",
@@ -85,4 +89,6 @@ export const blockSimplifiedChinese: BlockCatalogue = {
   "chat.block.flowLoading": "正在加载请求……",
   "chat.block.flowsLoading": "正在加载已保存的请求……",
   "chat.block.flowsEmpty": "这里还没有已保存的请求。",
+  "chat.block.answered": "已回答",
+  "chat.block.answeredWith": "已回答：{answer}",
 };

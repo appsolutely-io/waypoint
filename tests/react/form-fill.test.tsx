@@ -170,7 +170,8 @@ it("renders a form.fill block with each validation result and nonblocking guidan
       />
     </WaypointProvider>,
   );
-  expect(screen.getByText("Complete text")).toBeDefined();
+  // The values render with the blocks chunk, once it has loaded.
+  expect(await screen.findByText("Complete text")).toBeDefined();
   expect(screen.getByText("Invalid field")).toBeDefined();
   expect(screen.getByText("Suggested length")).toBeDefined();
   c.dispose();

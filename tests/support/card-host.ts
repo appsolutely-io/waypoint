@@ -30,6 +30,10 @@ export interface CardHostOptions {
   refuse?: (send: number) => { error: unknown; answered?: boolean } | undefined;
   // Whether this read (1-based, across clients) never returns.
   hang?: (read: number) => boolean;
+  // Whether this read (1-based, across clients) fails as a dropped request.
+  fail?: (read: number) => boolean;
+  // Whether reads name the applied answer in the card's `answer`.
+  answer?: boolean;
 }
 export function createCardHost(options: CardHostOptions = {}) {
   const block: Block = { ...question };
@@ -56,6 +60,8 @@ export function createCardHost(options: CardHostOptions = {}) {
   let reads = 0;
   const read = () => {
     reads++;
+    if (options.fail?.(reads))
+      return Promise.reject(new TypeError("Failed to fetch"));
     return options.hang?.(reads)
       ? new Promise<Conversation>(() => {})
       : Promise.resolve(structuredClone(conversation));
@@ -84,6 +90,11 @@ export function createCardHost(options: CardHostOptions = {}) {
       throw refusal.error;
     }
     block.answered = true;
+    if (options.answer) {
+      const answer: Partial<Reply> = { ...reply };
+      delete answer.protocol;
+      block.answer = answer as Block["answer"];
+    }
     applied.push(action);
     const result = { id: `reply-${number}` };
     requests.set(reply.clientReplyId, {

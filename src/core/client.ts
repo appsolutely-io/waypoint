@@ -2981,7 +2981,10 @@ export function replyRow(input: {
   failed?: boolean;
   /** The stream that would carry the rest of the reply gave up. */
   streamLost?: boolean;
-  /** When the reply being written last showed it was. */
+  /**
+   * When the reply being written last made progress, on the caller's clock.
+   * Without it the stall is not measured: the reply stays `writing`.
+   */
   activityAt?: number;
 }): ReplyState {
   const last = input.messages.at(-1);
@@ -2995,7 +2998,8 @@ export function replyRow(input: {
   ) {
     if (input.unavailable || input.streamLost) return "unavailable";
     if (input.failed) return "failed";
-    return input.now >= (input.activityAt ?? last.createdAt) + REPLY_STALL_MS
+    return input.activityAt !== undefined &&
+      input.now >= input.activityAt + REPLY_STALL_MS
       ? "overdue"
       : "writing";
   }

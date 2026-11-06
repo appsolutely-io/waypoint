@@ -67,3 +67,10 @@ it("a known failure or a lost stream wins over a reply still marked writing", ()
     "unavailable",
   );
 });
+
+it("without activityAt the stall is not measured: a reply being written stays writing", () => {
+  // The message's createdAt is the host's clock, not the caller's.
+  expect(
+    replyRow({ messages: [user, streaming], pending: [], now: 17000 }),
+  ).toBe("writing");
+});

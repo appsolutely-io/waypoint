@@ -60,7 +60,8 @@
   color: var(--wp-warning);
 }
 .waypoint [data-reply-state="failed"],
-.waypoint [data-reply-state="unavailable"] {
+.waypoint [data-reply-state="unavailable"],
+.waypoint [data-reply-ended] {
   color: var(--wp-danger);
 }
 .waypoint [data-tone="success"] {

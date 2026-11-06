@@ -266,6 +266,32 @@ describe.each(skins)("announcements (%s)", (_, skin) => {
     );
   });
 
+  for (const status of ["failed", "unavailable"] as const)
+    it(`a reply the host ends as ${status} is said once, by the message region`, async () => {
+      const h = await chat([user("u1")], { skin });
+      await loaded(h);
+      const row = document.querySelector(
+        '[data-part="replyRow"] [role="status"]',
+      )!;
+      await waitFor(() =>
+        expect(row.textContent).toBe(english["reply.writing"]),
+      );
+      const said: string[] = [];
+      new MutationObserver(() => {
+        if (row.textContent) said.push(row.textContent);
+      }).observe(row, { childList: true, characterData: true, subtree: true });
+      await h.set("a", [user("u1"), reply("f1", "Partly written", status)]);
+      await waitFor(() =>
+        expect(h.emissions).toEqual([english["chat.arrivalFailed"]]),
+      );
+      await quiet();
+      expect(said).toEqual([]);
+      expect(row.textContent).toBe("");
+      // Still seen, in the reply it is about.
+      const article = document.querySelector('article[data-message-id="f1"]')!;
+      expect(article.textContent).toContain(english[`reply.${status}`]);
+    });
+
   it("CK-A6 one read adding 100 completed replies is one emission", async () => {
     const h = await chat([], { skin });
     await loaded(h);

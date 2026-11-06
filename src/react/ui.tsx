@@ -1756,6 +1756,12 @@ function ChatBody({
   const last = messages.at(-1);
   const writingId =
     row === "writing" && last?.status === "writing" ? last.id : undefined;
+  // The host ended the reply itself: the reply says so, and the message
+  // region announces it, so the row's live region stays quiet.
+  const endedInReply =
+    last?.role === "assistant" &&
+    (last.status === "failed" || last.status === "unavailable") &&
+    row === last.status;
   // Held while a modal drawer makes the row inert; said once it is live.
   const replyRow = useRef<HTMLDivElement>(null);
   const heldRow = useHeldWhileInert(row, replyRow);
@@ -2141,6 +2147,13 @@ function ChatBody({
                               </span>
                             ) : message.status === "stopped" ? (
                               <span data-stopped="">{t("reply.stopped")}</span>
+                            ) : message.status === "failed" ||
+                              message.status === "unavailable" ? (
+                              // Seen in the reply it is about; said once, by
+                              // the message region, not the reply row.
+                              <span data-reply-ended={message.status}>
+                                {t(`reply.${message.status}`)}
+                              </span>
                             ) : null}
                             {message.blocks.map((block) => (
                               <Part
@@ -2295,7 +2308,9 @@ function ChatBody({
             </Part>
             <Part name="replyRow" slots={slots}>
               <div ref={replyRow} role="status" data-reply-state={row}>
-                {heldRow === "none" ? null : <p>{t(`reply.${heldRow}`)}</p>}
+                {heldRow === "none" || endedInReply ? null : (
+                  <p>{t(`reply.${heldRow}`)}</p>
+                )}
               </div>
               {row !== "none" || state.toolSteps.length ? (
                 <ReplyControls client={client} row={row} />

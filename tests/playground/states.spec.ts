@@ -110,7 +110,11 @@ test("a reply the host ends with a failed message says it failed", async ({
 }) => {
   await page.goto("/?state=reply-ended-failed");
   await expect(replyRow(page)).toHaveAttribute("data-reply-state", "failed");
-  await expect(replyRow(page)).toHaveText("Reply failed");
+  // Said in the reply; the row's live region leaves it to the announcer.
+  await expect(reply(page).locator("[data-reply-ended]")).toHaveText(
+    "Reply failed",
+  );
+  await expect(replyRow(page)).toHaveText("");
   await expect(
     page.getByRole("button", { name: "Retry", exact: true }),
   ).toBeVisible();

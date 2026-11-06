@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// A reply the host ends as failed or unavailable says so in the reply row,
-// with Retry.
+// A reply the host ends as failed or unavailable says so in the reply, with
+// Retry in the reply row.
 import { it, expect, afterEach, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -66,7 +66,13 @@ for (const [status, text] of [
     await waitFor(() =>
       expect(row.getAttribute("data-reply-state")).toBe(status),
     );
-    expect(row.textContent).toBe(text);
+    // Shown in the reply itself; the message region announces it, so the
+    // row's live region stays empty.
+    expect(
+      document.querySelector('article[data-message-id="a"] [data-reply-ended]')
+        ?.textContent,
+    ).toBe(text);
+    expect(row.textContent).toBe("");
     client.dispose();
   });
 

@@ -546,9 +546,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   let formRetry:
     { key: string; request: ReturnType<FormSession["begin"]> } | undefined;
   let replyTimer: unknown;
-  // When each reply being written last showed it was: its start, its text,
-  // or the first time a read showed it being written.
-  const replyActivity = new Map<string, number>();
+  // When the reply being written last made progress, and the text it had
+  // then: progress is any change to its text, by a frame or by a read, so
+  // it is measured the same on every transport.
+  let replyProgress: { id: string; content: string; at: number } | undefined;
   // Scopes replace the ad-hoc tokens: the client scope is aborted on dispose,
   // and the conversation scope, its child, on every navigation. Effects check
   // the signal of the scope that produced them where they land.
@@ -624,9 +625,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const latest = state.conversation?.messages.at(-1);
     const streaming =
       latest?.role === "assistant" && latest.status === "writing";
-    if (!streaming) replyActivity.clear();
-    else if (!replyActivity.has(latest.id)) replyActivity.set(latest.id, now);
-    const activityAt = streaming ? replyActivity.get(latest.id) : undefined;
+    if (!streaming) replyProgress = undefined;
+    else if (
+      replyProgress?.id !== latest.id ||
+      replyProgress.content !== latest.content
+    )
+      replyProgress = { id: latest.id, content: latest.content, at: now };
+    const activityAt = streaming ? replyProgress?.at : undefined;
     state = {
       ...state,
       planReadOnly: readOnly(state.plan),
@@ -1300,11 +1305,6 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const shown =
       "messageId" in frame &&
       state.conversation?.messages.find((m) => m.id === frame.messageId);
-    if (
-      frame.type === "text.delta" ||
-      (frame.type === "message.start" && frame.role === "assistant")
-    )
-      replyActivity.set(frame.messageId, config.platform.clock.now());
     if (frame.type === "text.delta") {
       // A reply that went on after its mark was dropped is written again.
       const again = mark && mark.binding === stream && !mark.status;

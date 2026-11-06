@@ -97,7 +97,7 @@ Every client owns its state, listeners, streams and send failures. Providers cha
 | Skin wrapper           | `wrapper={MyThemeProvider}` receives the scheme and resolved tokens; the antd wrapper maps dark mode to its dark algorithm                                                                                                          |
 | Skin testing           | `renderWithWaypoint(element, { client, skin })`, `defineSkinContract`, `defineOverrideContract`, `defineAccessibilityContract` from `/testing`                                                                                      |
 
-A slot or replacement receives presentation props and callbacks. The client remains the behavior owner. Answering a card answers the whole card and disables it in place. Widget types unknown to the client show their fallback with update guidance and cannot submit a reply. Tokens are scoped to the instance root, never the document root.
+A slot or replacement receives presentation props and callbacks. The client remains the behavior owner. Answering a card answers the whole card and disables it in place. When the response to an answer is lost, the card takes no other answer and offers to send the same one again, since the host may already hold it under that reply id. Widget types unknown to the client show their fallback with update guidance and cannot submit a reply. Tokens are scoped to the instance root, never the document root.
 
 ### A UI of your own
 

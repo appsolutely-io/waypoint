@@ -2471,8 +2471,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       // A refused reply or confirmation is never resent automatically, and
       // a reply from a retired conversation cannot disturb the current one.
       const problem = asProblem(error, reply.clientReplyId);
+      // A failed reply may still have been applied: a read first shows
+      // what the host holds (a card it marks answered), then the problem.
+      const agreementRefused = isAgreementRefusal(error);
+      if (current() && !agreementRefused) await refresh(owner);
       if (current()) report(problem);
-      if (current() && isAgreementRefusal(error)) bindingRefused(bound);
+      if (current() && agreementRefused) bindingRefused(bound);
       return { accepted: false, problem };
     }
   };

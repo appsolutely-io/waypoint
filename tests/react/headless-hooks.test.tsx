@@ -7,7 +7,7 @@ import { usePlanView, useBlockReply, cardReplyId } from "../../src/hooks/index";
 import * as react from "../../src/react/index";
 import { createWaypointClient } from "../../src/core/client";
 import type { Block, PlanRecord } from "../../src/protocol/generated";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 afterEach(cleanup);
 
 const card: Block = {
@@ -234,6 +234,105 @@ describe("card reply ids and locks never collide", () => {
     );
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]!.length).toBeLessThanOrEqual(128);
+    client.dispose();
+  });
+});
+
+describe("an answer whose outcome is unknown stays the card's answer", () => {
+  // A host as the Idempotency-Key draft describes it: a resend with the same
+  // key and body is deduplicated, the same key with another body is refused.
+  const idempotentHost = (
+    read?: () => Promise<import("../../src/protocol/generated").Conversation>,
+  ) => {
+    const base = config();
+    const bodies = new Map<string, string>();
+    const applied: string[] = [];
+    const sent: string[] = [];
+    const client = createWaypointClient({
+      ...base,
+      transport: {
+        ...base.transport,
+        ...(read && { read }),
+        send: async (reply) => {
+          // The body without the protocol version the client adds.
+          const body = JSON.stringify(reply, (key, value) =>
+            key === "protocol" ? undefined : value,
+          );
+          const action = (reply as { actionId?: string }).actionId!;
+          sent.push(`${reply.clientReplyId}=${action}`);
+          const seen = bodies.get(reply.clientReplyId);
+          if (seen !== undefined && seen !== body)
+            throw { id: "p", code: "refused" };
+          if (seen === undefined) {
+            bodies.set(reply.clientReplyId, body);
+            applied.push(action);
+          }
+          // The first answer is applied, and its response is lost.
+          if (sent.length === 1) throw new TypeError("Failed to fetch");
+          return { id: reply.clientReplyId };
+        },
+      },
+    });
+    return { client, applied, sent };
+  };
+  const accept = { kind: "action" as const, actionId: "accept" };
+  const decline = { kind: "action" as const, actionId: "decline" };
+
+  it("a different answer after a drop sends the first one again, so the host applies one", async () => {
+    const { client, applied, sent } = idempotentHost();
+    await client.ready;
+    const { result } = renderHook(() => useBlockReply(client));
+    // Accept is applied and its response lost; the user then picks
+    // Decline, and presses Decline once more.
+    const bound: unknown[] = [];
+    for (const answer of [accept, decline, decline]) {
+      act(() => result.current.reply(card, answer));
+      await act(() => flush());
+      bound.push(result.current.unsettled?.(card));
+    }
+    expect(applied).toEqual(["accept"]);
+    expect(sent).toEqual([
+      "card:conversation-a::question-a=accept",
+      "card:conversation-a::question-a=accept",
+    ]);
+    expect(result.current.isAnswered(card)).toBe(true);
+    // Until the host settles it, the card offers the answer it sent.
+    expect(bound).toEqual([accept, undefined, undefined]);
+    client.dispose();
+  });
+
+  it("the conversation is read after a failure, so a card the host marks answered stays locked", async () => {
+    let reads = 0;
+    const { client, sent } = idempotentHost(async () => {
+      reads++;
+      return {
+        protocol: "1.0",
+        id: "conversation-a",
+        title: "Chat",
+        messages:
+          reads > 1
+            ? [
+                {
+                  id: "m",
+                  role: "assistant",
+                  status: "complete",
+                  content: "",
+                  createdAt: "2026-01-01T00:00:00Z",
+                  blocks: [{ ...card, answered: true }],
+                },
+              ]
+            : [],
+      } as unknown as import("../../src/protocol/generated").Conversation;
+    });
+    await client.ready;
+    const { result } = renderHook(() => useBlockReply(client));
+    act(() => result.current.reply(card, accept, "m"));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    await waitFor(() => expect(reads).toBeGreaterThan(1));
+    const shown = client
+      .getSnapshot()
+      .conversation?.messages.find((message) => message.id === "m");
+    expect(result.current.isAnswered(shown!.blocks[0]!, "m")).toBe(true);
     client.dispose();
   });
 });

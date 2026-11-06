@@ -1399,7 +1399,11 @@ function ChatBody({
     }),
     [renderRetry, failedBodies],
   );
-  const { isAnswered, reply: answerCard } = useBlockReply(client);
+  const {
+    isAnswered,
+    reply: answerCard,
+    unsettled: unsettledAnswer,
+  } = useBlockReply(client);
   const [confirming, setConfirming] = useState(false);
   // The token this window found replaced at its press.
   const [changed, setChanged] = useState<string>();
@@ -2084,32 +2088,47 @@ function ChatBody({
                                 {t("reply.writing")}
                               </span>
                             ) : null}
-                            {message.blocks.map((block) => (
-                              <Part
-                                key={block.id}
-                                name="widgetFrame"
-                                slots={slots}
-                                data={{ block: blockSummary(block) }}
-                              >
-                                <div
-                                  data-open-card={
-                                    block.type === "card" &&
-                                    !isAnswered(block, message.id)
-                                      ? "true"
-                                      : undefined
-                                  }
+                            {message.blocks.map((block) => {
+                              // An answer whose outcome is unknown: the card
+                              // takes no other until the host settles it.
+                              const resend = unsettledAnswer(block, message.id);
+                              return (
+                                <Part
+                                  key={block.id}
+                                  name="widgetFrame"
+                                  slots={slots}
+                                  data={{ block: blockSummary(block) }}
                                 >
-                                  <Widget
-                                    block={block}
-                                    disabled={
-                                      state.conversationUnavailable ||
-                                      isAnswered(block, message.id)
+                                  <div
+                                    data-open-card={
+                                      block.type === "card" &&
+                                      !isAnswered(block, message.id)
+                                        ? "true"
+                                        : undefined
                                     }
-                                    onReply={respond(block, message.id)}
-                                  />
-                                </div>
-                              </Part>
-                            ))}
+                                  >
+                                    <Widget
+                                      block={block}
+                                      disabled={
+                                        state.conversationUnavailable ||
+                                        !!resend ||
+                                        isAnswered(block, message.id)
+                                      }
+                                      onReply={respond(block, message.id)}
+                                    />
+                                    {resend && !block.answered ? (
+                                      <B
+                                        onPress={() =>
+                                          answerCard(block, resend, message.id)
+                                        }
+                                      >
+                                        {t("chat.cardResend")}
+                                      </B>
+                                    ) : null}
+                                  </div>
+                                </Part>
+                              );
+                            })}
                           </Part>
                           <Part
                             name="messageActions"

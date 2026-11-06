@@ -122,3 +122,66 @@ it("nested replies name the actual form block while one answer disables the whol
   ).toBe(true);
   client.dispose();
 });
+it("after a lost response the card offers only to send the same answer again", async () => {
+  const base = config();
+  const sent: string[] = [];
+  const client = createWaypointClient({
+    ...base,
+    transport: {
+      ...base.transport,
+      read: async () => ({
+        protocol: "1.0",
+        id: "conversation-a",
+        title: "Chat",
+        messages: [
+          {
+            id: "assistant-a",
+            role: "assistant",
+            content: "",
+            createdAt: 0,
+            blocks: [
+              {
+                type: "buttons",
+                id: "question-a",
+                fallback: "Answer",
+                body: {
+                  actions: [
+                    { id: "accept", label: "Accept" },
+                    { id: "decline", label: "Decline" },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      }),
+      send: async (reply) => {
+        sent.push(
+          `${reply.clientReplyId}=${(reply as { actionId: string }).actionId}`,
+        );
+        if (sent.length === 1) throw new TypeError("Failed to fetch");
+        return { id: reply.clientReplyId };
+      },
+    },
+  });
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+  const again = await screen.findByRole("button", {
+    name: "Send answer again",
+  });
+  // Another answer would reuse the reply id with a different body.
+  expect(
+    (screen.getByRole("button", { name: "Decline" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  fireEvent.click(again);
+  await waitFor(() => expect(sent).toHaveLength(2));
+  expect(sent[1]).toBe(sent[0]);
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Send answer again" }),
+    ).toBeNull(),
+  );
+  client.dispose();
+});

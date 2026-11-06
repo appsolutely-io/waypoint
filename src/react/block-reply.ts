@@ -1,5 +1,8 @@
 // One answer per card: a card answered here is locked until the client
-// refuses the answer, so a second press never sends a second reply. The
+// refuses the answer, so a second press never sends a second reply. An
+// answer whose outcome is unknown stays the card's answer: every later
+// press sends it again, with the same id and body, until the host settles
+// it, because the same reply id with another body is a conflict. The
 // locks belong to the client, by conversation, message and card, so a
 // screen that mounts again while an answer is in flight finds its card
 // still locked, and a card id a later message uses again is not.
@@ -12,7 +15,11 @@ import { clientOf, useWaypointSnapshot } from "./headless";
 export type BlockAnswer = Pick<Reply, "kind"> & Record<string, unknown>;
 
 export interface BlockReply {
-  /** Ids of this conversation's cards answered here and not refused. */
+  /**
+   * Ids of this conversation's cards with an answer in flight or accepted
+   * here, by card id alone; `isAnswered` with a message id tells cards of
+   * different messages apart.
+   */
   answered: ReadonlySet<string>;
   /**
    * Whether a card takes no answer: the host marks it answered, or one is
@@ -24,14 +31,25 @@ export interface BlockReply {
   ): boolean;
   /**
    * Sends one answer to the card of `messageId` (when given). A press on a
-   * card already answered here does nothing. The same answer keeps its
-   * reply id until the host refuses it; see `cardReplyId`.
+   * card already answered here does nothing. After a failure that leaves
+   * unknown whether the host applied it, a press sends the unsettled answer
+   * again, whatever `answer` it is given, so the host can deduplicate it;
+   * only after the host's definitive `refused` does a new answer get a new
+   * reply id (see `cardReplyId`).
    */
   reply(
     block: Pick<Block, "id">,
     answer: BlockAnswer,
     messageId?: string,
   ): void;
+  /**
+   * The answer sent to this card whose outcome is unknown, while it is not
+   * in flight: a UI offers to send it again instead of taking another.
+   */
+  unsettled(
+    block: Pick<Block, "id">,
+    messageId?: string,
+  ): BlockAnswer | undefined;
 }
 
 interface Card {
@@ -40,6 +58,8 @@ interface Card {
   locked: boolean;
   // The attempt the next send makes: a new one only after a refusal.
   attempt: number;
+  // The answer sent with no definitive outcome, sent again as it was.
+  unsettled?: { answer: BlockAnswer; reply: ReplyInput };
 }
 interface Locks {
   // By a tuple key, so no id's characters can make two cards one.
@@ -65,7 +85,8 @@ const changed = (locks: Locks) => {
   for (const listener of locks.listeners) listener();
 };
 
-// The protocol's limit on a reply id.
+// The longest reply id the hook builds before it uses a digest; the
+// schema's limit on a decline's `clientReplyId`.
 const MAX_REPLY_ID = 128;
 // FNV-1a, 32 bits, from a seed: two seeds give a 64-bit digest.
 const fnv = (text: string, seed: number) => {
@@ -85,11 +106,11 @@ const encodePart = (part: string) =>
     (unit) => `%${(unit.charCodeAt(0) + 0x10000).toString(16).slice(1)}`,
   );
 /**
- * A card answer's reply id: the same for the same answer to the same card,
- * so a host deduplicates a resend; `#2`, `#3` for an attempt after a
- * refusal. Its parts are escaped by code unit (`:` is `%003a`), so no id
- * can make two cards one, and one longer than 128 characters is a digest
- * of the parts.
+ * A card's reply id: the same for every send of one attempt at the same
+ * card, so a host deduplicates a resend (`useBlockReply` sends one answer
+ * per attempt); `#2`, `#3` for an attempt after a refusal. Its parts are
+ * escaped by code unit (`:` is `%003a`), so no id can make two cards one,
+ * and one longer than 128 characters is a digest of the parts.
  */
 export function cardReplyId(
   conversationId: string,
@@ -146,24 +167,35 @@ export function useBlockReply(client?: WaypointClient): BlockReply {
       if (card.locked) return;
       const attempt = card.attempt;
       // Built before the lock is taken, so nothing below it can throw.
-      const reply = {
-        ...answer,
-        blockId: typeof answer.blockId === "string" ? answer.blockId : block.id,
-        clientReplyId: cardReplyId(
-          conversationId,
-          messageId,
-          block.id,
-          attempt,
-        ),
-      } as ReplyInput;
+      const sending = card.unsettled ?? {
+        answer,
+        reply: {
+          ...answer,
+          blockId:
+            typeof answer.blockId === "string" ? answer.blockId : block.id,
+          clientReplyId: cardReplyId(
+            conversationId,
+            messageId,
+            block.id,
+            attempt,
+          ),
+        } as ReplyInput,
+      };
       card.locked = true;
       locks.cards.set(key, card);
       changed(locks);
-      void store.replyOutcome(reply).then((outcome) => {
-        if (outcome.accepted) return;
-        // Only a definitive refusal (nothing applied) starts a new
-        // attempt; any other failure leaves the same answer's id.
-        if (outcome.problem?.code === "refused") card.attempt = attempt + 1;
+      void store.replyOutcome(sending.reply).then((outcome) => {
+        if (outcome.accepted) {
+          card.unsettled = undefined;
+          return;
+        }
+        // Only a definitive refusal (nothing applied) frees the card for a
+        // new attempt with its own id; after any other failure the answer
+        // sent stays the card's answer, and nothing sent changes nothing.
+        if (outcome.problem?.code === "refused") {
+          card.attempt = attempt + 1;
+          card.unsettled = undefined;
+        } else if (outcome.problem) card.unsettled = sending;
         card.locked = false;
         changed(locks);
       });
@@ -178,5 +210,14 @@ export function useBlockReply(client?: WaypointClient): BlockReply {
     // A new `answered` set marks a lock change, so this changes with it.
     [locks, conversationId, answered],
   );
-  return { answered, isAnswered, reply };
+  const unsettled = useCallback(
+    (block: Pick<Block, "id">, messageId = "") => {
+      const card = locks.cards.get(
+        cardKey(conversationId, messageId, block.id),
+      );
+      return card?.locked ? undefined : card?.unsettled?.answer;
+    },
+    [locks, conversationId, answered],
+  );
+  return { answered, isAnswered, reply, unsettled };
 }

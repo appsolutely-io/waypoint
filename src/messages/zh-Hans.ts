@@ -60,6 +60,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
     "此对话暂时无法使用。请重新加载后继续；重新加载不会停止服务器正在处理的回复。",
   "chat.reload": "重新加载对话",
   "chat.retry": "重试",
+  "chat.cardResend": "重新发送回答",
   "chat.withdraw": "撤回",
   "chat.restored": "已撤回的消息",
   "chat.restoredEdit": "编辑",

@@ -93,13 +93,14 @@ const toggle = () =>
 const outlineText = () =>
   document.getElementById(toggle().getAttribute("aria-controls")!)
     ?.textContent ?? "";
-// What the messages' bodies show, without the sender each bubble names.
+// What the messages' bodies show, without the sender each bubble names
+// and the actions under it.
 const bodies = () =>
   [...document.querySelectorAll("article")]
     .map((article) => {
       const body = article.cloneNode(true) as HTMLElement;
       body
-        .querySelectorAll("[data-sender]")
+        .querySelectorAll('[data-sender], [data-part="messageActions"]')
         .forEach((sender) => sender.remove());
       return body.textContent;
     })

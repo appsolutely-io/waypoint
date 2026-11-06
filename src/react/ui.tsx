@@ -134,6 +134,15 @@ function ReplyControls(props: { client: WaypointClient; row: ReplyState }) {
     <load.module.ReplyControls {...props} />
   ) : null;
 }
+// The default actions under each message, loaded with the first one.
+const messageActionsChunk = lazyChunk(() => import("./message-actions"));
+function MessageActions(props: { client: WaypointClient; message: Message }) {
+  const load = useChunk(messageActionsChunk);
+  useEffect(() => messageActionsChunk.request(), []);
+  return load.status === "ready" ? (
+    <load.module.MessageActions {...props} />
+  ) : null;
+}
 // The saved requests' panel and parameter drawer, loaded with the tabs.
 const flowsChunk = lazyChunk(() => import("./flows-panel"));
 function useBlocks() {
@@ -2151,7 +2160,9 @@ function ChatBody({
                                 versionCount: message.versionCount,
                               },
                             }}
-                          />
+                          >
+                            <MessageActions client={client} message={message} />
+                          </Part>
                         </article>
                       ))}
                       {state.pending.map((pending) => (

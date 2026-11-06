@@ -8,8 +8,9 @@ const budgets = [
     path: "dist/index.js",
     // One esbuild bundle deduplicates reachable static/dynamic dependencies.
     // gzip level 9 minus size-limit's 32-byte empty-project deduction:
-    // 3% above the measured size, rounded down.
-    limit: "20.603 kB",
+    // 3% above the measured size, rounded down. Measured at 20,767 B with
+    // the reply stop, the wait for an overdue reply and the feedback port.
+    limit: "21.390 kB",
     gzip: true,
     brotli: false,
     ignore: [
@@ -148,6 +149,8 @@ const budgets = [
       "./flows-panel-*",
       "../reply-controls-*",
       "./reply-controls-*",
+      "../message-actions-*",
+      "./message-actions-*",
     ],
   },
   {
@@ -234,7 +237,18 @@ const budgets = [
   {
     name: "lazy reply controls",
     path: "dist/reply-controls-*.js",
-    limit: "1 KB",
+    // Stop, Keep waiting and Retry: 631 B measured, plus 3%, rounded down.
+    limit: "649 B",
+    gzip: true,
+    brotli: false,
+    ignore: ["react", "react-dom", "./chunk-*"],
+  },
+  {
+    name: "lazy message actions",
+    path: "dist/message-actions-*.js",
+    // Copy, Regenerate, Edit and feedback: 1,211 B measured, plus 3%,
+    // rounded down.
+    limit: "1.247 KB",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],
@@ -326,6 +340,10 @@ const budgets = [
       "./form-extras-*",
       "../flows-panel-*",
       "./flows-panel-*",
+      "../reply-controls-*",
+      "./reply-controls-*",
+      "../message-actions-*",
+      "./message-actions-*",
     ],
   },
   {
@@ -343,6 +361,15 @@ module.exports = withSharedChunks(budgets, {
   // leave them out ("./chunk-*"). Each measured with Node 22's zlib, plus
   // 3%, rounded down.
   shared: [
+    {
+      name: "lazy reply messages",
+      source: "src/react/reply-messages.ts",
+      // 336 B measured.
+      limit: "346 B",
+      gzip: true,
+      brotli: false,
+      ignore: ["react", "react-dom", "./chunk-*"],
+    },
     {
       name: "lazy block messages",
       source: "src/react/block-messages.ts",

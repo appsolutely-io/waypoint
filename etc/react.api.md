@@ -410,6 +410,8 @@ export interface ClientConfig {
     // (undocumented)
     conversationId: string;
     // (undocumented)
+    feedback?: FeedbackPort;
+    // (undocumented)
     flowOperations?: readonly string[];
     // (undocumented)
     flowSource?: FlowSource;
@@ -838,6 +840,18 @@ export interface ExtensionBlock {
     id: string;
     // (undocumented)
     type: string;
+}
+
+// @public (undocumented)
+export interface FeedbackInput extends MessageVersionInput {
+    // (undocumented)
+    rating: "positive" | "negative";
+}
+
+// @public
+export interface FeedbackPort {
+    // (undocumented)
+    send(input: FeedbackInput): MaybePromise<void>;
 }
 
 // @public (undocumented)
@@ -2314,7 +2328,7 @@ export interface ReplyMessage {
 }
 
 // @public (undocumented)
-export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting";
+export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting" | "chat.message.actions" | "chat.message.copy" | "chat.message.copied" | "chat.message.regenerate" | "chat.message.edit" | "chat.message.editLabel" | "chat.message.resend" | "chat.message.good" | "chat.message.bad";
 
 // @public
 export type ReplyOutcome = {
@@ -2730,9 +2744,11 @@ export interface WaypointChatProps extends Partial<Omit<WaypointProviderProps, "
 
 // @public (undocumented)
 export interface WaypointClient {
+    canChangeVersions(): boolean;
     // (undocumented)
     canKeepChanges(id?: string): boolean;
     canPrepareFlow(): boolean;
+    canSendFeedback(): boolean;
     canStopReply(): boolean;
     checkIntentStatus(id?: string): Promise<void>;
     checkKeepStatus(id?: string): Promise<void>;
@@ -2789,6 +2805,7 @@ export interface WaypointClient {
     selectVersion(messageId: string, index: number): Promise<void>;
     // (undocumented)
     send(): Promise<void>;
+    sendFeedback(messageId: string, rating: FeedbackInput["rating"]): Promise<boolean>;
     // (undocumented)
     setDraft(value: string): Promise<void>;
     // (undocumented)

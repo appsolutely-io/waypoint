@@ -1,6 +1,7 @@
 // The controls of the reply being written: a lazy chunk, loaded when a
 // reply is first written or overdue.
-import { useRef } from "react";
+import { useContext } from "react";
+import { ChatFocusContext, focusFor } from "./chat-focus";
 import type { ReplyState, WaypointClient } from "../core/client";
 import { addMessages } from "./i18n";
 import { replyEnglish, replySimplifiedChinese } from "./reply-messages";
@@ -16,18 +17,16 @@ export function ReplyControls({
 }) {
   const { format: t, primitives } = context();
   const B = primitives.button;
-  const own = useRef<HTMLDivElement>(null);
+  const focus = useContext(ChatFocusContext);
   // The pressed button goes away: focus moves on to the composer.
   const then = (action: () => unknown) => () => {
-    const composer = own.current
-      ?.closest(".waypoint")
-      ?.querySelector<HTMLElement>('[data-part="composer"] textarea');
+    const origin = focus?.originFor("reply-wait");
     void action();
-    composer?.focus();
+    focusFor(focus, focus?.composer(), { origin, owner: focus?.owner() ?? "" });
   };
   if (row === "overdue")
     return (
-      <div ref={own} data-reply-controls="">
+      <div data-reply-controls="">
         <B onPress={then(() => client.keepWaiting())}>
           {t("chat.reply.keepWaiting")}
         </B>
@@ -35,7 +34,7 @@ export function ReplyControls({
       </div>
     );
   return row === "writing" && client.canStopReply() ? (
-    <div ref={own} data-reply-controls="">
+    <div data-reply-controls="">
       <B onPress={() => void client.stopReply()}>{t("chat.reply.stop")}</B>
     </div>
   ) : null;

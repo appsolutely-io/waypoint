@@ -172,6 +172,13 @@ export interface MessageVersionPort {
   regenerate(input: MessageVersionInput): MaybePromise<void>;
   select(input: MessageVersionInput & { index: number }): MaybePromise<void>;
 }
+export interface FeedbackInput extends MessageVersionInput {
+  rating: "positive" | "negative";
+}
+/** Where a host takes the user's rating of a reply. */
+export interface FeedbackPort {
+  send(input: FeedbackInput): MaybePromise<void>;
+}
 export interface FlowSource {
   load?(id: string): MaybePromise<Flow>;
   list(tab: FlowTab): MaybePromise<FlowSummary[]>;
@@ -270,6 +277,7 @@ export interface ClientConfig {
   formSession?: FormSession;
   reads?: ReadPorts;
   versions?: MessageVersionPort;
+  feedback?: FeedbackPort;
   plans?: RunnerPorts & {
     resume?(id: string): Promise<PlanRecord>;
     retryUndo?(id: string): Promise<PlanRecord>;
@@ -326,6 +334,18 @@ export interface WaypointClient {
   editMessage(messageId: string, content: string): Promise<void>;
   regenerate(messageId: string): Promise<void>;
   selectVersion(messageId: string, index: number): Promise<void>;
+  /** Whether a `versions` port can edit, regenerate and select versions. */
+  canChangeVersions(): boolean;
+  /** Whether a `feedback` port takes ratings of replies. */
+  canSendFeedback(): boolean;
+  /**
+   * Rates a finished reply through the `feedback` port, once per rating
+   * while it is in flight, and resolves with whether the port took it.
+   */
+  sendFeedback(
+    messageId: string,
+    rating: FeedbackInput["rating"],
+  ): Promise<boolean>;
   send(): Promise<void>;
   retry(id: string): Promise<void>;
   withdraw(id: string): Promise<void>;
@@ -2038,6 +2058,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       const scope = conversationScope.signal;
       return later((actions) =>
         actions.version(scope, "select", id, undefined, index),
+      );
+    },
+    canChangeVersions: () => !!config.versions,
+    canSendFeedback: () => !!config.feedback,
+    sendFeedback: (id, rating) => {
+      const scope = conversationScope.signal;
+      return later((actions) => actions.feedback(scope, id, rating)).then(
+        (sent) => sent === true,
       );
     },
     async setDraft(draft) {

@@ -74,7 +74,47 @@ export function createOnDemand(context: OnDemandContext) {
   // each preparation supersedes the ones still loading.
   let prepared: { id: string; document: Flow; scope: ScopeSignal } | undefined;
   let preparation = 0;
+  const feedbackAttempts = new Map<string, Promise<boolean>>();
   return {
+    // Rates a finished reply, once per identical rating in flight.
+    async feedback(
+      scope: ScopeSignal,
+      messageId: string,
+      rating: "positive" | "negative",
+    ): Promise<boolean> {
+      await context.ready;
+      if (!context.live() || scope.aborted || !config.feedback) return false;
+      const state = context.state();
+      const message = state.conversation?.messages.find(
+        (message) => message.id === messageId,
+      );
+      if (message?.role !== "assistant" || message.status === "writing") {
+        report({ code: "refused", id: "message-feedback" });
+        return false;
+      }
+      const key = JSON.stringify([state.conversationId, messageId, rating]);
+      const active = feedbackAttempts.get(key);
+      if (active) return active;
+      const input = {
+        conversationId: state.conversationId,
+        messageId,
+        clientReplyId: config.platform.ids(),
+        rating,
+      };
+      const attempt = (async () => {
+        try {
+          await config.feedback!.send(input);
+          return true;
+        } catch (error) {
+          if (!scope.aborted) report(asProblem(error, input.clientReplyId));
+          return false;
+        } finally {
+          feedbackAttempts.delete(key);
+        }
+      })();
+      feedbackAttempts.set(key, attempt);
+      return attempt;
+    },
     // Asks the host to stop writing a reply the client already shows
     // stopped; the reply id is the message's, so a repeat is a replay.
     async stopReply(messageId: string) {

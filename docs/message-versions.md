@@ -1,6 +1,6 @@
 # Message versions
 
-The chat ships no built-in edit, regenerate or version controls: the host decides which of them a product offers and how they look. The library supplies the pieces they need and keeps them safe to call.
+The chat's default `messageActions` part offers Copy, and Regenerate and Edit when the client has a `versions` port. A host that wants other controls, or another look, passes its own part, which replaces the defaults. The library supplies the pieces they need and keeps them safe to call.
 
 ## The port
 
@@ -25,7 +25,23 @@ const client = createWaypointClient({ ...config, versions });
 
 The client calls it through `client.editMessage(id, content)`, `client.regenerate(id)` and `client.selectVersion(id, index)`. Each refuses what does not fit (edit on a user message only, regenerate on an assistant message only, an index within `versionCount`) with the `refused` / `message-version` problem, sends one request with one stable `clientReplyId` for identical calls while one is in flight (the host deduplicates retries by that id), and reads the conversation again after the host answered, so the transcript always shows the host's versions.
 
-## The controls
+## Feedback
+
+A host that takes ratings of replies passes a `FeedbackPort` as `feedback`. The default actions then show Good response and Bad response on each finished reply, and the pressed one stays marked:
+
+```ts
+const client = createWaypointClient({
+  ...config,
+  feedback: {
+    send: ({ conversationId, messageId, clientReplyId, rating }) =>
+      api.rateReply(conversationId, messageId, rating, clientReplyId),
+  },
+});
+```
+
+`client.sendFeedback(id, rating)` refuses a user message or a reply still being written (`refused` / `message-feedback`), sends one request with one `clientReplyId` for identical ratings in flight, reports a failure, and resolves with whether the port took it.
+
+## Your own controls
 
 The `messageActions` part is rendered for every message with its data, `{ message: { id, role, status, versionIndex, versionCount } }`, so a host part knows which message it is on. `versionWalk(message)` gives the index, the count and the previous and next index, or `null` when there is only one version.
 

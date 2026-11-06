@@ -168,7 +168,7 @@ export type RecoveryMessageKey = "chat.recovery.heading" | "chat.recovery.update
 export type ReplyCatalogue = Readonly<Record<ReplyMessageKey, string>>;
 
 // @public (undocumented)
-export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting";
+export type ReplyMessageKey = "chat.reply.stop" | "chat.reply.keepWaiting" | "chat.message.actions" | "chat.message.copy" | "chat.message.copied" | "chat.message.regenerate" | "chat.message.edit" | "chat.message.editLabel" | "chat.message.resend" | "chat.message.good" | "chat.message.bad";
 
 // @public
 export function stepName(t: FormatMessage, labels: PlanLabels | undefined, step: {

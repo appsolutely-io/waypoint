@@ -3,7 +3,7 @@
 // conversation is searched: its filter matches the whole visible text of
 // each message, not only the excerpt the outline shows, and keeps each
 // message's own position in its label.
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   act,
   cleanup,
@@ -19,24 +19,49 @@ import { WINDOW_FROM } from "../../src/react/windowing";
 import { createWaypointClient } from "../../src/core/client";
 import type { Conversation, Message } from "../../src/protocol/generated";
 import { config } from "../support/client";
+import { foldForSearch } from "../../src/react/outline-search";
 
-afterEach(cleanup);
+// Counts how often a message's visible text is projected.
+const projected = vi.hoisted(() => ({ count: 0 }));
+vi.mock("../../src/react/markdown", async (original) => {
+  const actual = await original<typeof import("../../src/react/markdown")>();
+  return {
+    ...actual,
+    visibleText: (...args: Parameters<typeof actual.visibleText>) => {
+      projected.count++;
+      return actual.visibleText(...args);
+    },
+  };
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 const long = `${"word ".repeat(EXCERPT_GRAPHEMES)}needle at the end`;
-const messages = Array.from(
-  { length: 12 },
-  (_, index) =>
-    ({
-      id: `m${index + 1}`,
-      role: index % 2 ? "assistant" : "user",
-      content: index === 4 ? long : `Message about **apples** ${index + 1}`,
-      blocks: [],
-      createdAt: index,
-      status: "completed",
-    }) as Message,
+const twelve = Array.from({ length: 12 }, (_, index) =>
+  index === 4 ? long : `Message about **apples** ${index + 1}`,
 );
+const conversation = (contents: readonly string[]) =>
+  contents.map(
+    (content, index) =>
+      ({
+        id: `m${index + 1}`,
+        role: index % 2 ? "assistant" : "user",
+        content,
+        blocks: [],
+        createdAt: index,
+        status: "completed",
+      }) as Message,
+  );
 
-async function chat() {
+async function chat(
+  contents: readonly string[] = twelve,
+  beforeOpen?: () => void,
+) {
+  const messages = conversation(contents);
   const base = config();
   const client = createWaypointClient({
     ...base,
@@ -49,14 +74,25 @@ async function chat() {
   });
   await client.ready;
   render(<WaypointChat client={client} />);
-  await waitFor(() =>
-    expect(document.querySelectorAll(".wp-markdown")).toHaveLength(12),
+  // A long conversation mounts only a window of its messages.
+  const mounted = contents.length > 12 ? 1 : contents.length;
+  await waitFor(
+    () =>
+      expect(
+        document.querySelectorAll(".wp-markdown").length,
+      ).toBeGreaterThanOrEqual(mounted),
+    { timeout: 30_000 },
   );
+  beforeOpen?.();
   await act(async () => {
     screen.getByRole("button", { name: english["chat.outline"] }).click();
   });
-  await waitFor(() =>
-    expect(document.querySelectorAll("[data-outline-link]")).toHaveLength(12),
+  await waitFor(
+    () =>
+      expect(document.querySelectorAll("[data-outline-link]")).toHaveLength(
+        contents.length,
+      ),
+    { timeout: 30_000 },
   );
   return client;
 }
@@ -73,23 +109,33 @@ it("the transcript windows only from about 500 messages", () => {
   expect(WINDOW_FROM).toBe(500);
 });
 
+// The filter applies once typing pauses, and says what matched once every
+// text is made.
+const type = async (value: string) => {
+  fireEvent.change(filter(), { target: { value } });
+  await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+  await waitFor(() =>
+    expect(status()).not.toBe(english["chat.outlineSearching"]),
+  );
+};
+
 it("filters the outline by each message's whole visible text", async () => {
   const client = await chat();
-  fireEvent.change(filter(), { target: { value: "NEEDLE" } });
+  await type("NEEDLE");
   expect(links()).toEqual(["m5"]);
   // The label keeps the message's place among all of them.
   expect(
     document.querySelector('[data-outline-link="m5"]')!.textContent,
   ).toContain("message 5");
   expect(status()).toBe("1 message matches");
-  fireEvent.change(filter(), { target: { value: "apples 1" } });
+  await type("apples 1");
   expect(links()).toEqual(["m1", "m10", "m11", "m12"]);
   expect(status()).toBe("4 messages match");
   // Markup is not text: the asterisks around "apples" are not shown.
-  fireEvent.change(filter(), { target: { value: "**" } });
+  await type("**");
   expect(links()).toEqual([]);
   expect(status()).toBe("No messages match");
-  fireEvent.change(filter(), { target: { value: "" } });
+  await type("");
   expect(links()).toHaveLength(12);
   expect(status()).toBe("");
   client.dispose();
@@ -97,7 +143,7 @@ it("filters the outline by each message's whole visible text", async () => {
 
 it("a filtered result still reaches its message", async () => {
   const client = await chat();
-  fireEvent.change(filter(), { target: { value: "needle" } });
+  await type("needle");
   const link = document.querySelector<HTMLElement>('[data-outline-link="m5"]')!;
   link.focus();
   await act(async () => {
@@ -105,4 +151,86 @@ it("a filtered result still reaches its message", async () => {
   });
   expect(document.activeElement?.getAttribute("data-message-id")).toBe("m5");
   client.dispose();
+});
+
+it("the first keystroke at 5,000 messages does a bounded amount of work", async () => {
+  const contents = Array.from(
+    { length: 5000 },
+    (_, index) =>
+      `## Message ${index}\n\nSome **markdown** about item ${index}, with [a link](https://example.com/${index}).`,
+  );
+  const client = await chat(contents);
+  projected.count = 0;
+  const folds = vi.spyOn(String.prototype, "toLocaleLowerCase");
+  fireEvent.change(filter(), { target: { value: "item 4242" } });
+  // The keystroke itself projects and folds a bounded number of texts.
+  expect(projected.count).toBeLessThanOrEqual(64);
+  expect(folds.mock.calls.length).toBeLessThanOrEqual(64);
+  folds.mockRestore();
+  await waitFor(() => expect(status()).toBe("1 message matches"), {
+    timeout: 30_000,
+  });
+  expect(links()).toEqual(["m4243"]);
+  client.dispose();
+}, 120_000);
+
+it("says it is searching while the texts are made, with the matches so far", async () => {
+  // Idle work runs only when the test lets it.
+  const idle: ((deadline: IdleDeadline) => void)[] = [];
+  const client = await chat(twelve, () => {
+    vi.stubGlobal("requestIdleCallback", (run: (d: IdleDeadline) => void) => {
+      idle.push(run);
+      return idle.length;
+    });
+    vi.stubGlobal("cancelIdleCallback", () => {});
+  });
+  fireEvent.change(filter(), { target: { value: "apples" } });
+  await waitFor(() => expect(status()).toBe(english["chat.outlineSearching"]));
+  expect(links()).toEqual([]);
+  // One idle slice with room for a few texts.
+  let budget = 3;
+  idle.shift()!({
+    didTimeout: false,
+    timeRemaining: () => (budget-- > 0 ? 10 : 0),
+  });
+  await waitFor(() => expect(links().length).toBeGreaterThan(0));
+  expect(status()).toBe(english["chat.outlineSearching"]);
+  while (idle.length)
+    await act(async () => {
+      idle.shift()!({ didTimeout: false, timeRemaining: () => 10 });
+    });
+  await waitFor(() => expect(status()).toBe("11 messages match"));
+  client.dispose();
+});
+
+it("matches text whatever its normal form, accents and case", async () => {
+  const client = await chat([
+    "Caf\u0065\u0301 cr\u00e8me",
+    "Die Stra\u00dfe",
+    "Plain words",
+  ]);
+  await type("cafe");
+  expect(links()).toEqual(["m1"]);
+  await type("CAF\u00c9 CREME");
+  expect(links()).toEqual(["m1"]);
+  await type("STRASSE");
+  expect(links()).toEqual(["m2"]);
+  client.dispose();
+});
+
+it("folds case in the chat's language", () => {
+  expect(foldForSearch("\u0130stanbul", "tr")).toBe(
+    foldForSearch("istanbul", "tr"),
+  );
+  expect(foldForSearch("Stra\u00dfe", "de")).toBe(
+    foldForSearch("STRASSE", "de"),
+  );
+  expect(foldForSearch("Cafe\u0301", "fr")).toBe(
+    foldForSearch("caf\u00e9", "fr"),
+  );
+  // Marks a script needs are kept: a virama is not an accent.
+  expect(foldForSearch("\u0915\u094d\u0937", "hi")).not.toBe(
+    foldForSearch("\u0915\u0937", "hi"),
+  );
+  expect(foldForSearch("  a\n\tb  ")).toBe("a b");
 });

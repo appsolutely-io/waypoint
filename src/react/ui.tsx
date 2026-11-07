@@ -34,6 +34,7 @@ import type {
 } from "../protocol/generated";
 import { excerpt } from "./excerpt";
 import { ExcerptCache, ShownCache } from "./excerpt-cache";
+import { foldForSearch, SearchIndex } from "./outline-search";
 import { useTranscriptPosition } from "./transcript";
 import { useTranscriptWindow } from "./windowing";
 import { useAnnouncements, useHeldWhileInert } from "./announcements";
@@ -1316,6 +1317,10 @@ const OWN_KEYS =
   'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="listbox"], [role="grid"], [role="slider"], [role="spinbutton"]';
 // Shown in the place of the excerpt while formatting, then split around.
 const EXCERPT_SLOT = "\u{E000}";
+// How long the outline's filter waits for typing to pause.
+const FILTER_DELAY_MS = 150;
+const noSubscription = () => () => {};
+const noVersion = () => 0;
 function TranscriptOutline({
   messages,
   excerpts,
@@ -1325,7 +1330,9 @@ function TranscriptOutline({
   onNavigate,
   query,
   onQuery,
-  matches,
+  search,
+  sourceOf,
+  lang,
 }: {
   messages: readonly Message[];
   excerpts: readonly (string | undefined)[];
@@ -1333,21 +1340,41 @@ function TranscriptOutline({
   open: boolean;
   onToggle: () => void;
   onNavigate: (messageId: string) => void;
-  // What the filter holds, and the messages it matches (all without one).
+  // What the filter holds, and each message's folded text to match it in.
   query: string;
   onQuery: (query: string) => void;
-  matches: (index: number) => boolean;
+  search: SearchIndex<Message>;
+  sourceOf: (message: Message) => unknown;
+  lang?: string;
 }) {
   const { format: t, primitives } = context();
   const B = primitives.button;
   const Field = primitives.input;
   const listId = useDomId("outline");
   const statusId = useDomId("outline-status");
+  // The filter applies once typing pauses; clearing it applies at once.
+  const [applied, apply] = useState(query);
+  useEffect(() => {
+    const timer = setTimeout(() => apply(query), FILTER_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const folded =
+    open && query.trim() && applied.trim() ? foldForSearch(applied, lang) : "";
+  // While filtering, each slice of texts made shows the matches it adds.
+  useSyncExternalStore(
+    folded ? search.subscribe : noSubscription,
+    folded ? search.snapshot : noVersion,
+    noVersion,
+  );
   const shown = open
     ? messages.flatMap((message, index) =>
-        matches(index) ? [{ message, index }] : [],
+        !folded ||
+        search.textOf(message.id, sourceOf(message))?.includes(folded)
+          ? [{ message, index }]
+          : [],
       )
     : [];
+  const searching = Boolean(folded) && !search.complete();
   return (
     <nav aria-label={t("chat.outline")} data-outline="" className="wp-outline">
       <B aria-expanded={open} aria-controls={listId} onPress={onToggle}>
@@ -1364,9 +1391,11 @@ function TranscriptOutline({
           />
           {/* How many match, said as the filter changes. */}
           <p id={statusId} role="status">
-            {query.trim()
-              ? t("chat.outlineMatches", { count: shown.length })
-              : null}
+            {!folded
+              ? null
+              : searching
+                ? t("chat.outlineSearching")
+                : t("chat.outlineMatches", { count: shown.length })}
           </p>
         </div>
       ) : null}
@@ -2054,6 +2083,26 @@ function ChatBody({
       source: visibilityUnknown ? message : message.content,
     })),
   );
+  // What a message visibly shows, projected once per source and policy:
+  // its excerpt and the outline's search are both made from it.
+  const visibleTexts = useRef(new ShownCache<string>()).current;
+  visibleTexts.begin(
+    ownerKey(client, shownId ?? ""),
+    [
+      markdownModule,
+      provider.markdownImages?.origin,
+      provider.markdownImages?.allow,
+      provider.extraUrlSchemes?.join(" "),
+    ],
+    messages.map((message) => ({ id: message.id, source: message.content })),
+  );
+  const visibleOf = (message: Message, markdown: MarkdownModule) =>
+    visibleTexts.get(message.id, message.content, (content) =>
+      markdown.visibleText(content, {
+        images: provider.markdownImages,
+        extraSchemes: provider.extraUrlSchemes,
+      }),
+    );
   const excerptOf = (message: Message) => {
     if (visibilityUnknown)
       return projections.get(message.id, message, (shown) => {
@@ -2061,13 +2110,8 @@ function ChatBody({
         return host === undefined ? undefined : excerpt(host);
       });
     if (!markdownModule) return undefined;
-    return projections.get(message.id, message.content, (content) =>
-      excerpt(
-        markdownModule.visibleText(content, {
-          images: provider.markdownImages,
-          extraSchemes: provider.extraUrlSchemes,
-        }),
-      ),
+    return projections.get(message.id, message.content, () =>
+      excerpt(visibleOf(message, markdownModule)),
     );
   };
   // Each shown message's body is parsed once per version of what it says
@@ -2089,10 +2133,21 @@ function ChatBody({
   );
   // Labels are made only while the outline shows them.
   const excerpts = outlineOpen ? messages.map(excerptOf) : [];
-  // The filter reads each message's whole visible text, made once per
-  // source while there is something to filter by.
-  const searchTexts = useRef(new ShownCache<string>()).current;
-  searchTexts.begin(
+  // The filter reads each message's whole visible text, folded once per
+  // source in idle slices while the outline is open.
+  const search = useRef(new SearchIndex<Message>()).current;
+  const searchSourceOf = (message: Message): unknown =>
+    visibilityUnknown ? message : message.content;
+  const searched = useMemo(
+    () =>
+      messages.map((message) => ({
+        id: message.id,
+        source: visibilityUnknown ? message : message.content,
+        message,
+      })),
+    [messages, visibilityUnknown],
+  );
+  search.sync(
     ownerKey(client, shownId ?? ""),
     [
       visibilityUnknown,
@@ -2103,31 +2158,24 @@ function ChatBody({
       provider.extraUrlSchemes?.join(" "),
       provider.lang,
     ],
-    messages.map((message) => ({
-      id: message.id,
-      source: visibilityUnknown ? message : message.content,
-    })),
+    searched,
+    (message) =>
+      foldForSearch(
+        visibilityUnknown
+          ? (provider.messageExcerpt?.(message) ?? "")
+          : markdownModule
+            ? visibleOf(message, markdownModule)
+            : message.content,
+        provider.lang,
+      ),
   );
-  const folded = (text: string) =>
-    text.replace(/\s+/g, " ").trim().toLocaleLowerCase(provider.lang);
-  const query = outlineOpen ? folded(outline.query) : "";
-  const searchTextOf = (message: Message) =>
-    visibilityUnknown
-      ? searchTexts.get(message.id, message, (shown) =>
-          folded(provider.messageExcerpt?.(shown) ?? ""),
-        )
-      : searchTexts.get(message.id, message.content, (content) =>
-          folded(
-            markdownModule
-              ? markdownModule.visibleText(content, {
-                  images: provider.markdownImages,
-                  extraSchemes: provider.extraUrlSchemes,
-                })
-              : content,
-          ),
-        );
-  const matchesFilter = (index: number) =>
-    !query || searchTextOf(messages[index]!).includes(query);
+  useEffect(() => {
+    if (outlineOpen) search.start();
+  });
+  useEffect(
+    () => (outlineOpen ? () => search.stop() : undefined),
+    [outlineOpen, search],
+  );
   const liveRegion = useRef<HTMLDivElement>(null);
   const announcement = useAnnouncements(
     client,
@@ -2538,7 +2586,9 @@ function ChatBody({
                     onQuery={(query) =>
                       setOutline({ conversationId: shownId, open: true, query })
                     }
-                    matches={matchesFilter}
+                    search={search}
+                    sourceOf={searchSourceOf}
+                    lang={provider.lang}
                     onNavigate={(messageId) => {
                       const origin = chatFocus.value.originFor("outline");
                       const owner = chatFocus.value.owner();

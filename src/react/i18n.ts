@@ -82,6 +82,7 @@ export const english = {
   "chat.outlineFilter": "Filter messages",
   "chat.outlineMatches":
     "{count, plural, =0 {No messages match} one {# message matches} other {# messages match}}",
+  "chat.outlineSearching": "Searching…",
   "chat.rail": "Conversations",
   "chat.close": "Close",
   "chat.quota": "Usage",
@@ -218,6 +219,7 @@ export const simplifiedChinese: Record<keyof typeof english, string> = {
   "chat.outlineFilter": "筛选消息",
   "chat.outlineMatches":
     "{count, plural, =0 {没有匹配的消息} other {# 条消息匹配}}",
+  "chat.outlineSearching": "正在搜索…",
   "chat.rail": "对话列表",
   "chat.close": "关闭",
   "chat.quota": "使用量",

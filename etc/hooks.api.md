@@ -675,6 +675,7 @@ export const english: {
     readonly "chat.outline": "Message outline";
     readonly "chat.outlineFilter": "Filter messages";
     readonly "chat.outlineMatches": "{count, plural, =0 {No messages match} one {# message matches} other {# messages match}}";
+    readonly "chat.outlineSearching": "Searching…";
     readonly "chat.rail": "Conversations";
     readonly "chat.close": "Close";
     readonly "chat.quota": "Usage";

@@ -118,8 +118,7 @@ const budgets = [
   {
     name: "react",
     path: "dist/react/index.js",
-    // The budget covers eager form controls and modal feedback.
-    // Measured with Node 22's zlib, as CI measures it. Besides the layout,
+    // The budget covers eager form controls and modal feedback. Besides the layout,
     // token, target-size and narrow conversation list work, the entry holds
     // what a chat needs before any chunk loads: the saved requests' drawer
     // opening on the press, the read-only plan state, held announcements,
@@ -133,8 +132,10 @@ const budgets = [
     // the cache of what was made from each shown message, the idle preload
     // of the Markdown chunk, and the transcript's window with its feed keys
     // and the outline's filter, which reach messages it has not mounted.
-    // Measured with size-limit at 43,315 B; the limit is 3% above it,
-    // rounded down.
+    // Measured with size-limit under Node 26 at 43,315 B; the limit is 3%
+    // above it, rounded down. Node 22's zlib, as CI runs it, measures the
+    // same bundle about 0.5% larger: 44,254 B against 44,036 B with the
+    // outline's idle search.
     limit: "44.614 KB",
     gzip: true,
     brotli: false,
@@ -324,9 +325,11 @@ const budgets = [
     // focus, transcript and announcement contracts need the space, and it
     // bundles the react entry, so it grows with the react entry above. It
     // also bundles the form session and the form fields. With the reply
-    // stop in the scripted host and the transcript's window, measured with
-    // Node 22's zlib at 61,725 B; the limit is 3% above it, rounded down.
-    limit: "63.576 KB",
+    // stop in the scripted host, the transcript's window and the outline's
+    // idle search, measured with Node 22's zlib (size-limit's own bundle,
+    // gzipped at level 9 in Node 22.23) at 64,146 B; the limit is 3% above
+    // it, rounded down.
+    limit: "66.07 KB",
     gzip: true,
     brotli: false,
     ignore: [

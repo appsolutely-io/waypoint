@@ -52,6 +52,12 @@ export class ShownCache<V> {
     return value;
   }
 
+  /** What was made from a shown message's source, without making it. */
+  peek(id: string, source: unknown): V | undefined {
+    const entry = this.byId.get(id);
+    return entry && entry.source === source ? entry.value : undefined;
+  }
+
   /** What the cache holds (for lifetime checks). */
   entries(): { id: string; source: unknown }[] {
     return [...this.byId].map(([id, entry]) => ({ id, source: entry.source }));

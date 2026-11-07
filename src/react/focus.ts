@@ -140,7 +140,7 @@ export function containFocus(drawer: Element): () => void {
     if (at === stack.length && top) enclose(top);
   };
 }
-const FOCUSABLE =
+export const FOCUSABLE =
   'a[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable]:not([contenteditable="false"])';
 /**
  * Whether an element can take focus: connected, a focusable kind (not a

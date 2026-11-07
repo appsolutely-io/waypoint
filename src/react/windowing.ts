@@ -101,6 +101,8 @@ export function segmentsOf(
 export interface TranscriptWindow {
   /** Whether only a window is mounted. */
   windowed: boolean;
+  /** A row is being mounted to be shown, and is not in the document yet. */
+  busy: boolean;
   segments: Segment[];
   /**
    * Mounts the row for `id` and calls `then` once it is in the document,
@@ -259,6 +261,7 @@ export function useTranscriptWindow(
 
   return {
     windowed,
+    busy: revealing !== undefined,
     segments,
     reveal(id, then) {
       const mounted = [...(content.current?.querySelectorAll(ROW) ?? [])].some(

@@ -23,6 +23,7 @@ import {
   type ComponentType,
   type CSSProperties,
   type Ref,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import type {
   Block,
@@ -58,6 +59,7 @@ import {
   composedContains,
   deepActiveElement,
   deepTarget,
+  FOCUSABLE,
   focusable,
   moveFocus,
   retireOrigin,
@@ -1290,6 +1292,9 @@ export function WaypointChat(props: WaypointChatProps) {
     </section>
   );
 }
+// What keeps its own Page Up, Page Down, Home and End inside a message.
+const OWN_KEYS =
+  'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="listbox"], [role="grid"], [role="slider"], [role="spinbutton"]';
 // Shown in the place of the excerpt while formatting, then split around.
 const EXCERPT_SLOT = "\u{E000}";
 function TranscriptOutline({
@@ -1742,6 +1747,52 @@ function ChatBody({
     addEventListener("hashchange", changed);
     return () => removeEventListener("hashchange", changed);
   }, [windowed]);
+  // The feed's keys (WAI-ARIA Authoring Practices, feed pattern): Page
+  // Down and Page Up move focus to the next and previous message, mounting
+  // it first; Control+End and Control+Home move it to what can be focused
+  // after and before the feed. A field or widget inside a message keeps
+  // its own keys.
+  const feedKey = (event: ReactKeyboardEvent<HTMLElement>) => {
+    const target = event.target as Element;
+    const article = target.closest("article[data-message-id]");
+    if (!article || target.closest(OWN_KEYS)) return;
+    const feed = event.currentTarget;
+    const origin = chatFocus.value.originFor("feed");
+    const owner = chatFocus.value.owner();
+    if (event.ctrlKey && (event.key === "Home" || event.key === "End")) {
+      const before = event.key === "Home";
+      const root = feed.closest(".waypoint") ?? feed.ownerDocument.body;
+      const candidates = [
+        ...root.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ].filter(
+        (element) =>
+          !feed.contains(element) &&
+          focusable(element) &&
+          element.tabIndex >= 0 &&
+          !!(
+            feed.compareDocumentPosition(element) &
+            (before
+              ? Node.DOCUMENT_POSITION_PRECEDING
+              : Node.DOCUMENT_POSITION_FOLLOWING)
+          ),
+      );
+      const next = before ? candidates.at(-1) : candidates[0];
+      if (!next) return;
+      event.preventDefault();
+      focusFor(chatFocus.value, next, { origin, owner });
+      return;
+    }
+    if (event.key !== "PageDown" && event.key !== "PageUp") return;
+    if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey)
+      return;
+    const at = messageIds.indexOf(article.getAttribute("data-message-id")!);
+    const id = messageIds[at + (event.key === "PageDown" ? 1 : -1)];
+    if (at < 0 || id === undefined) return;
+    event.preventDefault();
+    transcriptWindow.reveal(id, () =>
+      focusFor(chatFocus.value, position.toMessage(id), { origin, owner }),
+    );
+  };
   // F6: the message, outline link or Back to latest that had focus, so its
   // removal can hand focus on within the same shown conversation.
   const transcriptFocus = useRef<
@@ -2410,7 +2461,21 @@ function ChatBody({
                   tabIndex={-1}
                 >
                   <RenderFailures.Provider value={renderFailures}>
-                    <div ref={transcriptContent}>
+                    {/* The messages are a feed (WAI-ARIA 1.2, "feed"):
+                        each article says its place among all of them,
+                        Page Down and Page Up move between them, mounting
+                        one the window has not, and Control+End and
+                        Control+Home leave the feed. A window change is
+                        committed in one render, so only a message being
+                        mounted to be shown leaves the feed busy. */}
+                    <div
+                      ref={transcriptContent}
+                      role={messages.length ? "feed" : undefined}
+                      aria-busy={transcriptWindow.busy ? true : undefined}
+                      onKeyDown={
+                        messages.length ? (event) => feedKey(event) : undefined
+                      }
+                    >
                       {!state.conversation &&
                       !state.conversationUnavailable &&
                       !state.problem ? (
@@ -2436,16 +2501,8 @@ function ChatBody({
                             .map((message, offset) => (
                               <MessageRow
                                 key={message.id}
-                                posInSet={
-                                  transcriptWindow.windowed
-                                    ? segment.from + offset + 1
-                                    : undefined
-                                }
-                                setSize={
-                                  transcriptWindow.windowed
-                                    ? messages.length
-                                    : undefined
-                                }
+                                posInSet={segment.from + offset + 1}
+                                setSize={messages.length + state.pending.length}
                                 message={message}
                                 slots={slots}
                                 anchorId={anchor(message.id)}
@@ -2462,10 +2519,13 @@ function ChatBody({
                             ))
                         ),
                       )}
-                      {state.pending.map((pending) => (
+                      {state.pending.map((pending, index) => (
                         <article
                           key={pending.id}
                           data-role="pending"
+                          tabIndex={-1}
+                          aria-posinset={messages.length + index + 1}
+                          aria-setsize={messages.length + state.pending.length}
                           aria-label={t("chat.roleUser")}
                         >
                           <Part

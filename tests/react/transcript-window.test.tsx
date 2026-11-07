@@ -120,10 +120,9 @@ async function chat(count: number) {
   return client;
 }
 
-it("below the threshold, every message is mounted with no place of its own", async () => {
+it("below the threshold, every message is mounted, with no spacer", async () => {
   const client = await chat(WINDOW_FROM - 1);
   expect(mounted()).toHaveLength(WINDOW_FROM - 1);
-  expect(document.querySelector("[aria-setsize]")).toBeNull();
   expect(document.querySelector("[data-transcript-gap]")).toBeNull();
   client.dispose();
 });
@@ -292,5 +291,85 @@ it("a message that crosses the threshold while scrolled up keeps the message rea
   // Windowed now, with the message read where it was.
   expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
   expect(read()).toBe(before);
+  client.dispose();
+});
+
+// WAI-ARIA 1.2, "feed" (https://www.w3.org/TR/wai-aria-1.2/#feed), with
+// the keys of the Authoring Practices' feed pattern
+// (https://www.w3.org/WAI/ARIA/apg/patterns/feed/).
+const key = (target: Element, init: KeyboardEventInit) =>
+  act(async () => {
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, ...init }),
+    );
+  });
+
+it("the messages are a feed of focusable articles, each with its place", async () => {
+  const client = await chat(3);
+  const feed = document.querySelector('[role="feed"]')!;
+  const articles = [...feed.querySelectorAll("article[data-message-id]")];
+  expect(articles).toHaveLength(3);
+  articles.forEach((article, index) => {
+    expect(article.getAttribute("tabindex")).toBe("-1");
+    expect(article.getAttribute("aria-posinset")).toBe(String(index + 1));
+    expect(article.getAttribute("aria-setsize")).toBe("3");
+  });
+  expect(feed.hasAttribute("aria-busy")).toBe(false);
+  client.dispose();
+});
+
+it("Page Up moves to the previous message, mounting it first", async () => {
+  const client = await chat(1000);
+  const first = mounted()[0]!;
+  const at = Number(first.slice(1));
+  const article = document.querySelector<HTMLElement>(
+    `[data-message-id="${first}"]`,
+  )!;
+  article.focus();
+  await key(article, { key: "PageUp" });
+  await settle();
+  const previous = `m${at - 1}`;
+  expect(document.activeElement?.getAttribute("data-message-id")).toBe(
+    previous,
+  );
+  await key(document.activeElement!, { key: "PageDown" });
+  await settle();
+  expect(document.activeElement?.getAttribute("data-message-id")).toBe(first);
+  client.dispose();
+});
+
+it("Control+Home and Control+End leave the feed", async () => {
+  const client = await chat(3);
+  const article = document.querySelector<HTMLElement>(
+    '[data-message-id="m2"]',
+  )!;
+  article.focus();
+  await key(article, { key: "Home", ctrlKey: true });
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: english["chat.outline"] }),
+  );
+  article.focus();
+  await key(article, { key: "End", ctrlKey: true });
+  const feed = document.querySelector('[role="feed"]')!;
+  expect(document.activeElement).not.toBe(article);
+  expect(feed.contains(document.activeElement)).toBe(false);
+  expect(
+    feed.compareDocumentPosition(document.activeElement!) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  client.dispose();
+});
+
+it("a field inside a message keeps its own Page Down", async () => {
+  const client = await chat(3);
+  const article = document.querySelector<HTMLElement>(
+    '[data-message-id="m2"]',
+  )!;
+  const field = document.createElement("textarea");
+  article.append(field);
+  field.focus();
+  await key(field, { key: "PageDown" });
+  expect(document.activeElement).toBe(field);
+  field.remove();
   client.dispose();
 });

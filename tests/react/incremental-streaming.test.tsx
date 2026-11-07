@@ -30,7 +30,10 @@ vi.mock("react-markdown", async (original) => {
   };
   return { ...actual, default: counted, Markdown: counted };
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 beforeEach(() => {
   parses.length = 0;
 });
@@ -59,6 +62,58 @@ it("while a reply is written, a finished block is parsed with no other", async (
         .length,
     ).toBeLessThan(12);
 });
+
+// A long reply whose paragraphs cite link definitions, given before
+// them or after them, streamed in chunks of 20 characters.
+function cited(count: number, definitionsFirst: boolean) {
+  const uses = Array.from(
+    { length: count },
+    (_, index) =>
+      `Paragraph ${index + 1} cites [source ${index + 1}][r${index + 1}] here.`,
+  ).join("\n\n");
+  const definitions = Array.from(
+    { length: count },
+    (_, index) => `[r${index + 1}]: https://example.com/${index + 1}`,
+  ).join("\n");
+  return `${definitionsFirst ? `${definitions}\n\n${uses}` : `${uses}\n\n${definitions}`}\n`;
+}
+
+for (const definitionsFirst of [false, true])
+  it(`link definitions ${definitionsFirst ? "before" : "after"} their uses keep each frame's parse bounded`, () => {
+    // Reduced motion shows each chunk at once, as a reply still written.
+    vi.stubGlobal(
+      "matchMedia",
+      (query: string) =>
+        ({
+          matches: query.includes("reduce"),
+          addEventListener() {},
+          removeEventListener() {},
+        }) as unknown as MediaQueryList,
+    );
+    const text = cited(110, definitionsFirst);
+    const { container, rerender, unmount } = render(
+      <Markdown text="" writing />,
+    );
+    let widest = 0;
+    for (let at = 20; at < text.length + 20; at += 20) {
+      parses.length = 0;
+      rerender(<Markdown text={text.slice(0, at)} writing />);
+      // Paragraphs parsed in this frame: the open block, and a finished
+      // one only when a definition it uses arrives.
+      const frame = parses.join("").split("Paragraph ").length - 1;
+      widest = Math.max(widest, frame);
+    }
+    expect(widest).toBeLessThanOrEqual(4);
+    const streamed = container.innerHTML
+      .replace(/ data-fade=""/g, "")
+      .replace(/>\s+</g, "><");
+    unmount();
+    const { container: whole } = render(<Markdown text={text} />);
+    expect(streamed).toBe(whole.innerHTML.replace(/>\s+</g, "><"));
+    expect(
+      whole.querySelectorAll('a[href^="https://example.com/"]'),
+    ).toHaveLength(110);
+  });
 
 it("a fence still open keeps its blank lines in the open block", async () => {
   const text = "Before.\n\n```\nline one\n\nline two";

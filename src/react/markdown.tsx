@@ -409,13 +409,19 @@ function parse(
   });
 }
 // A block of a reply being written that later text can no longer change:
-// parsed once, while the open block after it is parsed on every frame.
+// parsed once, while the open block after it is parsed on every frame. It
+// is parsed again only when the definitions its references use change.
 const FinishedBlock = memo(function FinishedBlock(props: {
   text: string;
+  definitions: string;
   sources: readonly Source[];
   extraSchemes?: readonly string[];
 }) {
-  return parse(props.text, props.sources, props.extraSchemes);
+  return parse(
+    withDefinitions(props.definitions, props.text),
+    props.sources,
+    props.extraSchemes,
+  );
 });
 // One identity, so a finished block's sources compare equal.
 const NO_SOURCES: readonly Source[] = [];
@@ -425,15 +431,75 @@ function blockProcessor() {
   return unified().use(remarkParse).use(gfm);
 }
 
+// A label as CommonMark matches it (0.31.2, 4.7 "Link reference
+// definitions", https://spec.commonmark.org/0.31.2/#matches): whitespace
+// collapsed and trimmed, then case-folded. It equals mdast's `identifier`.
+const labelKey = (label: string) =>
+  label
+    .replace(/[\t\n\r ]+/g, " ")
+    .replace(/^ | $/g, "")
+    .toLowerCase()
+    .toUpperCase()
+    .toLowerCase();
+
+// A definition written again on one line: the label as its identifier,
+// which matches as the source label did, and the destination and title
+// escaped so that they read back as the parser read them.
+function definitionLine(node: {
+  identifier: string;
+  url?: string;
+  title?: string | null;
+}): string {
+  const url = (node.url ?? "").replace(/[\\<>&]/g, "\\$&");
+  const title =
+    node.title == null ? "" : ` "${node.title.replace(/[\\"&]/g, "\\$&")}"`;
+  return `[${node.identifier}]: <${url}>${title}`;
+}
+
+// The labels a block's text may use: every innermost bracketed text, with
+// line prefixes of a block quote taken out, as a label key.
+const labelsOf = (text: string): string[] =>
+  [...text.matchAll(/\[((?:\\.|[^[\]\\])*)\]/g)].map((match) =>
+    labelKey(match[1]!.replace(/\n[ \t]*(?:>[ \t]?)*/g, " ")),
+  );
+
+// Definitions render nothing, so a block parsed after them shows as it
+// would in the whole text, its references resolved.
+const withDefinitions = (definitions: string, text: string) =>
+  definitions ? `${definitions}\n\n${text}` : text;
+
 interface Blocks {
   text: string;
   // Where each block starts; the last one is still open.
   starts: number[];
   // How far whole lines have been read.
   read: number;
-  // A link reference definition was read: it applies to the whole text,
-  // earlier blocks included, so the text is no longer split.
-  whole: boolean;
+  // The link reference definitions of the finished blocks and of the open
+  // one, by label key, in the order of the text (the first one wins).
+  kept: Map<string, string>;
+  definitions: Map<string, string>;
+}
+
+interface Node {
+  type: string;
+  identifier?: string;
+  url?: string;
+  title?: string | null;
+  children?: Node[];
+  position?: { start: { offset?: number } };
+}
+
+function collect(node: Node, into: Map<string, string>) {
+  if (
+    node.type === "definition" &&
+    node.identifier !== undefined &&
+    !into.has(node.identifier)
+  )
+    into.set(
+      node.identifier,
+      definitionLine(node as Node & { identifier: string }),
+    );
+  for (const child of node.children ?? []) collect(child, into);
 }
 
 /**
@@ -444,37 +510,71 @@ interface Blocks {
  * block it closed, so nothing after an open fence's opening line (or an
  * open HTML comment, or a list a later line may continue) is finished
  * until a later line closes it. Text that continues what was read is read
- * on from the open block.
+ * on from the open block. A link reference definition applies to the
+ * whole text, earlier blocks included, so the definitions read so far are
+ * kept too: a finished block is parsed after the ones it uses.
  */
 export function blockStarts(text: string, was?: Blocks): Blocks {
   const state: Blocks =
     was && text.startsWith(was.text)
       ? { ...was, text }
-      : { text, starts: [0], read: 0, whole: false };
+      : {
+          text,
+          starts: [0],
+          read: 0,
+          kept: new Map(),
+          definitions: new Map(),
+        };
   // The line still being written may yet change what it is.
   const lines = text.lastIndexOf("\n") + 1;
-  if (state.whole || lines <= state.read) return state;
+  if (lines <= state.read) return state;
   state.read = lines;
   const open = state.starts.at(-1)!;
   const grammar = (blockGrammar ??= blockProcessor());
-  const tree = grammar.parse(text.slice(open, lines));
+  const tree = grammar.parse(text.slice(open, lines)) as Node & {
+    children: Node[];
+  };
   const lineOf = (offset: number) =>
     text.lastIndexOf("\n", open + offset - 1) + 1;
-  const defines = (node: { type: string; children?: unknown[] }): boolean =>
-    node.type === "definition" ||
-    (node.children ?? []).some((child) =>
-      defines(child as { type: string; children?: unknown[] }),
-    );
-  if (tree.children.some(defines)) {
-    state.whole = true;
-    state.starts = [0];
-    return state;
-  }
-  for (const child of tree.children.slice(1)) {
+  const kept = new Map(state.kept);
+  tree.children.forEach((child, index) => {
+    if (index === 0) return;
     const start = lineOf(child.position!.start.offset!);
-    if (start > state.starts.at(-1)!) state.starts.push(start);
-  }
+    if (start > state.starts.at(-1)!) {
+      // Every block before this start is finished, with its definitions.
+      for (const done of tree.children.slice(0, index))
+        if (lineOf(done.position!.start.offset!) < start) collect(done, kept);
+      state.starts.push(start);
+    }
+  });
+  const now = state.starts.at(-1)!;
+  const definitions = new Map(kept);
+  for (const child of tree.children)
+    if (lineOf(child.position!.start.offset!) >= now)
+      collect(child, definitions);
+  state.kept = kept;
+  // One identity while the definitions are unchanged.
+  const same =
+    definitions.size === state.definitions.size &&
+    [...definitions].every(
+      ([key, line]) => state.definitions.get(key) === line,
+    );
+  if (!same) state.definitions = definitions;
   return state;
+}
+
+/** The definitions a block's text may use, as lines to parse it after. */
+export function definitionsFor(
+  text: string,
+  definitions: ReadonlyMap<string, string>,
+): string {
+  if (!definitions.size || !text.includes("]")) return "";
+  const lines = new Set<string>();
+  for (const label of labelsOf(text)) {
+    const line = definitions.get(label);
+    if (line !== undefined) lines.add(line);
+  }
+  return [...lines].join("\n");
 }
 
 export default function Markdown(props: MarkdownProps) {
@@ -489,17 +589,26 @@ export default function Markdown(props: MarkdownProps) {
     const read = (blocks.current = blockStarts(shown, blocks.current));
     const starts = read.starts.filter((start) => start <= shown.length);
     const open = starts.at(-1)!;
+    const openText = closeOpenMarkdown(shown.slice(open));
     body = (
       <>
-        {starts.slice(0, -1).map((start, index) => (
-          <FinishedBlock
-            key={start}
-            text={shown.slice(start, starts[index + 1])}
-            sources={sources}
-            extraSchemes={extraSchemes}
-          />
-        ))}
-        {parse(closeOpenMarkdown(shown.slice(open)), sources, extraSchemes)}
+        {starts.slice(0, -1).map((start, index) => {
+          const block = shown.slice(start, starts[index + 1]);
+          return (
+            <FinishedBlock
+              key={start}
+              text={block}
+              definitions={definitionsFor(block, read.definitions)}
+              sources={sources}
+              extraSchemes={extraSchemes}
+            />
+          );
+        })}
+        {parse(
+          withDefinitions(definitionsFor(openText, read.definitions), openText),
+          sources,
+          extraSchemes,
+        )}
       </>
     );
   } else {

@@ -74,6 +74,17 @@ const probes: Record<string, string> = {
     "````md\n```js\nx()\n```\n\nstill inside the outer fence\n````\n\nDone.\n",
   fenceInfoLineInside: "```\ncode\n```python\n\nstill code\n```\n\nafter\n",
   tildeVsBacktick: "~~~\n```\n\nstill tilde code\n~~~\n\nafter\n",
+  // A definition applies to the whole text, before it and after it.
+  definitionsAtEnd:
+    'See [the docs][d] and [Other].\n\nNext [d].\n\n[d]: https://example.com/docs "The title"\n[other]: </a b&amp;c\\>>\n',
+  definitionInQuote: "See [x].\n\n> [x]: https://example.com/x\n\nafter [x]\n",
+  firstDefinitionWins:
+    "[a]: https://one.example\n\nUse [a].\n\n[A]: https://two.example\n\nAgain [a].\n",
+  escapedAndFoldedLabels:
+    'Use [a\\]b], [Foo  Bar] and [STRASSE].\n\n[a\\]b]: /x\\<y\n[foo\nbar]: /z "say \\"hi\\" &amp; go"\n[straße]: /s\n',
+  definitionInList: "- [l]: https://example.com/l\n- item [l]\n\nafter [l]\n",
+  titleOnNextLine:
+    'Use [t].\n\n[t]: https://example.com/t\n  "title on its own line"\n\nend [t]\n',
 };
 
 for (const [name, text] of Object.entries(probes)) {
@@ -191,6 +202,22 @@ function reply(next: () => number) {
         () => `| ${prose()} | b |\n| - | - |\n| ${prose()} | d |`,
         () => `${prose()} before code.\n\n    ${code()}\n\n    ${code()}`,
         () => `<!--\n\nKh${n++}q\n\n-->`,
+        // A lazy continuation line, a setext heading in both forms, and
+        // list items continued at their own indent after blank lines.
+        () => `> ${prose()} quoted\n${prose()} lazy\n> ${prose()}`,
+        () => `${prose()} title\n${prose()} more\n=====`,
+        () => `${prose()}\n\n${prose()} title\n---`,
+        () => `- ${prose()}\n\n  ${prose()} continued\n\n- ${prose()}`,
+        () => `- ${prose()}\n\n\n  ${prose()} still`,
+        // HTML blocks of type 1 and type 6, across blank lines.
+        () => `<pre>\n\nKc${n++}q *b*\n\n</pre>`,
+        () => `<div>\n*${prose()}*\n\n</div>`,
+        // A definition inside a block quote applies everywhere.
+        () => {
+          const label = `q${n++}`;
+          uses.push(`${label}-quoted`);
+          return `> [${label}-quoted]: https://example.com/q\n\n${prose()} [${label}-quoted].`;
+        },
         () => fence(false),
         () => fence(true),
         () => {

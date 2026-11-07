@@ -121,16 +121,54 @@ export function visibleText(
   walk(tree);
   return parts.join("").replace(/\s+/g, " ").trim();
 }
+// A line that may open or close a code fence (CommonMark 0.31.2, 4.5
+// "Fenced code blocks", https://spec.commonmark.org/0.31.2/#fenced-code-blocks):
+// up to three spaces, then three or more of one fence character.
+const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
+/**
+ * The fence still open at the end of the text, if any, and where the text
+ * after the last closed fence starts. A backtick opener's info string holds
+ * no backtick; a fence closes only on a line of the same character, at
+ * least as long, with nothing after it but spaces or tabs.
+ */
+function fences(text: string): { open?: string; after: number } {
+  let open: string | undefined;
+  let after = 0;
+  let at = 0;
+  for (const line of text.split("\n")) {
+    at += line.length + 1;
+    const match = FENCE_LINE.exec(line.replace(/\r$/, ""));
+    if (!match) continue;
+    const fence = match[1]!;
+    const rest = match[2]!;
+    if (open === undefined) {
+      if (fence[0] !== "`" || !rest.includes("`")) open = fence;
+    } else if (
+      fence[0] === open[0] &&
+      fence.length >= open.length &&
+      /^[ \t]*$/.test(rest)
+    ) {
+      open = undefined;
+      after = at;
+    }
+  }
+  return { open, after };
+}
+
 /**
  * Closes, for display, what a reply still being written has opened and not
- * yet closed: a code fence, or `**`, `~~` and `` ` `` in its last paragraph.
- * The text itself is never changed.
+ * yet closed: a code fence, with its own character and length, or `**`,
+ * `~~` and `` ` `` in its last paragraph. The text itself is never changed.
  */
 export function closeOpenMarkdown(text: string): string {
-  const fences = text.match(/^ {0,3}(?:```|~~~)/gm) ?? [];
-  if (fences.length % 2) return `${text}\n${fences.at(-1)!.trim()}`;
-  // Escaped characters close nothing.
-  const last = text.slice(text.lastIndexOf("\n\n") + 1).replace(/\\./g, "");
+  const { open, after } = fences(text);
+  if (open !== undefined) return `${text}\n${open}`;
+  // The last paragraph starts after a blank line or a closed fence; escaped
+  // characters close nothing.
+  const last = text
+    .slice(Math.max(text.lastIndexOf("\n\n") + 1, after))
+    .replace(/\\./g, "");
   if ((last.match(/`/g) ?? []).length % 2) return `${text}\``;
   const outside = last.replace(/`[^`]*`/g, "");
   let closing = "";
@@ -138,6 +176,7 @@ export function closeOpenMarkdown(text: string): string {
     if ((outside.split(marker).length - 1) % 2) closing = marker + closing;
   return text + closing;
 }
+
 // How much of the text still to show one frame of the reveal reads.
 const REVEAL_WINDOW = 4096;
 // One word segmenter per language, made on first use.
@@ -380,48 +419,64 @@ const FinishedBlock = memo(function FinishedBlock(props: {
 });
 // One identity, so a finished block's sources compare equal.
 const NO_SOURCES: readonly Source[] = [];
-const LIST_ITEM = /^(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
-const FENCE = /^ {0,3}(?:```|~~~)/;
+// The block structure is read with the renderer's own grammar.
+let blockGrammar: ReturnType<typeof blockProcessor> | undefined;
+function blockProcessor() {
+  return unified().use(remarkParse).use(gfm);
+}
+
 interface Blocks {
   text: string;
   // Where each block starts; the last one is still open.
   starts: number[];
-  // How far whole lines have been read, and what they left open.
+  // How far whole lines have been read.
   read: number;
-  fence: boolean;
-  blank: boolean;
+  // A link reference definition was read: it applies to the whole text,
+  // earlier blocks included, so the text is no longer split.
+  whole: boolean;
 }
+
 /**
- * Where the blocks of a text being written start: after a blank line
- * outside a code fence, at a line that starts a new block (not indented,
- * not a list item, which may continue the list before it). Text that
- * continues what was read is read on from where it stopped.
+ * Where the blocks of a text being written start, each block but the last
+ * one finished: no later text can change it. A block is finished once the
+ * renderer's grammar, reading the whole lines from the open block on, has
+ * started another top-level block after it. CommonMark never reopens a
+ * block it closed, so nothing after an open fence's opening line (or an
+ * open HTML comment, or a list a later line may continue) is finished
+ * until a later line closes it. Text that continues what was read is read
+ * on from the open block.
  */
 export function blockStarts(text: string, was?: Blocks): Blocks {
   const state: Blocks =
     was && text.startsWith(was.text)
-      ? { ...was, starts: was.starts, text }
-      : { text, starts: [0], read: 0, fence: false, blank: false };
-  for (;;) {
-    const end = text.indexOf("\n", state.read);
-    if (end < 0) break;
-    const line = text.slice(state.read, end);
-    if (!line.trim()) state.blank = !state.fence;
-    else {
-      if (
-        state.blank &&
-        !state.fence &&
-        !/^\s/.test(line) &&
-        !LIST_ITEM.test(line)
-      )
-        state.starts.push(state.read);
-      state.blank = false;
-      if (FENCE.test(line)) state.fence = !state.fence;
-    }
-    state.read = end + 1;
+      ? { ...was, text }
+      : { text, starts: [0], read: 0, whole: false };
+  // The line still being written may yet change what it is.
+  const lines = text.lastIndexOf("\n") + 1;
+  if (state.whole || lines <= state.read) return state;
+  state.read = lines;
+  const open = state.starts.at(-1)!;
+  const grammar = (blockGrammar ??= blockProcessor());
+  const tree = grammar.parse(text.slice(open, lines));
+  const lineOf = (offset: number) =>
+    text.lastIndexOf("\n", open + offset - 1) + 1;
+  const defines = (node: { type: string; children?: unknown[] }): boolean =>
+    node.type === "definition" ||
+    (node.children ?? []).some((child) =>
+      defines(child as { type: string; children?: unknown[] }),
+    );
+  if (tree.children.some(defines)) {
+    state.whole = true;
+    state.starts = [0];
+    return state;
+  }
+  for (const child of tree.children.slice(1)) {
+    const start = lineOf(child.position!.start.offset!);
+    if (start > state.starts.at(-1)!) state.starts.push(start);
   }
   return state;
 }
+
 export default function Markdown(props: MarkdownProps) {
   const { text, extraSchemes, sources = NO_SOURCES } = props;
   const safe = (source: Source) => isSafeUrl(source.url, extraSchemes);

@@ -32,6 +32,7 @@ A pre-release, published under the `next` dist-tag.
 
 - Exported unions are wider, which breaks an exhaustive `switch` in TypeScript: `Block` has `BlockDetails`, `Reply` has `ReplyStop`, `Message.status` and `FrameMessageEnd.status` have `stopped`, and `CAPABILITIES` has `reply-stop`. On the wire every addition is optional.
 - `WaypointClient` has new required members (`stopReply`, `canStopReply`, `keepWaiting`, `retryReply`, `canRetryReply`, `sendFeedback`, `canSendFeedback`, `canChangeVersions`), and `ClientSnapshot` has `toolSteps`. A hand-written client or snapshot, such as a test fake, adds them.
+- The `/testing` entry's size budget rises from 63.576 KB to 66.07 KB gzipped: it bundles the react entry, which now holds the transcript's window and the outline's idle search, measured at 64,146 B with Node 22's zlib.
 
 ### Fixed
 

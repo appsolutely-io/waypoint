@@ -235,6 +235,22 @@ it("folds case in the chat's language", () => {
   expect(foldForSearch("  a\n\tb  ")).toBe("a b");
 });
 
+it("folds width, as a collator's base strength does", () => {
+  expect(foldForSearch("\uff21\uff22\uff23 \uff11\uff12", "zh-Hans")).toBe(
+    foldForSearch("abc 12", "zh-Hans"),
+  );
+  // Half-width kana with a voicing mark meet their full-width letter.
+  expect(foldForSearch("\uff76\uff9e", "ja")).toBe(
+    foldForSearch("\u30ac", "ja"),
+  );
+  // Han text is kept as it is.
+  expect(foldForSearch("\u4f60\u597d", "zh-Hans")).toBe("\u4f60\u597d");
+});
+
+it("folds with the root locale when the chat's language tag is not valid", () => {
+  expect(foldForSearch("ABC", "zh_CN")).toBe("abc");
+});
+
 // The index is rebuilt whenever an input of its texts changes: a message's
 // version, the chat's language, or the parser becoming ready. Until it is
 // whole again it says "Searching…", never "No messages match".

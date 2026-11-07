@@ -9,22 +9,35 @@ import { ShownCache } from "./excerpt-cache";
 const ACCENTS = /[̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯]/g;
 
 /**
- * Text as the outline's filter compares it: case folded in the chat's
+ * Text as the outline's filter compares it: compatibility forms decomposed
+ * (so full-width "ＡＢＣ" matches "abc"), case folded in the chat's
  * language (upper then lower case, so "ß" matches "SS" and a Turkish
  * dotted "İ" matches "i"), accents dropped after canonical decomposition,
  * then in Unicode NFC with whitespace collapsed. Comparing at the base
  * letter follows `Intl.Collator`'s `sensitivity: "base"`, which compares
- * whole strings only, never a part of one.
+ * whole strings only, never a part of one. A language tag that is not
+ * valid folds with the root locale rather than throwing.
  */
 export function foldForSearch(text: string, lang?: string): string {
+  const locale = validLocale(lang);
   return text
-    .toLocaleUpperCase(lang)
-    .toLocaleLowerCase(lang)
+    .normalize("NFKD")
+    .toLocaleUpperCase(locale)
+    .toLocaleLowerCase(locale)
     .normalize("NFD")
     .replace(ACCENTS, "")
     .normalize("NFC")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function validLocale(lang: string | undefined): string | undefined {
+  if (!lang) return undefined;
+  try {
+    return Intl.getCanonicalLocales(lang)[0];
+  } catch {
+    return undefined;
+  }
 }
 
 interface Shown<M> {

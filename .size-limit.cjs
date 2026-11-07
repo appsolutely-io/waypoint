@@ -127,11 +127,15 @@ const budgets = [
     // handoffs, the shared load-failure notice whose Retry stays while
     // it loads again, and a card that stays answered once the host accepted
     // its answer. Stopping a reply needs the stopped mark in the bubble and
-    // the loader of the lazy reply controls in the entry. A long transcript
-    // mounts only a window of its messages, which the first render already
-    // needs: measured with Node 22's zlib at 41,844 B, the limit is 3%
-    // above it, rounded down.
-    limit: "43.099 KB",
+    // the loader of the lazy reply controls in the entry. What keeps a long
+    // conversation cheap is here too, since the first render needs it: the
+    // memoised message row, the provider's stable props, the selector hooks,
+    // the cache of what was made from each shown message, the idle preload
+    // of the Markdown chunk, and the transcript's window with its feed keys
+    // and the outline's filter, which reach messages it has not mounted.
+    // Measured with size-limit at 43,315 B; the limit is 3% above it,
+    // rounded down.
+    limit: "44.614 KB",
     gzip: true,
     brotli: false,
     ignore: [

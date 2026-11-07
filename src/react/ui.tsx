@@ -593,6 +593,25 @@ function useSystemScheme(): "light" | "dark" {
     () => "light",
   );
 }
+// Key by key, and plain objects among the values (a host's inline
+// `parts`, `renderers` or `primitives`) key by key too.
+function sameProps<T extends object>(a: T, b: T): boolean {
+  const plain = (value: unknown): value is object =>
+    !!value &&
+    typeof value === "object" &&
+    Object.getPrototypeOf(value) === Object.prototype;
+  const keys = Object.keys(a) as (keyof T)[];
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => {
+      const was = a[key];
+      const is = b[key];
+      return (
+        Object.is(was, is) || (plain(was) && plain(is) && shallowEqual(was, is))
+      );
+    })
+  );
+}
 // The value given before when it equals this one: by `same`, else key by
 // key.
 function useStable<T extends object | undefined>(
@@ -615,7 +634,7 @@ export function WaypointProvider(props: WaypointProviderProps) {
   // Equal values keep one identity, so a host that renders the provider
   // again with the same props renders nothing below it again.
   const { children, ...given } = props;
-  const options = useStable(given);
+  const options = useStable(given, sameProps);
   const host = useStable(
     props.useThemeTokens?.(),
     (a, b) => a.scheme === b.scheme && shallowEqual(a.tokens, b.tokens),
@@ -1619,7 +1638,7 @@ const MessageRow = memo(function MessageRow({
   );
 });
 function ChatBody({
-  slots,
+  slots: givenSlots,
   features,
   layout = "panel",
   shortcuts,
@@ -1629,6 +1648,9 @@ function ChatBody({
   onStop,
   suggestions = [],
 }: WaypointChatProps) {
+  // Inline slots with the same parts keep one identity, so the rows they
+  // reach are not rendered again.
+  const slots = useStable(givenSlots);
   const instanceId = useId();
   const provider = context();
   const { client, format: t, tokens } = provider;

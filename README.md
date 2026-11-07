@@ -130,6 +130,39 @@ function PlanActions({ client }) {
 
 Each language is its own entry (`/messages/en`, `/messages/zh-Hans`), so a host ships only the text it shows; a host with its own wording passes its own catalogue. A key the catalogue lacks throws in development and shows the key itself in production. `stepName(t, planLabels, step)` names a plan step the way the web chat does. `problemView(problem)` gives a problem's words (`key`), its one action (`retry` or `refresh`, worded `chat.retry` and `chat.problem.refresh`) and the `code` and `id` the chat shows behind "Details"; `replyRowView(snapshot.replyState, { canStop: client.canStopReply(), canRetry: client.canRetryReply() })` gives the reply row's words and its buttons (Stop, Keep waiting, Retry), each wired to the client method of the same name (`retry` is `retryReply()`).
 
+A list follows the conversation one message at a time: `useWaypointMessage(id, client)` renders its row again only when that message changes, so a streamed delta renders the row being written and no other. `useWaypointSelector(selector, isEqual, client)` selects any part of the snapshot; a selector that builds a new array or object each time needs an `isEqual` that compares its contents, or the component renders on every change:
+
+```tsx
+import { FlatList, Text } from "react-native";
+import {
+  useWaypointMessage,
+  useWaypointSelector,
+} from "@appsolutely-io/waypoint/hooks";
+
+const sameIds = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((id, index) => id === b[index]);
+
+function Row({ id, client }) {
+  const message = useWaypointMessage(id, client);
+  return <Text>{message?.content}</Text>;
+}
+
+function Transcript({ client }) {
+  const ids = useWaypointSelector(
+    (snapshot) => snapshot.conversation?.messages.map((m) => m.id) ?? [],
+    sameIds,
+    client,
+  );
+  return (
+    <FlatList
+      data={ids}
+      keyExtractor={(id) => id}
+      renderItem={({ item }) => <Row id={item} client={client} />}
+    />
+  );
+}
+```
+
 ### Part data
 
 Each part receives a copy of its own data as `data`, typed by its name (`PartData`, `PartDataMap`; `PartProps<"stepRow">` for one part). Parts not listed receive none.
@@ -240,7 +273,7 @@ On `agreement-expired` for its current agreement, the client closes the stream, 
 
 `npm run lint`, `npm run typecheck`, `npm test -- tests/protocol tests/conformance tests/core tests/react tests/skin-antd tests/package`, `npm run build`, `npm run api:check`, `npm run size` and `npm run test:consumer` are local/CI gates. `npm run test:native` checks the local build; CI's consumer check invokes `scripts/native-smoke.mjs` against the installed packed core for both npm and pnpm. Focused tests use at most two workers; `npm run test:browser` uses one. `npm run api:update` intentionally regenerates reports after a reviewed API change; check mode never blesses an uncommitted change. CI exercises lowest and latest optional peers.
 
-`npm run perf` measures the chat in the playground with headless Chromium: histories of 200, 1,000 and 5,000 messages (initial render, DOM nodes, heap after garbage collection, event listeners, long tasks, the latency of each key typed in the composer, the React commits while typing, and sending one message until its reply finishes) and one streamed reply of about 15,000 tokens at 200 tokens a second after 40 messages (time to first text, long tasks, dropped frames and commits while it streams). Name scenarios to run fewer (`npm run perf -- long:1000 stream:3000`), add `--runs 3` for the median of three, and `--json <file>` to keep every run. Each scenario prints the 1-minute load it ran at; above 40, with no `--runs`, it runs three times and prints the median. The playground's `?perfMessages=N`, `?perfTokens=N` and `?perfRate=N` put the same load on it by hand.
+`npm run perf` measures the chat in the playground with headless Chromium (install it once with `npx playwright install chromium`): histories of 200, 1,000 and 5,000 messages (initial render, DOM nodes, heap after garbage collection, event listeners, long tasks, the latency of each key typed in the composer, the React commits while typing, and sending one message until its reply finishes) and one streamed reply of about 15,000 tokens at 200 tokens a second after 40 messages (time to first text, long tasks, dropped frames and commits while it streams). Name scenarios to run fewer (`npm run perf -- long:1000 stream:3000`), add `--runs 3` for the median of three, and `--json <file>` to keep every run. Each scenario prints the 1-minute load it ran at; above 40, with no `--runs`, it runs three times and prints the median. The playground's `?perfMessages=N`, `?perfTokens=N` and `?perfRate=N` put the same load on it by hand.
 
 `waypoint-conformance <test-base-url> [--app-host]` runs HTTP scenarios against an isolated scripted service. The fixture's session and script endpoints answer 404 outside explicit test mode. No production database or model credential is needed. Profile-specific service behavior remains the application's responsibility.
 

@@ -116,10 +116,18 @@ export function useTranscriptWindow(
   content: RefObject<HTMLElement | null>,
   ids: readonly string[],
   pinned: boolean,
+  // The message the reader is at while not pinned: it stays mounted, so
+  // the position can keep it where it was.
+  anchorId?: string,
 ): TranscriptWindow {
   const windowed = ids.length >= WINDOW_FROM;
+  // Rows are measured and the box read at every length, so the render
+  // that first mounts only a window already knows where the reader is.
   const measured = useRef(new Map<string, number>()).current;
-  const [view, setView] = useState({ top: 0, height: 0 });
+  const view = useRef({ top: 0, height: 0 });
+  const windowedNow = useRef(windowed);
+  windowedNow.current = windowed;
+  const [, viewChanged] = useState(0);
   const [, remeasured] = useState(0);
   // A row kept mounted wherever the box is: the one holding focus, so the
   // keyboard never loses its place, and one being revealed.
@@ -139,29 +147,30 @@ export function useTranscriptWindow(
   const estimate = measured.size ? sum / measured.size : FIRST_ESTIMATE;
   const sizes = windowed ? ids.map((id) => measured.get(id) ?? estimate) : [];
   const kept = windowed
-    ? [focused, revealing?.id]
+    ? [focused, revealing?.id, anchorId]
         .filter((id): id is string => id !== undefined)
         .map((id) => ids.indexOf(id))
     : [];
   const segments: Segment[] = windowed
-    ? segmentsOf(sizes, windowRange(sizes, view, pinned), kept)
+    ? segmentsOf(sizes, windowRange(sizes, view.current, pinned), kept)
     : ids.length
       ? [{ kind: "rows", from: 0, to: ids.length - 1 }]
       : [];
 
-  // The box's position, read as it scrolls or resizes, once a frame.
+  // The box's position, read as it scrolls or resizes, once a frame; only
+  // a windowed transcript renders again for it.
   useLayoutEffect(() => {
     const element = box.current;
-    if (!windowed || !element) return;
+    if (!element) return;
     let frame: number | undefined;
     const read = () => {
       frame = undefined;
+      const was = view.current;
       const next = { top: element.scrollTop, height: element.clientHeight };
-      setView((was) =>
-        Math.abs(was.top - next.top) < 1 && was.height === next.height
-          ? was
-          : next,
-      );
+      if (Math.abs(was.top - next.top) < 1 && was.height === next.height)
+        return;
+      view.current = next;
+      if (windowedNow.current) viewChanged((count) => count + 1);
     };
     const schedule = () => {
       if (frame !== undefined) return;
@@ -185,7 +194,7 @@ export function useTranscriptWindow(
           ? cancelAnimationFrame
           : clearTimeout)(frame);
     };
-  }, [box, windowed]);
+  }, [box]);
 
   // The row holding focus stays mounted until focus leaves it.
   useLayoutEffect(() => {
@@ -210,26 +219,25 @@ export function useTranscriptWindow(
 
   // Each mounted row's height: from its top to the next element's, so the
   // space between rows is counted with the row before it.
+  // One layout read per element.
   useLayoutEffect(() => {
     const element = content.current;
-    if (!windowed || !element) return;
+    if (!element) return;
     let changed = false;
     const children = [...element.children] as HTMLElement[];
+    const rects = children.map((child) => child.getBoundingClientRect());
     for (let index = 0; index < children.length; index++) {
       const child = children[index]!;
       if (!child.matches(ROW)) continue;
-      const top = child.getBoundingClientRect().top;
-      const next = children[index + 1];
-      const height = next
-        ? next.getBoundingClientRect().top - top
-        : child.getBoundingClientRect().height;
+      const next = rects[index + 1];
+      const height = next ? next.top - rects[index]!.top : rects[index]!.height;
       const id = child.getAttribute("data-message-id")!;
       if (height > 0 && Math.abs((measured.get(id) ?? -1) - height) > 1) {
         measured.set(id, height);
         changed = true;
       }
     }
-    if (changed) remeasured((count) => count + 1);
+    if (changed && windowed) remeasured((count) => count + 1);
   });
 
   // A row being revealed is mounted now: hand over, then let it go.
@@ -243,8 +251,10 @@ export function useTranscriptWindow(
     revealing.then();
     // Where the hand-over put the box, so the row stays in the window.
     const element = box.current;
-    if (element)
-      setView({ top: element.scrollTop, height: element.clientHeight });
+    if (element) {
+      view.current = { top: element.scrollTop, height: element.clientHeight };
+      viewChanged((count) => count + 1);
+    }
   }, [revealing, content, box]);
 
   return {

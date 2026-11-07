@@ -9,6 +9,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { WaypointChat } from "../../src/react/index";
 import { english } from "../../src/react/i18n";
 import { createWaypointClient } from "../../src/core/client";
+import type { TransportEvent } from "../../src/core/client";
 import type { Conversation, Message } from "../../src/protocol/generated";
 import {
   OVERSCAN,
@@ -229,5 +230,67 @@ it("a message mounted again keeps its parse", async () => {
   await settle();
   expect(mounted()).toContain("m1000");
   expect(parsed()).toBe(1);
+  client.dispose();
+});
+
+it("a message that crosses the threshold while scrolled up keeps the message read in place", async () => {
+  // Short rows first, then long ones, so the first rows' heights say
+  // nothing about where the message read is.
+  for (let index = 1; index < WINDOW_FROM; index++)
+    geometry.heights.set(`m${index}`, index <= 20 ? 80 : 480);
+  const base = config();
+  let listener: ((event: TransportEvent) => void) | undefined;
+  const client = createWaypointClient({
+    ...base,
+    conversationId: "a",
+    transport: {
+      ...base.transport,
+      read: async (id) =>
+        ({
+          protocol: "1.0",
+          id,
+          title: id,
+          messages: many(WINDOW_FROM - 1),
+        }) as Conversation,
+      subscribe: (_id: string, on: (event: TransportEvent) => void) => {
+        listener = on;
+        on({ type: "status", status: "open" } as TransportEvent);
+        return () => {};
+      },
+    },
+  });
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  await waitFor(() => expect(mounted()).toContain(`m${WINDOW_FROM - 1}`));
+  await settle();
+  geometry.layout();
+  await settle();
+  expect(document.querySelector("[data-transcript-gap]")).toBeNull();
+  // The reader scrolls up to message 60, with 10 px of it above the box.
+  const read = () =>
+    document.querySelector('[data-message-id="m60"]')?.getBoundingClientRect()
+      .top;
+  geometry.user("wheel", read()! + 10);
+  await settle();
+  const before = read();
+  expect(before).toBe(-10);
+  await act(async () => {
+    listener!({
+      type: "frame",
+      frame: {
+        protocol: "1.0",
+        sequence: 1,
+        type: "message.start",
+        messageId: "s1",
+        role: "assistant",
+      },
+    } as TransportEvent);
+  });
+  await settle();
+  geometry.layout();
+  await settle();
+  // Windowed now, with the message read where it was.
+  expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
+  expect(read()).toBe(before);
   client.dispose();
 });

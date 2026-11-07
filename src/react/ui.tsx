@@ -1720,6 +1720,7 @@ function ChatBody({
     transcriptContent,
     messageIds,
     position.pinned,
+    position.anchorId(),
   );
   // A link to a message the window has not mounted (the page's address
   // names its anchor) mounts it, then shows it at the top of the box.

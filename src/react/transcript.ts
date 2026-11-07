@@ -58,6 +58,8 @@ export interface TranscriptPosition {
   toLatest(): void;
   /** T9: the message's top to the top of the box; false when it is gone. */
   toMessage(messageId: string): HTMLElement | undefined;
+  /** The message the box keeps in place while not pinned, if any. */
+  anchorId(): string | undefined;
 }
 
 export function useTranscriptPosition(
@@ -283,6 +285,7 @@ export function useTranscriptPosition(
 
   return {
     pinned,
+    anchorId: () => (state.pinned ? undefined : state.anchor?.id),
     toLatest() {
       const element = box.current;
       if (!element) return;

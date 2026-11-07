@@ -366,6 +366,44 @@ it("Control+Home and Control+End leave the feed", async () => {
   client.dispose();
 });
 
+it("Page Down and Page Up reach a message still being sent", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    conversationId: "a",
+    transport: {
+      ...base.transport,
+      read: async (id) =>
+        ({ protocol: "1.0", id, title: id, messages: many(2) }) as Conversation,
+      // A send that never ends keeps its message pending.
+      send: () => new Promise(() => {}),
+    },
+  });
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  await waitFor(() => expect(mounted()).toContain("m2"));
+  await act(async () => {
+    await client.setDraft("First");
+    void client.send();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  const pending = [
+    ...document.querySelectorAll<HTMLElement>('article[data-role="pending"]'),
+  ];
+  expect(pending).toHaveLength(1);
+  const last = document.querySelector<HTMLElement>('[data-message-id="m2"]')!;
+  last.focus();
+  await key(last, { key: "PageDown" });
+  expect(document.activeElement).toBe(pending[0]);
+  // Nothing follows the last one.
+  await key(pending[0]!, { key: "PageDown" });
+  expect(document.activeElement).toBe(pending[0]);
+  await key(pending[0]!, { key: "PageUp" });
+  await settle();
+  expect(document.activeElement).toBe(last);
+  client.dispose();
+});
+
 it("a field inside a message keeps its own Page Down", async () => {
   const client = await chat(3);
   const article = document.querySelector<HTMLElement>(

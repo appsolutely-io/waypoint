@@ -1837,7 +1837,9 @@ function ChatBody({
   // its own keys.
   const feedKey = (event: ReactKeyboardEvent<HTMLElement>) => {
     const target = event.target as Element;
-    const article = target.closest("article[data-message-id]");
+    const article = target.closest(
+      "article[data-message-id], article[data-pending-id]",
+    );
     if (!article || target.closest(OWN_KEYS)) return;
     const feed = event.currentTarget;
     const origin = chatFocus.value.originFor("feed");
@@ -1868,10 +1870,28 @@ function ChatBody({
     if (event.key !== "PageDown" && event.key !== "PageUp") return;
     if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey)
       return;
-    const at = messageIds.indexOf(article.getAttribute("data-message-id")!);
-    const id = messageIds[at + (event.key === "PageDown" ? 1 : -1)];
-    if (at < 0 || id === undefined) return;
+    // The messages, then the ones still being sent, as the feed lists them.
+    const pendingIds = state.pending.map((pending) => pending.id);
+    const messageId = article.getAttribute("data-message-id");
+    const at =
+      messageId !== null
+        ? messageIds.indexOf(messageId)
+        : messageIds.length +
+          pendingIds.indexOf(article.getAttribute("data-pending-id")!);
+    const next = at + (event.key === "PageDown" ? 1 : -1);
+    if (at < 0 || next < 0 || next >= messageIds.length + pendingIds.length)
+      return;
     event.preventDefault();
+    if (next >= messageIds.length) {
+      // A message being sent is always mounted, after the window.
+      const id = pendingIds[next - messageIds.length];
+      const row = [
+        ...feed.querySelectorAll<HTMLElement>("article[data-pending-id]"),
+      ].find((element) => element.getAttribute("data-pending-id") === id);
+      if (row) focusFor(chatFocus.value, row, { origin, owner });
+      return;
+    }
+    const id = messageIds[next]!;
     transcriptWindow.reveal(id, () =>
       focusFor(chatFocus.value, position.toMessage(id), { origin, owner }),
     );
@@ -2672,6 +2692,7 @@ function ChatBody({
                         <article
                           key={pending.id}
                           data-role="pending"
+                          data-pending-id={pending.id}
                           tabIndex={-1}
                           aria-posinset={messages.length + index + 1}
                           aria-setsize={messages.length + state.pending.length}

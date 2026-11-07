@@ -79,6 +79,9 @@ export const english = {
   "chat.latestNew":
     "{count, plural, one {Back to latest, # new reply} other {Back to latest, # new replies}}",
   "chat.outline": "Message outline",
+  "chat.outlineFilter": "Filter messages",
+  "chat.outlineMatches":
+    "{count, plural, =0 {No messages match} one {# message matches} other {# messages match}}",
   "chat.rail": "Conversations",
   "chat.close": "Close",
   "chat.quota": "Usage",
@@ -212,6 +215,9 @@ export const simplifiedChinese: Record<keyof typeof english, string> = {
   "chat.latest": "回到最新消息",
   "chat.latestNew": "{count, plural, other {回到最新消息，# 条新回复}}",
   "chat.outline": "消息大纲",
+  "chat.outlineFilter": "筛选消息",
+  "chat.outlineMatches":
+    "{count, plural, =0 {没有匹配的消息} other {# 条消息匹配}}",
   "chat.rail": "对话列表",
   "chat.close": "关闭",
   "chat.quota": "使用量",

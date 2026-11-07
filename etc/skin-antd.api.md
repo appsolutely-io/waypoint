@@ -816,6 +816,8 @@ export const english: {
     readonly "chat.latest": "Back to latest";
     readonly "chat.latestNew": "{count, plural, one {Back to latest, # new reply} other {Back to latest, # new replies}}";
     readonly "chat.outline": "Message outline";
+    readonly "chat.outlineFilter": "Filter messages";
+    readonly "chat.outlineMatches": "{count, plural, =0 {No messages match} one {# message matches} other {# messages match}}";
     readonly "chat.rail": "Conversations";
     readonly "chat.close": "Close";
     readonly "chat.quota": "Usage";

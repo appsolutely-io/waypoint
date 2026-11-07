@@ -141,6 +141,21 @@
   overflow: auto;
   border-block: 1px solid var(--wp-border);
 }
+/* The filter spans the outline, so a narrow chat keeps it whole. */
+.waypoint .wp-outline [data-outline-filter] {
+  margin-block-start: var(--wp-space1);
+}
+.waypoint .wp-outline [data-outline-filter] input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 24px;
+}
+.waypoint .wp-outline [data-outline-filter] [role="status"] {
+  margin: var(--wp-space1) 0 0;
+}
+.waypoint .wp-outline [data-outline-filter] [role="status"]:empty {
+  display: none;
+}
 /* Drawn inside the link, so the scroller never clips it; an outline, not a
    shadow, so it stays under forced colors. */
 .waypoint .wp-outline a:focus-visible {

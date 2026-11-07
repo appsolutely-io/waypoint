@@ -4,8 +4,12 @@
 // row never measured counts as the average of those that were.
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 
-/** From this many messages the transcript mounts only a window of them. */
-export const WINDOW_FROM = 120;
+/**
+ * From this many messages the transcript mounts only a window of them.
+ * Below it every message is mounted, so the browser's find in page finds
+ * any of them; past it, the outline's filter does.
+ */
+export const WINDOW_FROM = 500;
 /** How far beyond the box, in CSS pixels, rows stay mounted. */
 export const OVERSCAN = 1200;
 // A row's height before any row was measured.

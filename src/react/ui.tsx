@@ -1304,6 +1304,9 @@ function TranscriptOutline({
   open,
   onToggle,
   onNavigate,
+  query,
+  onQuery,
+  matches,
 }: {
   messages: readonly Message[];
   excerpts: readonly (string | undefined)[];
@@ -1311,20 +1314,48 @@ function TranscriptOutline({
   open: boolean;
   onToggle: () => void;
   onNavigate: (messageId: string) => void;
+  // What the filter holds, and the messages it matches (all without one).
+  query: string;
+  onQuery: (query: string) => void;
+  matches: (index: number) => boolean;
 }) {
   const { format: t, primitives } = context();
   const B = primitives.button;
+  const Field = primitives.input;
   const listId = useDomId("outline");
+  const statusId = useDomId("outline-status");
+  const shown = open
+    ? messages.flatMap((message, index) =>
+        matches(index) ? [{ message, index }] : [],
+      )
+    : [];
   return (
     <nav aria-label={t("chat.outline")} data-outline="" className="wp-outline">
       <B aria-expanded={open} aria-controls={listId} onPress={onToggle}>
         {t("chat.outline")}
       </B>
+      {open ? (
+        <div data-outline-filter="">
+          <Field
+            type="search"
+            label={t("chat.outlineFilter")}
+            value={query}
+            onChange={onQuery}
+            describedBy={statusId}
+          />
+          {/* How many match, said as the filter changes. */}
+          <p id={statusId} role="status">
+            {query.trim()
+              ? t("chat.outlineMatches", { count: shown.length })
+              : null}
+          </p>
+        </div>
+      ) : null}
       {/* No markers: each label says its position. The role keeps the list
           a list where list-style none would drop it. */}
       <ol id={listId} hidden={!open} role="list">
         {open
-          ? messages.map((message, index) => {
+          ? shown.map(({ message, index }) => {
               const values = {
                 role: t(
                   message.role === "user"
@@ -1702,9 +1733,10 @@ function ChatBody({
   const [outline, setOutline] = useState<{
     conversationId?: string;
     open: boolean;
-  }>({ open: false });
+    query: string;
+  }>({ open: false, query: "" });
   if (outline.conversationId !== shownId)
-    setOutline({ conversationId: shownId, open: false });
+    setOutline({ conversationId: shownId, open: false, query: "" });
   const outlineOpen = outline.conversationId === shownId && outline.open;
   const anchorPrefix = `wp${instanceId.replace(/[^\w-]/g, "")}`;
   const anchor = (messageId: string) =>
@@ -2035,6 +2067,45 @@ function ChatBody({
   );
   // Labels are made only while the outline shows them.
   const excerpts = outlineOpen ? messages.map(excerptOf) : [];
+  // The filter reads each message's whole visible text, made once per
+  // source while there is something to filter by.
+  const searchTexts = useRef(new ShownCache<string>()).current;
+  searchTexts.begin(
+    ownerKey(client, shownId ?? ""),
+    [
+      visibilityUnknown,
+      provider.messageExcerpt,
+      markdownModule,
+      provider.markdownImages?.origin,
+      provider.markdownImages?.allow,
+      provider.extraUrlSchemes?.join(" "),
+      provider.lang,
+    ],
+    messages.map((message) => ({
+      id: message.id,
+      source: visibilityUnknown ? message : message.content,
+    })),
+  );
+  const folded = (text: string) =>
+    text.replace(/\s+/g, " ").trim().toLocaleLowerCase(provider.lang);
+  const query = outlineOpen ? folded(outline.query) : "";
+  const searchTextOf = (message: Message) =>
+    visibilityUnknown
+      ? searchTexts.get(message.id, message, (shown) =>
+          folded(provider.messageExcerpt?.(shown) ?? ""),
+        )
+      : searchTexts.get(message.id, message.content, (content) =>
+          folded(
+            markdownModule
+              ? markdownModule.visibleText(content, {
+                  images: provider.markdownImages,
+                  extraSchemes: provider.extraUrlSchemes,
+                })
+              : content,
+          ),
+        );
+  const matchesFilter = (index: number) =>
+    !query || searchTextOf(messages[index]!).includes(query);
   const liveRegion = useRef<HTMLDivElement>(null);
   const announcement = useAnnouncements(
     client,
@@ -2438,8 +2509,14 @@ function ChatBody({
                       setOutline({
                         conversationId: shownId,
                         open: !outlineOpen,
+                        query: outline.query,
                       })
                     }
+                    query={outline.query}
+                    onQuery={(query) =>
+                      setOutline({ conversationId: shownId, open: true, query })
+                    }
+                    matches={matchesFilter}
                     onNavigate={(messageId) => {
                       const origin = chatFocus.value.originFor("outline");
                       const owner = chatFocus.value.owner();

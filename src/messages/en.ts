@@ -72,6 +72,9 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.latestNew":
     "{count, plural, one {Back to latest, # new reply} other {Back to latest, # new replies}}",
   "chat.outline": "Message outline",
+  "chat.outlineFilter": "Filter messages",
+  "chat.outlineMatches":
+    "{count, plural, =0 {No messages match} one {# message matches} other {# messages match}}",
   "chat.rail": "Conversations",
   "chat.close": "Close",
   "chat.quota": "Usage",

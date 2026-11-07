@@ -110,9 +110,13 @@ async function chat(count: number) {
   });
   await client.ready;
   render(<WaypointChat client={client} />);
-  await waitFor(() => expect(mounted()).toContain(`m${count}`));
-  await waitFor(() =>
-    expect(document.querySelector(".wp-markdown")).not.toBeNull(),
+  // Below the threshold every message renders at once, which takes a while.
+  await waitFor(() => expect(mounted()).toContain(`m${count}`), {
+    timeout: 60_000,
+  });
+  await waitFor(
+    () => expect(document.querySelector(".wp-markdown")).not.toBeNull(),
+    { timeout: 60_000 },
   );
   await settle();
   geometry.layout();
@@ -125,7 +129,7 @@ it("below the threshold, every message is mounted, with no spacer", async () => 
   expect(mounted()).toHaveLength(WINDOW_FROM - 1);
   expect(document.querySelector("[data-transcript-gap]")).toBeNull();
   client.dispose();
-});
+}, 120_000);
 
 it("a long transcript mounts the latest messages, pinned at the end, and spaces the rest", async () => {
   const client = await chat(1000);
@@ -260,7 +264,9 @@ it("a message that crosses the threshold while scrolled up keeps the message rea
   });
   await client.ready;
   render(<WaypointChat client={client} />);
-  await waitFor(() => expect(mounted()).toContain(`m${WINDOW_FROM - 1}`));
+  await waitFor(() => expect(mounted()).toContain(`m${WINDOW_FROM - 1}`), {
+    timeout: 60_000,
+  });
   await settle();
   geometry.layout();
   await settle();
@@ -292,7 +298,7 @@ it("a message that crosses the threshold while scrolled up keeps the message rea
   expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
   expect(read()).toBe(before);
   client.dispose();
-});
+}, 120_000);
 
 // WAI-ARIA 1.2, "feed" (https://www.w3.org/TR/wai-aria-1.2/#feed), with
 // the keys of the Authoring Practices' feed pattern

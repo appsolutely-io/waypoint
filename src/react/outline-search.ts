@@ -53,7 +53,12 @@ export class SearchIndex<M> {
 
   /**
    * Starts a render for this owner, policy and the messages shown, each
-   * with the source its text is made from and how to make it.
+   * with the source its text is made from and how to make it. The index
+   * is rebuilt whenever one of its inputs changes: a message's version
+   * (its source), the owner, or the policy (the chat's language, the
+   * parser being ready, what the parser is told). Any text dropped sends
+   * the walk back to the first message, so the index is never complete
+   * while a shown message has no text.
    */
   sync(
     owner: string,
@@ -61,8 +66,8 @@ export class SearchIndex<M> {
     shown: readonly Shown<M>[],
     make: (message: M) => string,
   ): void {
-    this.texts.begin(owner, policy, shown);
-    if (shown !== this.shown) this.cursor = 0;
+    const dropped = this.texts.begin(owner, policy, shown);
+    if (dropped || shown !== this.shown) this.cursor = 0;
     this.shown = shown;
     this.make = make;
   }

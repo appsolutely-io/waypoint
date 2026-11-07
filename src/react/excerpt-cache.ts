@@ -15,32 +15,38 @@ export class ShownCache<V> {
 
   /**
    * Starts a render for this owner, policy and the messages shown, each
-   * with the source its excerpt would be made from.
+   * with the source its excerpt would be made from. Says whether any
+   * entry was dropped, so a caller walking the entries starts again.
    */
   begin(
     owner: string,
     policy: readonly unknown[],
     shown: readonly { id: string; source: unknown }[],
-  ): void {
+  ): boolean {
     if (
       owner !== this.owner ||
       policy.length !== this.policy.length ||
       policy.some((value, at) => value !== this.policy[at])
     ) {
+      const dropped = this.byId.size > 0;
       this.owner = owner;
       this.policy = policy;
       this.byId = new Map();
-      return;
+      return dropped;
     }
-    if (!this.byId.size) return;
+    if (!this.byId.size) return false;
     // A message no longer shown, or shown with another source, takes its
     // old source with it now, whether or not its excerpt is asked for.
     const sources = new Map(
       shown.map((message) => [message.id, message.source]),
     );
+    let dropped = false;
     for (const [id, entry] of this.byId)
-      if (!sources.has(id) || sources.get(id) !== entry.source)
+      if (!sources.has(id) || sources.get(id) !== entry.source) {
         this.byId.delete(id);
+        dropped = true;
+      }
+    return dropped;
   }
 
   /** What is made from a shown message, once per source. */

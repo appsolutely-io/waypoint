@@ -373,6 +373,8 @@ export interface WaypointProviderProps {
    * Plain text for a message's excerpt (the outline, announcements) when a
    * replaced renderer, bubble or transcript means the chat cannot tell what
    * the message visibly shows. Without it those surfaces name no content.
+   * The outline's filter asks once per message object: to change what it
+   * finds for a message, pass a new message object.
    */
   messageExcerpt?: (message: Message) => string | undefined;
   markdownImages?: MarkdownImagePolicy;
@@ -2167,11 +2169,15 @@ function ChatBody({
       })),
     [messages, visibilityUnknown],
   );
+  // Its inputs: each message's version (its source), the chat's language,
+  // the parser being ready and what it is told. The host's excerpt is read
+  // once per message object, not per function identity, so an inline
+  // function does not rebuild the index on every render.
   search.sync(
     ownerKey(client, shownId ?? ""),
     [
       visibilityUnknown,
-      provider.messageExcerpt,
+      Boolean(provider.messageExcerpt),
       markdownModule,
       provider.markdownImages?.origin,
       provider.markdownImages?.allow,

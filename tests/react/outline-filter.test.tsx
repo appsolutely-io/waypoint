@@ -3,7 +3,7 @@
 // conversation is searched: its filter matches the whole visible text of
 // each message, not only the excerpt the outline shows, and keeps each
 // message's own position in its label.
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   act,
   cleanup,
@@ -13,13 +13,13 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { WaypointChat } from "../../src/react/index";
-import { english } from "../../src/react/i18n";
+import { createFormatter, english } from "../../src/react/i18n";
 import { EXCERPT_GRAPHEMES } from "../../src/react/excerpt";
 import { WINDOW_FROM } from "../../src/react/windowing";
 import { createWaypointClient } from "../../src/core/client";
 import type { Conversation, Message } from "../../src/protocol/generated";
 import { config } from "../support/client";
-import { foldForSearch } from "../../src/react/outline-search";
+import { foldForSearch, SearchIndex } from "../../src/react/outline-search";
 
 // Counts how often a message's visible text is projected.
 const projected = vi.hoisted(() => ({ count: 0 }));
@@ -233,4 +233,129 @@ it("folds case in the chat's language", () => {
     foldForSearch("\u0915\u0937", "hi"),
   );
   expect(foldForSearch("  a\n\tb  ")).toBe("a b");
+});
+
+// The index is rebuilt whenever an input of its texts changes: a message's
+// version, the chat's language, or the parser becoming ready. Until it is
+// whole again it says "Searching…", never "No messages match".
+describe("the search index is rebuilt on every input it depends on", () => {
+  const shown = (id: string, content: string) => ({
+    id,
+    source: content,
+    message: content,
+  });
+  const drain = async () => {
+    for (let slice = 0; slice < 20; slice++)
+      await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  it("a changed policy with the same messages makes the index incomplete", async () => {
+    const index = new SearchIndex<string>();
+    const messages = [shown("a", "Istanbul"), shown("b", "Strasse")];
+    const fold = (lang: string) => (text: string) => foldForSearch(text, lang);
+    index.sync("1:a", ["en"], messages, fold("en"));
+    index.start();
+    await drain();
+    expect(index.complete()).toBe(true);
+    expect(index.textOf("a", "Istanbul")).toBe("istanbul");
+    // Same array, another language: every text is to make again.
+    index.sync("1:a", ["tr"], messages, fold("tr"));
+    expect(index.complete()).toBe(false);
+    index.start();
+    await drain();
+    expect(index.complete()).toBe(true);
+    expect(index.textOf("a", "Istanbul")).toBe("ıstanbul");
+    index.stop();
+  });
+  it("a new owner with the same messages makes the index incomplete", async () => {
+    const index = new SearchIndex<string>();
+    const messages = [shown("a", "one")];
+    index.sync("1:a", [], messages, (text) => text);
+    index.start();
+    await drain();
+    expect(index.complete()).toBe(true);
+    index.sync("2:a", [], messages, (text) => text);
+    expect(index.complete()).toBe(false);
+    index.stop();
+  });
+
+  it("the chat's language changing", async () => {
+    const messages = conversation(twelve);
+    const base = config();
+    const client = createWaypointClient({
+      ...base,
+      conversationId: "a",
+      transport: {
+        ...base.transport,
+        read: async (id) =>
+          ({ protocol: "1.0", id, title: id, messages }) as Conversation,
+      },
+    });
+    await client.ready;
+    const view = render(<WaypointChat client={client} locale="en" />);
+    await waitFor(
+      () => expect(document.querySelectorAll(".wp-markdown")).toHaveLength(12),
+      { timeout: 30_000 },
+    );
+    await act(async () => {
+      screen.getByRole("button", { name: english["chat.outline"] }).click();
+    });
+    await type("apples");
+    expect(status()).toBe("11 messages match");
+    const chinese = createFormatter("zh-Hans");
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(status()));
+    observer.observe(document.querySelector("nav[data-outline]")!, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    view.rerender(<WaypointChat client={client} locale="zh-Hans" />);
+    await waitFor(() =>
+      expect(status()).toBe(chinese("chat.outlineMatches", { count: 11 })),
+    );
+    observer.disconnect();
+    expect(links()).toHaveLength(11);
+    expect(seen).not.toContain(chinese("chat.outlineMatches", { count: 0 }));
+    client.dispose();
+  });
+
+  it("a host's excerpt function made anew on each render", async () => {
+    const messages = conversation(twelve);
+    const base = config();
+    const client = createWaypointClient({
+      ...base,
+      conversationId: "a",
+      transport: {
+        ...base.transport,
+        read: async (id) =>
+          ({ protocol: "1.0", id, title: id, messages }) as Conversation,
+      },
+    });
+    await client.ready;
+    // A replaced renderer: only the host's excerpt names a message's text.
+    const Plain = ({ text }: { text: string }) => <p data-plain="">{text}</p>;
+    const renderers = { markdown: Plain };
+    const host = () => (
+      <WaypointChat
+        client={client}
+        renderers={renderers}
+        messageExcerpt={(message) => message.content}
+      />
+    );
+    const view = render(host());
+    await waitFor(
+      () => expect(document.querySelectorAll("[data-plain]")).toHaveLength(12),
+      { timeout: 30_000 },
+    );
+    await act(async () => {
+      screen.getByRole("button", { name: english["chat.outline"] }).click();
+    });
+    await type("apples");
+    expect(status()).toBe("11 messages match");
+    view.rerender(host());
+    view.rerender(host());
+    await waitFor(() => expect(status()).toBe("11 messages match"));
+    expect(links()).toHaveLength(11);
+    client.dispose();
+  });
 });

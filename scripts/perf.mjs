@@ -2,7 +2,10 @@
 // Chromium, at long histories and through one long streamed reply.
 //
 //   npm run perf                      every scenario
-//   npm run perf -- long:1000         one scenario (long:N or stream:N)
+//   npm run perf -- long:1000         one scenario: long:N, stream:N,
+//                                     refstream:N (a streamed reply citing
+//                                     link definitions given at its end) or
+//                                     filter:N (the outline's first keystroke)
 //   npm run perf -- --runs 3          the median of three runs each
 //   npm run perf -- --json out.json   also writes every run
 //
@@ -21,12 +24,16 @@ const DEFAULT_SCENARIOS = [
   "long:1000",
   "long:5000",
   "stream:15000",
+  "refstream:15000",
+  "filter:5000",
 ];
 // Streamed replies arrive at this many tokens a second.
 const STREAM_RATE = 200;
 // History before the streamed reply, so a delta has other messages to spare.
 const STREAM_HISTORY = 40;
 const TYPED = "how many orders";
+// The first key typed in the outline's filter.
+const FILTER_KEY = "q";
 
 const args = process.argv.slice(2);
 const option = (name) => {
@@ -39,8 +46,10 @@ const json = option("--json");
 const runsOption = option("--runs");
 const scenarios = args.length ? args : DEFAULT_SCENARIOS;
 for (const scenario of scenarios)
-  if (!/^(long|stream):\d+$/.test(scenario))
-    throw new Error(`Unknown scenario ${scenario}: use long:N or stream:N`);
+  if (!/^(long|stream|refstream|filter):\d+$/.test(scenario))
+    throw new Error(
+      `Unknown scenario ${scenario}: use long:N, stream:N, refstream:N or filter:N`,
+    );
 
 const load = () => Number(loadavg()[0].toFixed(2));
 const freePort = () =>
@@ -262,10 +271,10 @@ async function long(base, size) {
   }
 }
 
-async function stream(base, tokens) {
+async function stream(base, tokens, references = false) {
   const { browser, page, cdp } = await open(
     base,
-    `state=streaming&perfTokens=${tokens}&perfRate=${STREAM_RATE}&perfMessages=${STREAM_HISTORY}`,
+    `state=streaming&perfTokens=${tokens}&perfRate=${STREAM_RATE}&perfMessages=${STREAM_HISTORY}${references ? "&perfRefs=1" : ""}`,
   );
   try {
     // The reply being written is the busy article.
@@ -318,6 +327,65 @@ async function stream(base, tokens) {
   }
 }
 
+// The outline at a long history: opening it, then the first key typed in
+// its filter right away, until the filter says how many messages match.
+async function filter(base, size) {
+  const { browser, page } = await open(base, `perfMessages=${size}`);
+  try {
+    await page.waitForFunction(
+      (id) => document.querySelector(`article[data-message-id="${id}"]`),
+      `perf-${size - 1}`,
+      { timeout: 600_000, polling: 50 },
+    );
+    await page.waitForTimeout(1500);
+    const openFrom = await page.evaluate(() => performance.now());
+    await page.getByRole("button", { name: "Message outline" }).click();
+    const opened = await (
+      await page.waitForFunction(
+        (count) =>
+          document.querySelectorAll("[data-outline-link]").length >= count &&
+          performance.now(),
+        size,
+        { timeout: 600_000, polling: 16 },
+      )
+    ).jsonValue();
+    const field = page.getByRole("searchbox", { name: "Filter messages" });
+    await field.focus();
+    const typedFrom = await page.evaluate(() => performance.now());
+    await page.keyboard.type(FILTER_KEY, { delay: 0 });
+    const settled = await (
+      await page.waitForFunction(
+        () =>
+          /match/.test(
+            document.querySelector("nav[data-outline] [role=status]")
+              ?.textContent ?? "",
+          ) && performance.now(),
+        null,
+        { timeout: 600_000, polling: 16 },
+      )
+    ).jsonValue();
+    await page.waitForTimeout(500);
+    const recorded = await page.evaluate(() => window.__wpPerf);
+    const keyMs = Math.max(
+      0,
+      ...recorded.events.filter(([at]) => at >= typedFrom).map(([, ms]) => ms),
+    );
+    return {
+      openMs: Math.round(opened - openFrom),
+      openLongTasks: longTasks(recorded.longTasks, openFrom, opened),
+      // A key under 16 ms reports no event timing.
+      keyMs: Math.round(keyMs),
+      resultsMs: Math.round(settled - typedFrom),
+      keyLongTasks: longTasks(recorded.longTasks, typedFrom, settled),
+      matches: await page.evaluate(
+        () => document.querySelectorAll("[data-outline-link]").length,
+      ),
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
 const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)];
@@ -341,57 +409,75 @@ function combine(results) {
 
 function print(name, result, loads) {
   const rows =
-    "renderMs" in result
+    "openMs" in result
       ? [
-          ["initial render, to the last message", `${result.renderMs} ms`],
-          ["DOM nodes", result.domNodes],
-          ["JS heap after GC", `${result.heapMB} MB`],
-          ["event listeners", result.listeners],
+          ["open the outline", `${result.openMs} ms`],
           [
-            "initial long tasks: count / total / max",
-            `${result.initialLongTasks.count} / ${result.initialLongTasks.totalMs} / ${result.initialLongTasks.maxMs} ms`,
+            "open long tasks: count / total / max",
+            `${result.openLongTasks.count} / ${result.openLongTasks.totalMs} / ${result.openLongTasks.maxMs} ms`,
           ],
+          ["first filter key: event latency", `${result.keyMs} ms`],
+          ["first filter key: until matches said", `${result.resultsMs} ms`],
           [
-            `type ${result.typing.keys} keys: total`,
-            `${result.typing.totalMs} ms`,
+            "key long tasks: count / total / max",
+            `${result.keyLongTasks.count} / ${result.keyLongTasks.totalMs} / ${result.keyLongTasks.maxMs} ms`,
           ],
-          [
-            "key latency: median / max (keys over 16 ms)",
-            `${result.typing.medianKeyMs} / ${result.typing.maxKeyMs} ms (${result.typing.slowKeys})`,
-          ],
-          [
-            "while typing: commits / total / max",
-            `${result.typing.commits.count} / ${result.typing.commits.totalMs} / ${result.typing.commits.maxMs} ms`,
-          ],
-          ["send to reply finished", `${result.sendToReplyMs} ms`],
-          [
-            "send long tasks: count / max",
-            `${result.sendLongTasks.count} / ${result.sendLongTasks.maxMs} ms`,
-          ],
+          ["messages matching", result.matches],
         ]
-      : [
-          ["time to first text (from navigation)", `${result.firstTextMs} ms`],
-          ["busy to first text", `${result.busyToFirstTextMs} ms`],
-          ["stream duration", `${result.streamMs} ms`],
-          [
-            "long tasks: count / total / max",
-            `${result.longTasks.count} / ${result.longTasks.totalMs} / ${result.longTasks.maxMs} ms`,
-          ],
-          [
-            "frames / dropped / over 100 ms",
-            `${result.frames.frames} / ${result.frames.dropped} / ${result.frames.over100ms}`,
-          ],
-          [
-            "commits: count / total / max",
-            `${result.commits.count} / ${result.commits.totalMs} / ${result.commits.maxMs} ms`,
-          ],
-          ["DOM nodes at the end", result.domNodes],
-          ["JS heap after GC", `${result.heapMB} MB`],
-          [
-            "reply complete",
-            `${result.final.complete ? "yes" : "no"} (${result.final.status})`,
-          ],
-        ];
+      : "renderMs" in result
+        ? [
+            ["initial render, to the last message", `${result.renderMs} ms`],
+            ["DOM nodes", result.domNodes],
+            ["JS heap after GC", `${result.heapMB} MB`],
+            ["event listeners", result.listeners],
+            [
+              "initial long tasks: count / total / max",
+              `${result.initialLongTasks.count} / ${result.initialLongTasks.totalMs} / ${result.initialLongTasks.maxMs} ms`,
+            ],
+            [
+              `type ${result.typing.keys} keys: total`,
+              `${result.typing.totalMs} ms`,
+            ],
+            [
+              "key latency: median / max (keys over 16 ms)",
+              `${result.typing.medianKeyMs} / ${result.typing.maxKeyMs} ms (${result.typing.slowKeys})`,
+            ],
+            [
+              "while typing: commits / total / max",
+              `${result.typing.commits.count} / ${result.typing.commits.totalMs} / ${result.typing.commits.maxMs} ms`,
+            ],
+            ["send to reply finished", `${result.sendToReplyMs} ms`],
+            [
+              "send long tasks: count / max",
+              `${result.sendLongTasks.count} / ${result.sendLongTasks.maxMs} ms`,
+            ],
+          ]
+        : [
+            [
+              "time to first text (from navigation)",
+              `${result.firstTextMs} ms`,
+            ],
+            ["busy to first text", `${result.busyToFirstTextMs} ms`],
+            ["stream duration", `${result.streamMs} ms`],
+            [
+              "long tasks: count / total / max",
+              `${result.longTasks.count} / ${result.longTasks.totalMs} / ${result.longTasks.maxMs} ms`,
+            ],
+            [
+              "frames / dropped / over 100 ms",
+              `${result.frames.frames} / ${result.frames.dropped} / ${result.frames.over100ms}`,
+            ],
+            [
+              "commits: count / total / max",
+              `${result.commits.count} / ${result.commits.totalMs} / ${result.commits.maxMs} ms`,
+            ],
+            ["DOM nodes at the end", result.domNodes],
+            ["JS heap after GC", `${result.heapMB} MB`],
+            [
+              "reply complete",
+              `${result.final.complete ? "yes" : "no"} (${result.final.status})`,
+            ],
+          ];
   const width = Math.max(...rows.map(([label]) => label.length));
   process.stdout.write(`\n${name}  (1-minute load: ${loads.join(", ")})\n`);
   for (const [label, value] of rows)
@@ -409,7 +495,11 @@ try {
     for (let run = 0; run < runs; run++) {
       loads.push(load());
       results.push(
-        await (kind === "long" ? long : stream)(playground.url, Number(size)),
+        kind === "long"
+          ? await long(playground.url, Number(size))
+          : kind === "filter"
+            ? await filter(playground.url, Number(size))
+            : await stream(playground.url, Number(size), kind === "refstream"),
       );
     }
     const result = combine(results);

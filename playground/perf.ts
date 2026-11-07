@@ -1,7 +1,8 @@
 // Load for `npm run perf`: `?perfMessages=N` puts N synthetic messages
 // before the conversation's own on every read, and `?perfTokens=N` makes
 // the staged reply a streamed one of about N tokens (`perfRate` tokens a
-// second). Without these the playground is unchanged.
+// second), citing link definitions given at its end with `perfRefs=1`.
+// Without these the playground is unchanged.
 import type { Conversation, Message } from "../src/protocol/generated";
 import type { FixtureTurn } from "../fixtures/server/index";
 import { stateTurn } from "./reply-states";
@@ -11,6 +12,7 @@ export const perf = {
   messages: Number(query.get("perfMessages") ?? 0),
   tokens: Number(query.get("perfTokens") ?? 0),
   rate: Number(query.get("perfRate") ?? 200),
+  refs: query.get("perfRefs") === "1",
 };
 export const measuring = perf.messages > 0 || perf.tokens > 0;
 
@@ -25,13 +27,20 @@ const TABLE =
 const LIST =
   "- First, check the open orders\n- Then compare against stock\n  - flag anything under ten\n- Finally, write the summary\n\n";
 
-/** Markdown of about `tokens` tokens, four characters each. */
-export function longMarkdown(tokens: number): string {
+/**
+ * Markdown of about `tokens` tokens, four characters each. With
+ * `references`, each paragraph cites a source by a link reference, and
+ * the definitions follow at the end, as a reply citing its sources does.
+ */
+export function longMarkdown(tokens: number, references = false): string {
   const parts: string[] = [];
   let size = 0;
+  let cited = 0;
   for (let index = 0; size < tokens * 4; index++) {
     const part = [
-      `## Section ${index / 4 + 1}\n\n${PARAGRAPH.repeat(3)}\n\n`,
+      `## Section ${index / 4 + 1}\n\n${PARAGRAPH.repeat(3)}${
+        references ? `See [source ${++cited}][s${cited}].` : ""
+      }\n\n`,
       CODE,
       TABLE,
       LIST,
@@ -39,12 +48,21 @@ export function longMarkdown(tokens: number): string {
     parts.push(part);
     size += part.length;
   }
+  for (let index = 1; index <= cited; index++)
+    parts.push(
+      `${index === 1 ? "" : "\n"}[s${index}]: https://example.com/source/${index}`,
+    );
+  if (cited) parts.push("\n");
   return parts.join("");
 }
 
 /** The streamed reply, also kept for the harness to compare with. */
-export function perfTurn(tokens = perf.tokens, rate = perf.rate): FixtureTurn {
-  const text = longMarkdown(tokens);
+export function perfTurn(
+  tokens = perf.tokens,
+  rate = perf.rate,
+  references = perf.refs,
+): FixtureTurn {
+  const text = longMarkdown(tokens, references);
   // The harness compares the finished reply with it.
   (globalThis as { __wpPerfExpected?: string }).__wpPerfExpected = text;
   const chunks: string[] = [];

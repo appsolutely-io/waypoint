@@ -43,3 +43,15 @@ it("streams about the tokens asked for, four a piece, at the rate asked for", ()
   // 200 tokens a second at 4 tokens a piece: a piece every 20 ms.
   expect(turn.interval).toBe(20);
 });
+
+it("with references, cites a link definition in each paragraph and defines them all at the end", () => {
+  const text = longMarkdown(15_000, true);
+  const cited = [...text.matchAll(/\[source (\d+)\]\[s\1\]/g)].length;
+  expect(cited).toBeGreaterThan(50);
+  const definitions = text.slice(text.lastIndexOf("\n\n[s1]: "));
+  for (let index = 1; index <= cited; index++)
+    expect(definitions).toContain(
+      `[s${index}]: https://example.com/source/${index}`,
+    );
+  expect(perfTurn(15_000, 200, true).chunks!.join("")).toBe(text);
+});

@@ -2089,6 +2089,8 @@ function ChatBody({
   );
   // Each shown message is projected once per source and policy; the cache
   // keeps nothing of messages, conversations or clients no longer shown.
+  const imagePolicyKey =
+    provider.markdownImages?.cacheKey ?? provider.markdownImages?.allow;
   const projections = useRef(new ExcerptCache()).current;
   projections.begin(
     ownerKey(client, shownId ?? ""),
@@ -2097,7 +2099,7 @@ function ChatBody({
       provider.messageExcerpt,
       markdownModule,
       provider.markdownImages?.origin,
-      provider.markdownImages?.allow,
+      imagePolicyKey,
       provider.extraUrlSchemes?.join(" "),
     ],
     messages.map((message) => ({
@@ -2113,7 +2115,7 @@ function ChatBody({
     [
       markdownModule,
       provider.markdownImages?.origin,
-      provider.markdownImages?.allow,
+      imagePolicyKey,
       provider.extraUrlSchemes?.join(" "),
     ],
     messages.map((message) => ({ id: message.id, source: message.content })),
@@ -2180,7 +2182,7 @@ function ChatBody({
       Boolean(provider.messageExcerpt),
       markdownModule,
       provider.markdownImages?.origin,
-      provider.markdownImages?.allow,
+      imagePolicyKey,
       provider.extraUrlSchemes?.join(" "),
       provider.lang,
     ],

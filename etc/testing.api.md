@@ -1660,6 +1660,7 @@ export interface ManifestEntry {
 export interface MarkdownImagePolicy {
     // (undocumented)
     allow?: (url: string) => boolean;
+    cacheKey?: string | number;
     // (undocumented)
     origin?: string;
 }

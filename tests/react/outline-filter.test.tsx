@@ -4,6 +4,7 @@
 // each message, not only the excerpt the outline shows, and keeps each
 // message's own position in its label.
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { execFileSync } from "node:child_process";
 import {
   act,
   cleanup,
@@ -247,8 +248,49 @@ it("folds width, as a collator's base strength does", () => {
   expect(foldForSearch("\u4f60\u597d", "zh-Hans")).toBe("\u4f60\u597d");
 });
 
-it("folds with the root locale when the chat's language tag is not valid", () => {
-  expect(foldForSearch("ABC", "zh_CN")).toBe("abc");
+it("folds invalid language tags with the root locale under a Turkish default", () => {
+  const output = execFileSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      `import { foldForSearch } from './src/react/outline-search.ts';
+       const locale = new Intl.DateTimeFormat().resolvedOptions().locale;
+       // Some Node builds use root casing despite a Turkish Intl default.
+       const upper = String.prototype.toLocaleUpperCase;
+       const lower = String.prototype.toLocaleLowerCase;
+       String.prototype.toLocaleUpperCase = function (locales) {
+         return upper.call(this, locales ?? locale);
+       };
+       String.prototype.toLocaleLowerCase = function (locales) {
+         return lower.call(this, locales ?? locale);
+       };
+       console.log(JSON.stringify({
+         locale,
+         defaultFold: 'I'.toLocaleLowerCase(),
+         invalid: foldForSearch('Istanbul', 'zh_CN'),
+         turkish: foldForSearch('Istanbul', 'tr'),
+       }));`,
+    ],
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, LANG: "tr_TR.UTF-8", LC_ALL: "tr_TR.UTF-8" },
+      encoding: "utf8",
+      timeout: 15_000,
+    },
+  );
+  const result = JSON.parse(output) as {
+    locale: string;
+    defaultFold: string;
+    invalid: string;
+    turkish: string;
+  };
+  expect(result.locale).toMatch(/^tr\b/);
+  expect(result.defaultFold).toBe("ı");
+  expect(result.invalid).toBe("istanbul");
+  expect(result.turkish).toBe("ıstanbul");
 });
 
 // The index is rebuilt whenever an input of its texts changes: a message's
@@ -335,6 +377,75 @@ describe("the search index is rebuilt on every input it depends on", () => {
     client.dispose();
   });
 
+  it.each(["", 0])(
+    "reuses inline image policies with cacheKey %j and refreshes changed decisions",
+    async (cacheKey) => {
+      const image = "https://images.example.test/photo.png";
+      const messages = conversation([`![orchard](${image})`, "apples"]);
+      const base = config();
+      const client = createWaypointClient({
+        ...base,
+        conversationId: "a",
+        transport: {
+          ...base.transport,
+          read: async (id) =>
+            ({ protocol: "1.0", id, title: id, messages }) as Conversation,
+        },
+      });
+      await client.ready;
+      const host = (
+        allowed: boolean,
+        key?: string | number,
+        origin?: string,
+      ) => (
+        <WaypointChat
+          client={client}
+          markdownImages={{
+            allow: (url) => allowed && url === image,
+            cacheKey: key,
+            origin,
+          }}
+        />
+      );
+      const view = render(host(false, cacheKey));
+      await waitFor(() =>
+        expect(document.querySelectorAll(".wp-markdown")).toHaveLength(2),
+      );
+      await act(async () => {
+        screen.getByRole("button", { name: english["chat.outline"] }).click();
+      });
+      await type("orchard");
+      expect(links()).toEqual(["m1"]);
+      const before = projected.count;
+      view.rerender(host(false, cacheKey));
+      expect(status()).toBe("1 message matches");
+      await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+      expect(projected.count).toBe(before);
+      expect(links()).toEqual(["m1"]);
+
+      view.rerender(host(false, cacheKey, new URL(image).origin));
+      await waitFor(() => expect(links()).toEqual([]));
+      view.rerender(host(false, cacheKey));
+      await waitFor(() => expect(links()).toEqual(["m1"]));
+
+      view.rerender(host(true, "allowed"));
+      await waitFor(() =>
+        expect(status()).toBe(
+          createFormatter("en")("chat.outlineMatches", { count: 0 }),
+        ),
+      );
+      expect(links()).toEqual([]);
+      expect(document.querySelector(".wp-markdown img")).not.toBeNull();
+      expect(document.querySelector("[data-outline-link]")).toBeNull();
+
+      view.rerender(host(false));
+      await waitFor(() => expect(links()).toEqual(["m1"]));
+      view.rerender(host(true));
+      await waitFor(() => expect(links()).toEqual([]));
+      client.dispose();
+    },
+  );
+
   it("a host's excerpt function made anew on each render", async () => {
     const messages = conversation(twelve);
     const base = config();
@@ -369,8 +480,9 @@ describe("the search index is rebuilt on every input it depends on", () => {
     await type("apples");
     expect(status()).toBe("11 messages match");
     view.rerender(host());
+    expect(status()).toBe("11 messages match");
     view.rerender(host());
-    await waitFor(() => expect(status()).toBe("11 messages match"));
+    expect(status()).toBe("11 messages match");
     expect(links()).toHaveLength(11);
     client.dispose();
   });

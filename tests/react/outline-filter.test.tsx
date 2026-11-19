@@ -4,7 +4,6 @@
 // each message, not only the excerpt the outline shows, and keeps each
 // message's own position in its label.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { execFileSync } from "node:child_process";
 import {
   act,
   cleanup,
@@ -248,49 +247,32 @@ it("folds width, as a collator's base strength does", () => {
   expect(foldForSearch("\u4f60\u597d", "zh-Hans")).toBe("\u4f60\u597d");
 });
 
-it("folds invalid language tags with the root locale under a Turkish default", () => {
-  const output = execFileSync(
-    process.execPath,
-    [
-      "--import",
-      "tsx",
-      "--input-type=module",
-      "-e",
-      `import { foldForSearch } from './src/react/outline-search.ts';
-       const locale = new Intl.DateTimeFormat().resolvedOptions().locale;
-       // Some Node builds use root casing despite a Turkish Intl default.
-       const upper = String.prototype.toLocaleUpperCase;
-       const lower = String.prototype.toLocaleLowerCase;
-       String.prototype.toLocaleUpperCase = function (locales) {
-         return upper.call(this, locales ?? locale);
-       };
-       String.prototype.toLocaleLowerCase = function (locales) {
-         return lower.call(this, locales ?? locale);
-       };
-       console.log(JSON.stringify({
-         locale,
-         defaultFold: 'I'.toLocaleLowerCase(),
-         invalid: foldForSearch('Istanbul', 'zh_CN'),
-         turkish: foldForSearch('Istanbul', 'tr'),
-       }));`,
-    ],
-    {
-      cwd: process.cwd(),
-      env: { ...process.env, LANG: "tr_TR.UTF-8", LC_ALL: "tr_TR.UTF-8" },
-      encoding: "utf8",
-      timeout: 15_000,
-    },
-  );
-  const result = JSON.parse(output) as {
-    locale: string;
-    defaultFold: string;
-    invalid: string;
-    turkish: string;
-  };
-  expect(result.locale).toMatch(/^tr\b/);
-  expect(result.defaultFold).toBe("ı");
-  expect(result.invalid).toBe("istanbul");
-  expect(result.turkish).toBe("ıstanbul");
+it("folds invalid tags with an explicit root locale regardless of the default", () => {
+  const upper = String.prototype.toLocaleUpperCase;
+  const lower = String.prototype.toLocaleLowerCase;
+  const upperCase = vi
+    .spyOn(String.prototype, "toLocaleUpperCase")
+    .mockImplementation(function (
+      this: string,
+      locales?: Intl.LocalesArgument,
+    ): string {
+      return upper.call(this, locales ?? "tr");
+    });
+  const lowerCase = vi
+    .spyOn(String.prototype, "toLocaleLowerCase")
+    .mockImplementation(function (
+      this: string,
+      locales?: Intl.LocalesArgument,
+    ): string {
+      return lower.call(this, locales ?? "tr");
+    });
+  expect("I".toLocaleLowerCase()).toBe("ı");
+  expect(foldForSearch("Istanbul", "zh_CN")).toBe("istanbul");
+  expect(upperCase).toHaveBeenLastCalledWith("und");
+  expect(lowerCase).toHaveBeenLastCalledWith("und");
+  expect(foldForSearch("Istanbul", "tr")).toBe("ıstanbul");
+  expect(upperCase).toHaveBeenLastCalledWith("tr");
+  expect(lowerCase).toHaveBeenLastCalledWith("tr");
 });
 
 // The index is rebuilt whenever an input of its texts changes: a message's
@@ -377,7 +359,7 @@ describe("the search index is rebuilt on every input it depends on", () => {
     client.dispose();
   });
 
-  it.each(["", 0])(
+  it.each(["", 0, 1])(
     "reuses inline image policies with cacheKey %j and refreshes changed decisions",
     async (cacheKey) => {
       const image = "https://images.example.test/photo.png";
@@ -397,11 +379,14 @@ describe("the search index is rebuilt on every input it depends on", () => {
         allowed: boolean,
         key?: string | number,
         origin?: string,
+        withAllow = true,
       ) => (
         <WaypointChat
           client={client}
           markdownImages={{
-            allow: (url) => allowed && url === image,
+            ...(withAllow
+              ? { allow: (url: string) => allowed && url === image }
+              : {}),
             cacheKey: key,
             origin,
           }}
@@ -442,6 +427,18 @@ describe("the search index is rebuilt on every input it depends on", () => {
       await waitFor(() => expect(links()).toEqual(["m1"]));
       view.rerender(host(true));
       await waitFor(() => expect(links()).toEqual([]));
+
+      view.rerender(host(true, cacheKey));
+      await waitFor(() => expect(links()).toEqual([]));
+      view.rerender(host(false, cacheKey, undefined, false));
+      await waitFor(() => expect(links()).toEqual(["m1"]));
+      expect(
+        document.querySelector("[data-outline-link]")?.textContent,
+      ).toContain("orchard");
+      expect(document.querySelector(".wp-markdown img")).toBeNull();
+      view.rerender(host(true, cacheKey));
+      await waitFor(() => expect(links()).toEqual([]));
+      expect(document.querySelector(".wp-markdown img")).not.toBeNull();
       client.dispose();
     },
   );

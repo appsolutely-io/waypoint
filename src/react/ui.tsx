@@ -2100,6 +2100,7 @@ function ChatBody({
       markdownModule,
       provider.markdownImages?.origin,
       imagePolicyKey,
+      Boolean(provider.markdownImages?.allow),
       provider.extraUrlSchemes?.join(" "),
     ],
     messages.map((message) => ({
@@ -2116,6 +2117,7 @@ function ChatBody({
       markdownModule,
       provider.markdownImages?.origin,
       imagePolicyKey,
+      Boolean(provider.markdownImages?.allow),
       provider.extraUrlSchemes?.join(" "),
     ],
     messages.map((message) => ({ id: message.id, source: message.content })),
@@ -2183,6 +2185,7 @@ function ChatBody({
       markdownModule,
       provider.markdownImages?.origin,
       imagePolicyKey,
+      Boolean(provider.markdownImages?.allow),
       provider.extraUrlSchemes?.join(" "),
       provider.lang,
     ],

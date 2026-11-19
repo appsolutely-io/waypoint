@@ -1,9 +1,41 @@
 import { expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
+import { runInNewContext } from "node:vm";
+
+function loadSizeConfig(nodeVersion: string): void {
+  const file = resolve(".size-limit.cjs");
+  runInNewContext(readFileSync(file, "utf8"), {
+    process: { versions: { node: nodeVersion } },
+    require: createRequire(file),
+    module: { exports: {} },
+  });
+}
+
+it.each(["20.19.5", "24.0.0", "26.13.1"])(
+  "size measurements reject Node %s with instructions to use the CI runtime",
+  (nodeVersion) => {
+    expect(() => loadSizeConfig(nodeVersion)).toThrow(
+      `Size measurements require Node.js 22 to match CI; found ${nodeVersion}. Switch to Node.js 22 and rerun npm run size.`,
+    );
+  },
+);
+
+it.each(["22.0.0", "22.12.0"])(
+  "size measurements accept Node %s",
+  (nodeVersion) => {
+    expect(() => loadSizeConfig(nodeVersion)).not.toThrow();
+  },
+);
 
 it("the production size command refuses an oversized reachable recovery payload", () => {
   const budgets = createRequire(import.meta.url)("../../.size-limit.cjs") as {

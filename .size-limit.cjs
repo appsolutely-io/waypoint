@@ -1,6 +1,12 @@
 // Bundle size limits, checked by `npm run size`. The build's metafile adds
 // a budget for each shared lazy chunk and refuses a build with an ESM
 // browser output no budget measures.
+const sizeNodeMajor = 22;
+if (Number(process.versions.node.split(".")[0]) !== sizeNodeMajor) {
+  throw new Error(
+    `Size measurements require Node.js ${sizeNodeMajor} to match CI; found ${process.versions.node}. Switch to Node.js ${sizeNodeMajor} and rerun npm run size.`,
+  );
+}
 const { withSharedChunks } = require("./scripts/size-budgets.cjs");
 const budgets = [
   {
@@ -380,8 +386,9 @@ module.exports = withSharedChunks(budgets, {
     {
       name: "lazy reply messages",
       source: "src/react/reply-messages.ts",
-      // 613 B measured.
-      limit: "631 B",
+      // With the Copy failure text: 639 B measured under Node 22; the limit
+      // is 3% above it, rounded down.
+      limit: "658 B",
       gzip: true,
       brotli: false,
       ignore: ["react", "react-dom", "./chunk-*"],

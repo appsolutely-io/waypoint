@@ -47,6 +47,7 @@ export type WaypointProtocol =
   | Block
   | Message
   | Source
+  | ReplyFailure
   | Conversation
   | ReplyMessage
   | ReplyConfirm
@@ -160,6 +161,7 @@ export type Conversation = {
   messages: Message[];
   replyOverdueAt?: number | null;
   replyStatus?: 'expected' | 'unavailable' | 'failed' | 'complete';
+  replyFailure?: ReplyFailure | null;
   mode?: 'form-fill';
   subject?: FormSubject;
   parentConversationId?: string;
@@ -765,6 +767,19 @@ export interface Source {
   id: string;
   title: string;
   url: string;
+}
+export interface ReplyFailure {
+  id: string;
+  forMessageId?: string;
+  reason?: HostProblemDetail | null;
+  recovery?:
+    | {
+        kind: 'regenerate' | 'resend';
+        messageId: string;
+      }
+    | {
+        kind: 'none';
+      };
 }
 export interface ReplyMessage {
   kind: 'message';

@@ -41,12 +41,14 @@ export function useAnnouncements(
   t: FormatMessage,
   // The live region: while a modal drawer makes it inert, what is due waits.
   region?: { current: Element | null },
+  failures?: ReadonlyMap<string, string>,
 ): string {
   const [text, setText] = useState("");
   const state = useRef({
     baselineFor: undefined as string | undefined,
     baseline: new Set<string>(),
     announced: new Map<string, Set<Stage>>(),
+    failureText: new Map<string, string>(),
     // Replies seen being written: their stream's end says them, and one
     // that ends with no status is not a new arrival.
     writing: new Set<string>(),
@@ -61,10 +63,13 @@ export function useAnnouncements(
     batchShowing: 0,
     client: undefined as object | undefined,
   }).current;
-  const latest = useRef({ conversation, excerptOf, t });
-  latest.current = { conversation, excerptOf, t };
+  const latest = useRef({ conversation, excerptOf, t, failures });
+  latest.current = { conversation, excerptOf, t, failures };
 
   const eligible = (id: string, stage: Stage) => {
+    const failure = latest.current.failures?.get(id);
+    if (stage === "failed" && failure !== undefined)
+      return state.failureText.get(id) !== failure;
     const said = state.announced.get(id);
     const terminal = !!said && (said.has("completed") || said.has("failed"));
     return stage === "arrived"
@@ -115,7 +120,9 @@ export function useAnnouncements(
     );
     const entries = pending.flatMap(([id]) => {
       const message = byId.get(id);
-      const stage = message && stageOf(message);
+      const stage =
+        message &&
+        (latest.current.failures?.has(id) ? "failed" : stageOf(message));
       return message && stage && eligible(id, stage)
         ? [{ id, stage, message }]
         : [];
@@ -140,7 +147,8 @@ export function useAnnouncements(
         entry!.stage === "completed" ? excerptFrom(entry!.message) : undefined;
       said =
         entry!.stage === "failed"
-          ? format("chat.arrivalFailed")
+          ? (latest.current.failures?.get(entry!.id) ??
+            format("chat.arrivalFailed"))
           : excerpt !== undefined
             ? format("chat.arrivalExcerpt", { excerpt })
             : format("chat.arrival");
@@ -154,7 +162,16 @@ export function useAnnouncements(
       said = format("chat.arrivalAllFailed", { count });
     else if (failed) said = format("chat.arrivalManyFailed", { count, failed });
     else said = format("chat.arrivalManyPlain", { count });
+    if (count > 1) {
+      const reasons = entries.flatMap((entry) => {
+        const reason = latest.current.failures?.get(entry.id);
+        return reason === undefined ? [] : [reason];
+      });
+      if (reasons.length) said = [said, ...reasons].join(" ");
+    }
     for (const entry of entries) {
+      const reason = latest.current.failures?.get(entry.id);
+      if (reason !== undefined) state.failureText.set(entry.id, reason);
       const stages = state.announced.get(entry.id) ?? new Set<Stage>();
       stages.add(entry.stage);
       state.announced.set(entry.id, stages);
@@ -180,6 +197,7 @@ export function useAnnouncements(
         conversation.messages.map((message) => message.id),
       );
       state.announced.clear();
+      state.failureText = new Map(failures);
       state.writing.clear();
       state.pending.clear();
       clearTimeout(state.timer);
@@ -189,10 +207,11 @@ export function useAnnouncements(
       return;
     }
     for (const message of conversation.messages) {
-      if (state.baseline.has(message.id)) continue;
+      if (state.baseline.has(message.id) && !failures?.has(message.id))
+        continue;
       if ((message as { status?: string }).status === "writing")
         state.writing.add(message.id);
-      const stage = stageOf(message);
+      const stage = failures?.has(message.id) ? "failed" : stageOf(message);
       if (!stage || !eligible(message.id, stage)) continue;
       if (!state.pending.size) {
         state.batchFor = conversation.id;
@@ -202,7 +221,7 @@ export function useAnnouncements(
     }
     if (state.pending.size && state.timer === undefined)
       state.timer = setTimeout(emit, ANNOUNCEMENT_BATCH_MS);
-  }, [client, conversation]);
+  }, [client, conversation, failures]);
   useEffect(
     () => () => {
       clearTimeout(state.timer);

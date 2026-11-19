@@ -5,6 +5,16 @@ import { createPlanRunner, PlanReadRefused, type RunnerPorts } from "./runner";
 import { semanticKey, type CoreIntentKind } from "./same-intent";
 import { createScope, onAbort, type Scope, type ScopeSignal } from "./scope";
 import type { OnDemand } from "./on-demand";
+import {
+  conversationTail,
+  observeReplyFailure,
+  replyFailures,
+  recoveryRequest,
+  type RecoveryRequest,
+  type RetainedReplyFailure,
+  type ReplyFailureRecord,
+} from "./reply-recovery";
+export type { ReplyFailureRecord } from "./reply-recovery";
 import { revisionOf, type StoredRecord } from "./stored-record";
 import type {
   IntentAlert,
@@ -33,6 +43,7 @@ import type {
   ConfirmationRecord,
   PlanRecord,
   Problem,
+  ReplyFailure,
   Reply,
   ReadTemplate,
   ManifestEntry,
@@ -166,6 +177,15 @@ export interface MessageVersionInput {
   conversationId: string;
   messageId: string;
   clientReplyId: string;
+  signal?: ScopeSignal;
+}
+export interface ReplyRecoveryInput extends MessageVersionInput {
+  kind: "regenerate" | "resend";
+  signal: ScopeSignal;
+}
+export type ReplyRecoveryResult = void | { accepted: false; problem: Problem };
+export interface ReplyRecoveryPort {
+  recover(input: ReplyRecoveryInput): MaybePromise<ReplyRecoveryResult>;
 }
 export interface MessageVersionPort {
   edit(input: MessageVersionInput & { content: string }): MaybePromise<void>;
@@ -232,6 +252,8 @@ export interface ClientSnapshot {
   pending: readonly PendingSend[];
   /** Actual outbox rows loaded for this visit, for silent restoration. */
   pendingRestoration?: { visit: number; ids: readonly string[] };
+  /** Host failures remain anchored to their original conversational turns. */
+  replyFailures?: readonly ReplyFailureRecord[];
   problem: Problem | null;
   announcement: number;
   observerFailures: number;
@@ -298,6 +320,7 @@ export interface ClientConfig {
   formSession?: FormSession;
   reads?: ReadPorts;
   versions?: MessageVersionPort;
+  replies?: ReplyRecoveryPort;
   feedback?: FeedbackPort;
   plans?: RunnerPorts & {
     resume?(id: string): Promise<PlanRecord>;
@@ -354,6 +377,7 @@ export interface WaypointClient {
   setDraft(value: string): Promise<void>;
   editMessage(messageId: string, content: string): Promise<void>;
   regenerate(messageId: string): Promise<void>;
+  canRegenerate?(messageId: string): boolean;
   selectVersion(messageId: string, index: number): Promise<void>;
   /** Whether a `versions` port can edit, regenerate and select versions. */
   canChangeVersions(): boolean;
@@ -688,9 +712,17 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   } as const);
   const readOnly = (plan: PlanRecord | null | undefined) =>
     !!plan?.recovery && (!protectedPlan(plan) || staleControl.has(plan.id));
+  const failureMemory = new Map<string, RetainedReplyFailure>();
   const update = (patch: Partial<ClientSnapshot>) => {
     if (isDisposed()) return;
     state = { ...state, ...patch };
+    state = { ...state, replyFailures: replyFailures(failureMemory, state) };
+    const activeFailure = state.replyFailures?.find(
+      (failure) => failure.active,
+    );
+    const failureStatus = state.conversation?.replyFailure
+      ? activeFailure?.status
+      : state.conversation?.replyStatus;
     if (replyTimer !== undefined) {
       config.platform.clock.clearTimeout(replyTimer);
       replyTimer = undefined;
@@ -714,8 +746,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         pending: state.pending,
         now: config.platform.clock.now(),
         overdueAt: state.conversation?.replyOverdueAt ?? undefined,
-        unavailable: state.conversation?.replyStatus === "unavailable",
-        failed: state.conversation?.replyStatus === "failed",
+        unavailable: failureStatus === "unavailable",
+        failed: failureStatus === "failed",
         streamLost: state.streamUnavailable,
         activityAt,
         heldUntil: waitUntil,
@@ -1111,6 +1143,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   // The version of each reply that started on the stream: a message keeps
   // the previous version's number until a read shows the new one.
   const started = new Map<string, number | undefined>();
+  const startGenerations = new Map<string, number>();
+  let nextStart = 0;
   const versionOf = (message: Message) =>
     started.has(message.id)
       ? started.get(message.id)
@@ -1197,7 +1231,11 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const id = state.conversationId;
     const bound = agreement;
     try {
-      const conversation = await config.transport.read(id, requestContext());
+      const raw = await config.transport.read(id, requestContext());
+      const conversation =
+        raw.replyFailure === undefined
+          ? raw
+          : { ...raw, replyFailure: normalizeReplyFailure(raw.replyFailure) };
       if (scope.aborted || owner?.aborted || isDisposed())
         return { kind: "superseded", conversationId: id };
       if (
@@ -1208,6 +1246,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             appliedRead.result.kind === "missing"))
       )
         return { kind: "superseded", conversationId: id };
+      observeReplyFailure(failureMemory, conversation);
       for (const message of conversation.messages)
         if (message.clientMessageId && viewRow(message.clientMessageId))
           queued.push({ kind: "remove", id: message.clientMessageId });
@@ -1470,18 +1509,21 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const shown =
       "messageId" in frame &&
       state.conversation?.messages.find((m) => m.id === frame.messageId);
-    // A new reply starts: what a read said about the reply before it
-    // (failed, unavailable) no longer describes the reply now.
-    if (
-      frame.type === "message.start" &&
-      frame.role === "assistant" &&
-      state.conversation &&
-      (state.conversation.replyStatus === "failed" ||
-        state.conversation.replyStatus === "unavailable")
-    )
-      update({
-        conversation: { ...state.conversation, replyStatus: undefined },
-      });
+    if (frame.type === "message.start" && frame.role === "assistant") {
+      for (const record of failureMemory.values()) record.retired = true;
+      if (state.conversation)
+        update({
+          conversation: {
+            ...state.conversation,
+            replyFailure: undefined,
+            ...(["failed", "unavailable"].includes(
+              state.conversation.replyStatus ?? "",
+            )
+              ? { replyStatus: undefined }
+              : {}),
+          },
+        });
+    }
     if (frame.type === "text.delta" && stopOf(frame.messageId)) return;
     if (frame.type === "text.delta") {
       // A reply that went on after its mark was dropped is written again.
@@ -1512,6 +1554,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
               ) + 1
             : undefined;
       started.set(frame.messageId, version);
+      startGenerations.set(frame.messageId, ++nextStart);
       const stop = stopped.get(frame.messageId);
       if (
         stop &&
@@ -2096,10 +2139,11 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   // Actions that wait for readiness first and are not needed for the
   // first render load with their own chunk on first use.
   let onDemand: Promise<OnDemand> | undefined;
+  let actionCode: OnDemand | undefined;
   const later = <T = void>(use: (actions: OnDemand) => Promise<T>) =>
     (onDemand ??= import("./on-demand").then(
       (module) =>
-        module.createOnDemand({
+        (actionCode = module.createOnDemand({
           ready,
           config,
           client,
@@ -2150,7 +2194,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
                     report({ code: "unavailable", id: planId });
                 })
               : client.runPlan(planId, digest),
-        }),
+        })),
       (error: unknown) => {
         onDemand = undefined;
         throw error;
@@ -2187,6 +2231,55 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     emit({ type: "plan.state", planId: plan.id });
     return true;
   };
+  const activeReplies = new Map<
+    string,
+    { done: Promise<void>; owner: Scope }
+  >();
+  const recoverReply = (request: RecoveryRequest): Promise<void> => {
+    const message = state.conversation?.messages.find(
+      (message) => message.id === request.messageId,
+    );
+    if (!message || isDisposed()) return Promise.resolve();
+    const version = versionOf(message);
+    const generation = startGenerations.get(message.id) ?? 0;
+    const key = JSON.stringify([
+      state.conversationId,
+      message.id,
+      version,
+      generation,
+    ]);
+    const active = activeReplies.get(key);
+    if (active) return active.done;
+    const owner = createScope("reply-recovery", conversationScope.signal);
+    let canceled!: () => void;
+    const cancellation = new Promise<void>((resolve) => {
+      canceled = resolve;
+    });
+    const entry = { owner, done: Promise.resolve() };
+    const release = () => {
+      if (activeReplies.get(key) === entry) activeReplies.delete(key);
+    };
+    const detach = onAbort(owner.signal, () => {
+      release();
+      canceled();
+    });
+    entry.done = Promise.race([
+      later((actions) =>
+        actions.recover(
+          owner.signal,
+          request,
+          version === undefined ? `start:${generation}` : version,
+        ),
+      ),
+      cancellation,
+    ]).finally(() => {
+      detach();
+      owner.end();
+      release();
+    });
+    activeReplies.set(key, entry);
+    return entry.done;
+  };
   const client: WaypointClient = {
     get ready() {
       return ready;
@@ -2209,9 +2302,16 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       return later((actions) => actions.version(scope, "edit", id, content));
     },
     regenerate: (id) => {
-      const scope = conversationScope.signal;
-      return later((actions) => actions.version(scope, "regenerate", id));
+      if (!negotiated)
+        return ready.then(() =>
+          negotiated ? client.regenerate(id) : undefined,
+        );
+      const request = recoveryRequest(state, config, id);
+      if (!request || isDisposed()) return Promise.resolve();
+      return recoverReply(request);
     },
+    canRegenerate: (id) =>
+      negotiated && !isDisposed() && !!recoveryRequest(state, config, id),
     selectVersion: (id, index) => {
       const scope = conversationScope.signal;
       return later((actions) =>
@@ -2612,7 +2712,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       update({});
     },
     retryReply() {
-      const last = state.conversation?.messages.at(-1);
+      const current = state.replyFailures?.find((failure) => failure.active);
+      if (current?.failure.recovery !== undefined) {
+        const request = recoveryRequest(state, config);
+        return request ? recoverReply(request) : Promise.resolve();
+      }
+      const last = conversationTail(state.conversation?.messages ?? []);
       const ended = endedReply();
       if (
         ended ||
@@ -2623,7 +2728,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       client.keepWaiting();
       return client.refresh().then(() => {});
     },
-    canRetryReply: () => !endedReply() || !!config.versions,
+    canRetryReply: () => {
+      const current = state.replyFailures?.find((failure) => failure.active);
+      return current?.failure.recovery !== undefined
+        ? !!recoveryRequest(state, config)
+        : !endedReply() || !!config.versions;
+    },
     canStopReply: () =>
       !!stoppable() && state.capabilities.includes("reply-stop"),
     // Marked at once, before the host is asked.
@@ -2663,6 +2773,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       if (replyTimer !== undefined)
         config.platform.clock.clearTimeout(replyTimer);
       clientScope.abort();
+      failureMemory.clear();
+      actionCode?.dispose();
       close();
       listeners.clear();
       observers.clear();
@@ -2681,7 +2793,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   // The reply being written, if any: the last message, from the assistant.
   const stoppable = () => {
     const last = state.conversation?.messages.at(-1);
-    return last?.role === "assistant" && last.status === "writing"
+    return last?.role === "assistant" &&
+      last.status === "writing" &&
+      !["failed", "unavailable"].includes(state.replyState)
       ? last
       : undefined;
   };
@@ -2767,6 +2881,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       return { kind: "superseded", conversationId: id };
     const sameConversation = id === state.conversationId;
     livePendingIds.clear();
+    failureMemory.clear();
+    startGenerations.clear();
     pendingRestoration = {
       visit: pendingRestoration.visit + 1,
       ids: sameConversation ? stored.pending.map((row) => row.id) : [],
@@ -3182,6 +3298,32 @@ function isPending(value: unknown): value is PendingSend {
     typeof (value as PendingSend).id === "string" &&
     typeof (value as PendingSend).content === "string"
   );
+}
+function normalizeReplyFailure(
+  value: unknown,
+): ReplyFailure | null | undefined {
+  if (value === null) return null;
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.id !== "string" || !candidate.id) return undefined;
+  const reason = hostDetail(candidate.reason);
+  const recovery = candidate.recovery as
+    Record<string, unknown> | null | undefined;
+  const selected: ReplyFailure["recovery"] =
+    recovery?.kind === "none"
+      ? { kind: "none" }
+      : (recovery?.kind === "regenerate" || recovery?.kind === "resend") &&
+          typeof recovery.messageId === "string" &&
+          recovery.messageId
+        ? { kind: recovery.kind, messageId: recovery.messageId }
+        : undefined;
+  return {
+    id: candidate.id,
+    ...(typeof candidate.forMessageId === "string" &&
+      candidate.forMessageId && { forMessageId: candidate.forMessageId }),
+    ...(reason !== undefined && { reason }),
+    ...(selected && { recovery: selected }),
+  };
 }
 const MAX_HOST_DETAIL_LENGTH = 128;
 function hostDetail(value: unknown): Problem["host"] {

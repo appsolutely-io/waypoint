@@ -8,6 +8,7 @@
 
 ### Added
 
+- Optional `Conversation.replyFailure` carries safe host reason/qualifier, turn ownership and an explicitly selected Regenerate, Resend or no recovery. `replyFailureText`, `replies.recover`, `ReplyRecoveryInput`/`ReplyRecoveryResult` and anchored `snapshot.replyFailures` let a host explain partial or missing replies and deliver recovery without duplicating user messages. Message and reply-row Regenerate share one scoped in-flight attempt; unknown outcomes retain their request id, definitive refusal permits a new one, and switch/disposal aborts without waiting for an uncooperative port. `MessageVersionInput.signal?` and optional `canRegenerate` expose cancellation and shared eligibility; `chat.resend` labels only Resend. Missing/null failure or an absent recovery field preserves legacy Retry.
 - Optional `Problem.host` (`HostProblemDetail`), additive pending part detail and `ClientSnapshot.pendingRestoration` provenance. `/hooks` and `/react` share `visibleProblem` and `pendingProblem` for filtered overrides, own-failure fallback and composer placement during retry. Existing hosts sending no detail keep their behavior and actions.
 
 ## 0.1.1-next.1 - 2026-11-07

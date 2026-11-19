@@ -64,6 +64,9 @@ export function ReplyControls({
   const { actions } = replyRowView(row, {
     canStop: client.canStopReply(),
     canRetry: client.canRetryReply(),
+    recovery: client
+      .getSnapshot()
+      .replyFailures?.find((failure) => failure.active)?.failure.recovery?.kind,
   });
   // The pressed button goes away: focus moves on to the composer.
   const then = (action: () => unknown) => () => {

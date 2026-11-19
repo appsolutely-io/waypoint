@@ -1664,6 +1664,34 @@
       },
       "required": ["id", "title", "url"]
     },
+    "ReplyFailure": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "forMessageId": { "type": "string", "minLength": 1 },
+        "reason": {
+          "anyOf": [{ "$ref": "#/$defs/HostProblemDetail" }, { "type": "null" }]
+        },
+        "recovery": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": { "enum": ["regenerate", "resend"] },
+                "messageId": { "type": "string", "minLength": 1 }
+              },
+              "required": ["kind", "messageId"]
+            },
+            {
+              "type": "object",
+              "properties": { "kind": { "const": "none" } },
+              "required": ["kind"]
+            }
+          ]
+        }
+      },
+      "required": ["id"]
+    },
     "Conversation": {
       "type": "object",
       "properties": {
@@ -1689,6 +1717,9 @@
         },
         "replyStatus": {
           "enum": ["expected", "unavailable", "failed", "complete"]
+        },
+        "replyFailure": {
+          "anyOf": [{ "$ref": "#/$defs/ReplyFailure" }, { "type": "null" }]
         },
         "mode": {
           "const": "form-fill"

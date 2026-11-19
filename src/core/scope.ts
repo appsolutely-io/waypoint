@@ -33,6 +33,7 @@ interface Platform {
 export const SCOPE_PARENTS = {
   client: [],
   conversation: ["client"],
+  "reply-recovery": ["conversation"],
   // One stream binding: the conversation's stream under one agreement, with
   // its connections and recovery episodes.
   stream: ["conversation"],

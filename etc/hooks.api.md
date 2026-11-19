@@ -369,6 +369,8 @@ export interface ClientConfig {
     // (undocumented)
     reads?: ReadPorts;
     // (undocumented)
+    replies?: ReplyRecoveryPort;
+    // (undocumented)
     storage?: StoragePort;
     // (undocumented)
     tabs?: readonly FlowTab[];
@@ -423,6 +425,7 @@ export interface ClientSnapshot {
     problem: Problem | null;
     // (undocumented)
     protocol: string | null;
+    replyFailures?: readonly ReplyFailureRecord[];
     // (undocumented)
     replyState: ReplyState;
     restored: readonly RestoredMessage[];
@@ -520,6 +523,7 @@ export type Conversation = {
     messages: Message[];
     replyOverdueAt?: number | null;
     replyStatus?: 'expected' | 'unavailable' | 'failed' | 'complete';
+    replyFailure?: ReplyFailure | null;
     mode?: 'form-fill';
     subject?: FormSubject;
     parentConversationId?: string;
@@ -669,6 +673,7 @@ export const english: {
     readonly "chat.conversationUnavailable": "This conversation is unavailable. Reload to continue; this does not stop a server turn.";
     readonly "chat.reload": "Reload conversation";
     readonly "chat.retry": "Retry";
+    readonly "chat.resend": "Resend";
     readonly "chat.withdraw": "Withdraw";
     readonly "chat.restored": "Withdrawn messages";
     readonly "chat.restoredEdit": "Edit";
@@ -1432,6 +1437,8 @@ export interface MessageVersionInput {
     conversationId: string;
     // (undocumented)
     messageId: string;
+    // (undocumented)
+    signal?: ScopeSignal;
 }
 
 // @public (undocumented)
@@ -1927,6 +1934,35 @@ export interface ReplyDelivery {
 }
 
 // @public (undocumented)
+export interface ReplyFailure {
+    // (undocumented)
+    forMessageId?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    reason?: HostProblemDetail | null;
+    // (undocumented)
+    recovery?: {
+        kind: 'regenerate' | 'resend';
+        messageId: string;
+    } | {
+        kind: 'none';
+    };
+}
+
+// @public (undocumented)
+export interface ReplyFailureRecord {
+    // (undocumented)
+    active: boolean;
+    // (undocumented)
+    failure: ReplyFailure;
+    // (undocumented)
+    messageId?: string;
+    // (undocumented)
+    status: "failed" | "unavailable";
+}
+
+// @public (undocumented)
 export interface ReplyForm {
     // (undocumented)
     blockId: string;
@@ -2005,6 +2041,26 @@ export interface ReplyPlanValues {
 }
 
 // @public (undocumented)
+export interface ReplyRecoveryInput extends MessageVersionInput {
+    // (undocumented)
+    kind: "regenerate" | "resend";
+    // (undocumented)
+    signal: ScopeSignal;
+}
+
+// @public (undocumented)
+export interface ReplyRecoveryPort {
+    // (undocumented)
+    recover(input: ReplyRecoveryInput): MaybePromise<ReplyRecoveryResult>;
+}
+
+// @public (undocumented)
+export type ReplyRecoveryResult = void | {
+    accepted: false;
+    problem: Problem;
+};
+
+// @public (undocumented)
 export function replyRow(input: {
     messages: readonly Message[];
     pending: readonly PendingSend[];
@@ -2030,6 +2086,7 @@ export interface ReplyRowAction {
 export function replyRowView(state: ReplyState, options?: {
     canStop?: boolean;
     canRetry?: boolean;
+    recovery?: "regenerate" | "resend" | "none";
 }): {
     key?: MessageKey;
     actions: ReplyRowAction[];
@@ -2321,6 +2378,8 @@ export interface WaypointClient {
     // (undocumented)
     canKeepChanges(id?: string): boolean;
     canPrepareFlow(): boolean;
+    // (undocumented)
+    canRegenerate?(messageId: string): boolean;
     canRetryReply(): boolean;
     canSendFeedback(): boolean;
     canStopReply(): boolean;
@@ -2414,7 +2473,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Source | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
+export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
 
 // @public (undocumented)
 export type WinnerKind = 'stop' | 'cancel-initial' | 'cancel-review' | 'leave' | 'keep';

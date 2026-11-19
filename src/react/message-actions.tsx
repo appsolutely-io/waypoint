@@ -9,6 +9,7 @@ import { versionWalk, type WaypointClient } from "../core/client";
 import { addMessages } from "./i18n";
 import { replyEnglish, replySimplifiedChinese } from "./reply-messages";
 import { context } from "./ui";
+import { useWaypointSelector } from "./headless";
 
 addMessages(replyEnglish, replySimplifiedChinese);
 type Rating = "positive" | "negative";
@@ -20,6 +21,11 @@ export function MessageActions({
   message: Message;
 }) {
   const { format: t, primitives: ui } = context();
+  const canRegenerate = useWaypointSelector(
+    () => client.canRegenerate?.(message.id) ?? client.canChangeVersions(),
+    Object.is,
+    client,
+  );
   const B = ui.button;
   const id = `wp${useId().replace(/[^\w-]/g, "")}`;
   const field = useRef<HTMLTextAreaElement>(null);
@@ -155,7 +161,7 @@ export function MessageActions({
           {t("chat.message.copy")}
         </B>
       )}
-      {ended ? null : client.canChangeVersions() ? (
+      {ended ? null : (reply ? canRegenerate : client.canChangeVersions()) ? (
         reply ? (
           <B
             aria-disabled={busy}

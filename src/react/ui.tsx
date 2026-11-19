@@ -29,6 +29,7 @@ import type {
   Block,
   Message,
   Problem,
+  ReplyFailure,
   PlanRecord,
   Reply,
 } from "../protocol/generated";
@@ -42,6 +43,7 @@ import {
   confirmationOf,
   flowTabId,
   type ReplyState,
+  type ReplyFailureRecord,
   type WaypointClient,
 } from "../core/client";
 import type { Capability } from "../protocol/index";
@@ -398,6 +400,10 @@ export interface WaypointProviderProps {
     problem: Problem,
     context?: { answeredElsewhere: boolean },
   ) => { text: string; action?: ReactNode };
+  replyFailureText?: (failure: ReplyFailure) => {
+    text: string;
+    action?: ReactNode;
+  };
   format?: FormatMessage;
   locale?: string;
   dir?: "ltr" | "rtl";
@@ -1586,11 +1592,35 @@ function RowActions({ slots, message }: { slots?: Slots; message: Message }) {
     </Part>
   );
 }
+interface FailurePresentation {
+  record: ReplyFailureRecord;
+  view: { text: string; action?: ReactNode };
+}
+function ReplyFailureText({
+  failure,
+  announce,
+}: {
+  failure: FailurePresentation;
+  announce?: boolean;
+}) {
+  return (
+    <div
+      data-reply-failure={failure.record.failure.id}
+      role={announce ? "status" : undefined}
+    >
+      <p>
+        {failure.view.text}
+        {failure.view.action}
+      </p>
+    </div>
+  );
+}
 // One message of the transcript. It renders again only when one of its
 // props changes: a delta into another message, or a keystroke in the
 // composer, leaves it as it is.
 const MessageRow = memo(function MessageRow({
   message,
+  failure,
   slots,
   anchorId,
   writing,
@@ -1603,6 +1633,7 @@ const MessageRow = memo(function MessageRow({
   setSize,
 }: {
   message: Message;
+  failure?: FailurePresentation;
   slots?: Slots;
   anchorId: string;
   // Still streaming in: what it says is not final.
@@ -1672,7 +1703,7 @@ const MessageRow = memo(function MessageRow({
           </ParseOf.Provider>
         </BodyOf.Provider>
         {/* Seen in the bubble; said once, by the reply row. */}
-        {writing ? (
+        {failure ? null : writing ? (
           <span data-writing="" aria-hidden="true">
             {t("reply.writing")}
           </span>
@@ -1710,6 +1741,12 @@ const MessageRow = memo(function MessageRow({
           );
         })}
       </Part>
+      {failure ? (
+        <ReplyFailureText
+          failure={failure}
+          announce={message.role !== "assistant"}
+        />
+      ) : null}
       {actions ? <RowActions slots={slots} message={message} /> : null}
     </article>
   );
@@ -2248,6 +2285,50 @@ function ChatBody({
     () => (outlineOpen ? () => search.stop() : undefined),
     [outlineOpen, search],
   );
+  const failurePresentations = useMemo(
+    () =>
+      (state.replyFailures ?? []).map((record): FailurePresentation => ({
+        record,
+        view: record.failure.reason
+          ? (provider.replyFailureText?.(record.failure) ?? {
+              text: t(`reply.${record.status}`),
+            })
+          : { text: t(`reply.${record.status}`) },
+      })),
+    [state.replyFailures, provider.replyFailureText, t],
+  );
+  const failuresByMessage = useMemo(
+    () =>
+      new Map(
+        failurePresentations
+          .filter((failure) => failure.record.messageId)
+          .map((failure) => [failure.record.messageId!, failure]),
+      ),
+    [failurePresentations],
+  );
+  const activeFailure = failurePresentations.find(
+    (failure) => failure.record.active,
+  );
+  const unanchoredFailure =
+    activeFailure &&
+    !messages.some((message) => message.id === activeFailure.record.messageId)
+      ? activeFailure
+      : undefined;
+  const failureAnnouncements = useMemo(
+    () =>
+      new Map(
+        failurePresentations
+          .filter((failure) =>
+            messages.some(
+              (message) =>
+                message.id === failure.record.messageId &&
+                message.role === "assistant",
+            ),
+          )
+          .map((failure) => [failure.record.messageId!, failure.view.text]),
+      ),
+    [failurePresentations, messages],
+  );
   const liveRegion = useRef<HTMLDivElement>(null);
   const announcement = useAnnouncements(
     client,
@@ -2255,6 +2336,7 @@ function ChatBody({
     excerptOf,
     t,
     liveRegion,
+    failureAnnouncements,
   );
   // A flow run started by a press here. Focus moves to the composer only
   // when this run's own navigation succeeded and its conversation is
@@ -2717,6 +2799,7 @@ function ChatBody({
                                 posInSet={segment.from + offset + 1}
                                 setSize={messages.length + state.pending.length}
                                 message={message}
+                                failure={failuresByMessage.get(message.id)}
                                 slots={slots}
                                 anchorId={anchor(message.id)}
                                 writing={message.id === writingId}
@@ -2879,7 +2962,7 @@ function ChatBody({
             </Part>
             <Part name="replyRow" slots={slots}>
               <div ref={replyRow} role="status" data-reply-state={row}>
-                {heldRow === "none" || endedInReply ? null : (
+                {heldRow === "none" || endedInReply || activeFailure ? null : (
                   <p
                     // A reply being written shows it in its bubble: the row
                     // says it once, to assistive technology only.
@@ -2893,6 +2976,9 @@ function ChatBody({
                   </p>
                 )}
               </div>
+              {unanchoredFailure ? (
+                <ReplyFailureText failure={unanchoredFailure} announce />
+              ) : null}
               {row !== "none" || state.toolSteps.length ? (
                 <ReplyControls client={client} row={row} />
               ) : null}

@@ -65,6 +65,18 @@ A host that cannot finish a reply says so in one of two ways: it ends the messag
 - A host SHOULD end a reply it gave up on with one of these statuses rather than leave it `writing`.
 - A host MUST NOT mark a message `completed` when its text is not the whole reply.
 
+### Host reasons and recovery
+
+A conversation MAY include `replyFailure: { id, forMessageId?, reason?, recovery? }` when its reply fails. The host MUST use a new `id` for a distinct episode. `forMessageId` anchors the failure to its user or assistant message; without it the explicit recovery target, or the conversational turn in the read that first supplied the episode, anchors it. Newer user turns MUST NOT inherit an earlier failure or recover its target. A partial assistant's failure appears under its partial text, once.
+
+`reason` is safe host enum detail (`{ code, qualifier? }`, each 1–128 Unicode characters). `replyFailureText(failure)` maps a non-null reason to `{ text, action? }`; the optional action can open host settings. Missing/null reason uses neutral text, without retaining a previous reason. Missing/null `replyFailure`, or a failure without `recovery`, preserves the existing Retry policy above.
+
+Only an explicit `recovery` changes that policy: `{ kind: "regenerate", messageId }` selects an existing assistant in the failed turn, `{ kind: "resend", messageId }` selects a user with no assistant reply, and `{ kind: "none" }` removes stock recovery, including that failed message's Regenerate. Targets MUST belong to the same conversation and failed turn; invalid or unavailable offers do not authorize another operation. A host may report a partial assistant still `writing` as conversation-failed; it has the selected recovery and no reply Stop.
+
+Provide `replies: { recover(input) }` on the client to deliver either selected operation. `ReplyRecoveryInput` contains `conversationId`, `messageId`, `kind`, `clientReplyId` and the attempt's native cancellation `signal` (typed structurally as `ScopeSignal`). Resend asks for the missing reply and MUST NOT append another user message. Regenerate prefers this port, or uses `versions.regenerate` when only that port exists; Resend never falls back to versions or message send. `MessageVersionInput.signal?` adds cancellation to existing version adapters. `client.canRegenerate?.(messageId)` uses the same eligibility as the message and reply-row controls.
+
+The port returns `void` when accepted, `{ accepted: false, problem }` only when no work was accepted, or throws when the outcome is unknown. Unknown outcomes and accepted attempts whose episode remains reported reuse their id on an explicit retry; definitive refusal permits a new id. A changed episode/kind/target/version receives a new id. The host MUST deduplicate `clientReplyId`. Row and message Regenerate share one in-flight attempt for a version. Withdrawal hides the offer without canceling accepted work or replaying automatically. Switching/disposal aborts the signal, settles the caller locally and releases only that attempt's ownership even if the port never settles; stale completions cannot change another visit. A new authoritative read must confirm the same episode/target/version before replay after a revisit.
+
 ## Where an error is shown
 
 An error is shown next to what it is about, so the reader finds it where they are looking, at any width.

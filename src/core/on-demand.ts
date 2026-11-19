@@ -9,6 +9,7 @@ import {
   type ConversationReadResult,
   type ReplyDelivery,
   type ReplyInput,
+  type ReplyRecoveryInput,
   DEFAULT_FLOW_TABS,
   flowTabId,
   type WaypointClient,
@@ -17,6 +18,7 @@ import {
 import { validateFlowDocument } from "./flows";
 import type { ExecutionAcceptance, Flow, Problem } from "../protocol/generated";
 import type { Scope, ScopeSignal } from "./scope";
+import type { RecoveryRequest } from "./reply-recovery";
 
 /** What the client lends these actions: its own state and ownership. */
 export interface OnDemandContext {
@@ -80,7 +82,70 @@ export function createOnDemand(context: OnDemandContext) {
   let prepared: { id: string; document: Flow; scope: ScopeSignal } | undefined;
   let preparation = 0;
   const feedbackAttempts = new Map<string, Promise<boolean>>();
+  const replyReplay = new Map<string, string>();
   return {
+    dispose() {
+      replyReplay.clear();
+      versionAttempts.clear();
+      feedbackAttempts.clear();
+      prepared = undefined;
+    },
+    async recover(
+      scope: ScopeSignal,
+      request: RecoveryRequest,
+      version: string | number,
+    ): Promise<void> {
+      await context.ready;
+      if (!context.live() || context.formMode() || scope.aborted) return;
+      const state = context.state();
+      const key = JSON.stringify([
+        state.conversationId,
+        request.episode,
+        request.kind,
+        request.messageId,
+        version,
+      ]);
+      const clientReplyId = replyReplay.get(key) ?? config.platform.ids();
+      replyReplay.set(key, clientReplyId);
+      const input: ReplyRecoveryInput = {
+        conversationId: state.conversationId,
+        messageId: request.messageId,
+        clientReplyId,
+        kind: request.kind,
+        signal: scope,
+      };
+      const asked =
+        request.kind === "regenerate"
+          ? context.versionAsking(request.messageId)
+          : undefined;
+      context.emit({
+        type: "reply",
+        conversationId: input.conversationId,
+        replyId: clientReplyId,
+      });
+      try {
+        const result =
+          request.episode !== undefined && config.replies
+            ? await config.replies.recover(input)
+            : await config.versions!.regenerate(input);
+        if (scope.aborted) return;
+        if (result && result.accepted === false) {
+          replyReplay.delete(key);
+          report(asProblem(result.problem, clientReplyId));
+          return;
+        }
+        asked?.();
+        await context.refresh();
+        if (
+          !scope.aborted &&
+          (request.episode === undefined ||
+            context.state().conversation?.replyFailure?.id !== request.episode)
+        )
+          replyReplay.delete(key);
+      } catch (error) {
+        if (!scope.aborted) report(asProblem(error, clientReplyId));
+      }
+    },
     // Rates a finished reply, once per identical rating in flight.
     async feedback(
       scope: ScopeSignal,
@@ -136,11 +201,11 @@ export function createOnDemand(context: OnDemandContext) {
         ...(versionIndex !== undefined && { versionIndex }),
       });
     },
-    // Edits, regenerates or selects a message version, once per identical
+    // Edits or selects a message version, once per identical
     // request while it is in flight.
     async version(
       scope: ScopeSignal,
-      operation: "edit" | "regenerate" | "select",
+      operation: "edit" | "select",
       messageId: string,
       content?: string,
       index?: number,
@@ -155,7 +220,6 @@ export function createOnDemand(context: OnDemandContext) {
         !config.versions ||
         !message ||
         (operation === "edit" && message.role !== "user") ||
-        (operation === "regenerate" && message.role !== "assistant") ||
         (operation === "select" &&
           (!Number.isInteger(index) ||
             index! < 1 ||
@@ -179,11 +243,8 @@ export function createOnDemand(context: OnDemandContext) {
         conversationId: state.conversationId,
         messageId,
         clientReplyId: attempt.id,
+        signal: scope,
       };
-      const asked =
-        operation === "regenerate"
-          ? context.versionAsking(messageId)
-          : undefined;
       attempt.active = (async () => {
         context.emit({
           type: "reply",
@@ -193,11 +254,8 @@ export function createOnDemand(context: OnDemandContext) {
         try {
           if (operation === "edit")
             await config.versions!.edit({ ...input, content: content ?? "" });
-          else if (operation === "regenerate")
-            await config.versions!.regenerate(input);
           else await config.versions!.select({ ...input, index: index! });
           versionAttempts.delete(key);
-          asked?.();
           if (!scope.aborted) await context.refresh();
         } catch (error) {
           if (!scope.aborted) report(asProblem(error, input.clientReplyId));

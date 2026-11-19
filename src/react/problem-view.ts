@@ -121,10 +121,22 @@ export interface ReplyRowAction {
  */
 export function replyRowView(
   state: ReplyState,
-  options: { canStop?: boolean; canRetry?: boolean } = {},
+  options: {
+    canStop?: boolean;
+    canRetry?: boolean;
+    recovery?: "regenerate" | "resend" | "none";
+  } = {},
 ): { key?: MessageKey; actions: ReplyRowAction[] } {
   if (state === "none") return { actions: [] };
-  const retry: ReplyRowAction = { id: "retry", labelKey: "chat.retry" };
+  const retry: ReplyRowAction = {
+    id: "retry",
+    labelKey:
+      options.recovery === "regenerate"
+        ? "chat.message.regenerate"
+        : options.recovery === "resend"
+          ? "chat.resend"
+          : "chat.retry",
+  };
   return {
     key: `reply.${state}`,
     actions:
@@ -134,7 +146,7 @@ export function replyRowView(
           ? options.canStop
             ? [{ id: "stop", labelKey: "chat.reply.stop" }]
             : []
-          : options.canRetry === false
+          : options.canRetry === false || options.recovery === "none"
             ? []
             : [retry],
   };

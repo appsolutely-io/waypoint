@@ -71,7 +71,7 @@ For integrations with account lifecycle semantics, immutable principal subject r
 
 ## Packaging acceptance
 
-Run `npm run size` under Node.js 22, matching the Check workflow. The size configuration rejects other Node major versions because gzip measurements vary with the bundled zlib; a different runtime can hide a budget overrun. This measurement requirement does not narrow the package's supported Node versions.
+Run `npm run size` under Node.js 22, matching the Check workflow. The size command rejects other Node major versions because gzip measurements vary with the bundled zlib; a different runtime can hide a budget overrun. This measurement requirement does not narrow the package's supported Node versions.
 
 The eager core keeps its own budget in `.size-limit.cjs`, checked by `npm run size`. Intent, client actions, reads, storage, decoder and other lazy code keep separate entry budgets. The additional **core with lazy recovery** check rebundles all reachable static and dynamic recovery dependencies once with the size-limit plugin's esbuild minification and tree-shaking settings, then measures gzip level 9 minus the size plugin's 32-byte empty-project deduction. It excludes the independently measured YAML parser, form session and conformance runners. The regression limit in `.size-limit.cjs` allows 3% above the measured size, rounded down. This aggregate is not a startup-download claim. Existing entry caps remain independently enforced. A hidden reachable payload must make `npm run size` fail.
 

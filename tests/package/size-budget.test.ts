@@ -12,6 +12,10 @@ import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 import { runInNewContext } from "node:vm";
 
+const { checkSizeRuntime } = createRequire(import.meta.url)(
+  "../../scripts/size-runtime.cjs",
+) as { checkSizeRuntime(nodeVersion: string): void };
+
 function loadSizeConfig(nodeVersion: string): void {
   const file = resolve(".size-limit.cjs");
   runInNewContext(readFileSync(file, "utf8"), {
@@ -21,10 +25,14 @@ function loadSizeConfig(nodeVersion: string): void {
   });
 }
 
+it("the size configuration can be loaded under Node 26", () => {
+  expect(() => loadSizeConfig("26.13.1")).not.toThrow();
+});
+
 it.each(["20.19.5", "24.0.0", "26.13.1"])(
   "size measurements reject Node %s with instructions to use the CI runtime",
   (nodeVersion) => {
-    expect(() => loadSizeConfig(nodeVersion)).toThrow(
+    expect(() => checkSizeRuntime(nodeVersion)).toThrow(
       `Size measurements require Node.js 22 to match CI; found ${nodeVersion}. Switch to Node.js 22 and rerun npm run size.`,
     );
   },
@@ -33,11 +41,11 @@ it.each(["20.19.5", "24.0.0", "26.13.1"])(
 it.each(["22.0.0", "22.12.0"])(
   "size measurements accept Node %s",
   (nodeVersion) => {
-    expect(() => loadSizeConfig(nodeVersion)).not.toThrow();
+    expect(() => checkSizeRuntime(nodeVersion)).not.toThrow();
   },
 );
 
-it("the production size command refuses an oversized reachable recovery payload", () => {
+it("the production size budget refuses an oversized reachable recovery payload", () => {
   const budgets = createRequire(import.meta.url)("../../.size-limit.cjs") as {
     name: string;
     limit: string;
@@ -49,12 +57,9 @@ it("the production size command refuses an oversized reachable recovery payload"
   const root = mkdtempSync(".api-temp/production-size-");
   const run = () =>
     spawnSync(
-      "npm",
+      process.execPath,
       [
-        "--silent",
-        "run",
-        "size",
-        "--",
+        resolve("node_modules/size-limit/bin.js"),
         "--config",
         resolve(root, ".size-limit.cjs"),
         "--json",
@@ -230,7 +235,7 @@ it("a build without its metafile is refused; no build at all is not", () => {
   }
 });
 
-it("the production size command refuses an oversized shared lazy chunk", () => {
+it("the production size budget refuses an oversized shared lazy chunk", () => {
   const { root, budgets, shared } = fixtureBuild(
     `export const t=${JSON.stringify(randomBytes(4000).toString("hex"))};`,
   );
@@ -244,12 +249,9 @@ it("the production size command refuses an oversized shared lazy chunk", () => {
       )}, { root: __dirname, dist: "dist", shared: ${JSON.stringify(shared)} });\n`,
     );
     const run = spawnSync(
-      "npm",
+      process.execPath,
       [
-        "--silent",
-        "run",
-        "size",
-        "--",
+        resolve("node_modules/size-limit/bin.js"),
         "--config",
         resolve(root, ".size-limit.cjs"),
         "--json",

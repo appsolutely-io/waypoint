@@ -3,6 +3,7 @@ import {
   createWaypointClient,
   createMemoryStorage,
   type ClientConfig,
+  type TransportEvent,
 } from "../../src/core/client";
 import { config } from "../support/client";
 import samples from "../protocol/samples.json";
@@ -12,11 +13,16 @@ function fixture() {
   record.state = "awaiting-confirmation";
   const base = config();
   let writes = 0;
+  let receive!: (event: TransportEvent) => void;
   const clientConfig: ClientConfig = {
     ...base,
     storage: createMemoryStorage(),
     transport: {
       ...base.transport,
+      subscribe: (_id, listener) => {
+        receive = listener;
+        return () => {};
+      },
       send: async (reply) => {
         if (reply.kind === "confirm") record.state = "running";
         return { id: reply.clientReplyId };
@@ -39,7 +45,13 @@ function fixture() {
     },
   };
   const client = createWaypointClient(clientConfig);
-  return { record, client, clientConfig, writes: () => writes };
+  return {
+    record,
+    client,
+    clientConfig,
+    writes: () => writes,
+    receive: (event: TransportEvent) => receive(event),
+  };
 }
 it("a direct run never records a user confirmation for later resume", async () => {
   const { client, record, writes } = fixture();
@@ -235,4 +247,26 @@ it("Stop during recovery notification cannot restore approval memory", async () 
     capture.mockRestore();
     client.dispose();
   }
+});
+
+it("a streamed plan-changed problem clears when that plan is confirmed", async () => {
+  const { client, record, receive } = fixture();
+  await client.ready;
+  client.setPlan(record);
+  receive({
+    type: "frame",
+    frame: {
+      protocol: "1.0",
+      sequence: 1,
+      type: "problem",
+      problem: { code: "plan-changed", id: record.id },
+    },
+  });
+  expect(client.getSnapshot().problem).toEqual({
+    code: "plan-changed",
+    id: record.id,
+  });
+  await client.confirmPlan();
+  expect(client.getSnapshot().problem).toBeNull();
+  client.dispose();
 });

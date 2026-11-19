@@ -230,6 +230,8 @@ export interface ClientSnapshot {
   conversationUnavailable: boolean;
   draft: string;
   pending: readonly PendingSend[];
+  /** Actual outbox rows loaded for this visit, for silent restoration. */
+  pendingRestoration?: { visit: number; ids: readonly string[] };
   problem: Problem | null;
   announcement: number;
   observerFailures: number;
@@ -906,6 +908,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   const landed = new WeakSet<Operation>();
   const inFlight = new Set<string>();
   let view = empty;
+  const livePendingIds = new Set<string>();
+  let pendingRestoration = { visit: 0, ids: [] as readonly string[] };
   const derive = () => {
     view = queued.reduce(applyOperation, stored);
     // A row the transcript already acknowledges is removed, wherever the
@@ -924,6 +928,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     update({
       draft: view.draft,
       restored: view.restored,
+      pendingRestoration,
       // A row without a settled outcome, and not being sent here, may or may
       // not have been delivered.
       pending: view.pending.map((row) => ({
@@ -939,6 +944,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     });
   };
   const record = (operation: Operation) => {
+    if (operation.kind === "add") livePendingIds.add(operation.row.id);
     queued.push(operation);
     derive();
   };
@@ -992,6 +998,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       const loaded = readOutbox(JSON.parse(raw) as StoredRecord);
       // A record older than one this client already observed is not loaded.
       if (loaded.revision < stored.revision) return;
+      pendingRestoration = {
+        visit: pendingRestoration.visit,
+        ids: loaded.pending
+          .map((row) => row.id)
+          .filter((id) => !livePendingIds.has(id)),
+      };
       stored = loaded;
       derive();
     } catch {
@@ -1443,7 +1455,15 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       return showPlan(frame.plan.id, scope);
     }
     if (frame.type === "problem") {
-      report(frame.problem);
+      const collision = state.pending.some(
+        (row) => row.id === frame.problem.id && row.failure === null,
+      );
+      report(
+        asProblem(
+          frame.problem,
+          collision ? config.platform.ids() : frame.problem.id,
+        ),
+      );
       return;
     }
     const mark = "messageId" in frame ? marks.get(frame.messageId) : undefined;
@@ -2746,6 +2766,11 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     if (owners.some((owner) => owner.aborted) || isDisposed())
       return { kind: "superseded", conversationId: id };
     const sameConversation = id === state.conversationId;
+    livePendingIds.clear();
+    pendingRestoration = {
+      visit: pendingRestoration.visit + 1,
+      ids: sameConversation ? stored.pending.map((row) => row.id) : [],
+    };
     close();
     navigate();
     knownMode = undefined;
@@ -3158,32 +3183,57 @@ function isPending(value: unknown): value is PendingSend {
     typeof (value as PendingSend).content === "string"
   );
 }
+const MAX_HOST_DETAIL_LENGTH = 128;
+function hostDetail(value: unknown): Problem["host"] {
+  if (value === null) return null;
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as { code?: unknown; qualifier?: unknown };
+  const valid = (text: unknown): text is string =>
+    typeof text === "string" &&
+    [...text].length > 0 &&
+    [...text].length <= MAX_HOST_DETAIL_LENGTH;
+  if (
+    !valid(candidate.code) ||
+    (candidate.qualifier !== undefined && !valid(candidate.qualifier))
+  )
+    return undefined;
+  return {
+    code: candidate.code,
+    ...(candidate.qualifier !== undefined && {
+      qualifier: candidate.qualifier,
+    }),
+  };
+}
 export function asProblem(error: unknown, id: string): Problem {
   const candidate = error as Partial<Problem> | null;
   const code = candidate?.code;
   const reason = candidate?.confirmation?.reason;
   const wait = candidate?.retryAfter;
+  const host = hostDetail(candidate?.host);
   return PROBLEM_CODES.includes(code!)
     ? {
         code: code!,
         id,
-        // A confirmation refusal keeps only its known reason.
+        ...(host !== undefined && { host }),
         ...(code === "refused" &&
           REASONS.includes(reason!) && { confirmation: { reason: reason! } }),
-        // A host's wait is kept only as a whole number of seconds.
         ...(Number.isInteger(wait) && wait! >= 0 && { retryAfter: wait }),
       }
     : { code: "in-doubt", id };
 }
 /** A failed read's problem: a host's whole-second wait makes it a rate limit. */
 export function readProblem(error: unknown, id: string): Problem {
-  const retryAfter = asProblem(
+  const normalized = asProblem(
     error instanceof ConversationReadError ? error.problem : error,
     id,
-  ).retryAfter;
-  return retryAfter === undefined
-    ? { code: "unavailable", id }
-    : { code: "rate-limited", id, retryAfter };
+  );
+  const { retryAfter, host } = normalized;
+  return {
+    code: retryAfter === undefined ? "unavailable" : "rate-limited",
+    id,
+    ...(retryAfter !== undefined && { retryAfter }),
+    ...(host !== undefined && { host }),
+  };
 }
 /**
  * The plan's confirmation record, when it is bound to this plan, this

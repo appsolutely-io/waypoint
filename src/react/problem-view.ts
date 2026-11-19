@@ -1,7 +1,7 @@
 // How a problem and the reply row are worded, as message keys and the one
 // action each offers: shared by the web chat and any UI drawn from
 // `/hooks`. No strings, no React, no DOM.
-import type { ReplyState } from "../core/client";
+import type { PendingSend, ReplyState } from "../core/client";
 import type { Problem } from "../protocol/generated";
 import type { MessageKey } from "./i18n";
 
@@ -42,6 +42,33 @@ export const problemAction = (
         ].includes(problem.code)
       ? "retry"
       : undefined;
+export interface ProblemDisplayOptions {
+  checking?: boolean;
+  planStopped?: boolean;
+  conversationUnavailable?: boolean;
+}
+/** The problem eligible for the shared transcript/composer presentation. */
+export function visibleProblem(
+  problem: Problem | null,
+  options: ProblemDisplayOptions = {},
+): Problem | undefined {
+  return problem &&
+    !options.checking &&
+    problem.id !== "conversation-unavailable" &&
+    !(problem.code === "stopped" && options.planStopped) &&
+    !problem.confirmation &&
+    !(options.conversationUnavailable && problem.id === "conversation-read")
+    ? problem
+    : undefined;
+}
+/** A current eligible override applies only to a row that is still failed. */
+export function pendingProblem(
+  row: Pick<PendingSend, "id" | "failure">,
+  eligibleProblem: Problem | undefined,
+): Problem | null {
+  if (!row.failure) return null;
+  return eligibleProblem?.id === row.id ? eligibleProblem : row.failure;
+}
 export interface ProblemView {
   /** The plain words for the problem. */
   key: MessageKey;

@@ -1,6 +1,7 @@
 /* Generated from schema.json. */
 
 export type WaypointProtocol =
+  | HostProblemDetail
   | Problem
   | Negotiation
   | NegotiationOfferWire
@@ -215,6 +216,13 @@ export type CreateConversation = {
   clientCreationId?: string;
 };
 
+/**
+ * Safe host-defined enumerated detail; never raw provider text.
+ */
+export interface HostProblemDetail {
+  code: string;
+  qualifier?: string;
+}
 export interface Problem {
   code:
     | 'update-required'
@@ -238,6 +246,7 @@ export interface Problem {
     | 'agreement-expired';
   id: string;
   retryAfter?: number;
+  host?: HostProblemDetail | null;
   /**
    * Why a confirmation was refused; only with code refused.
    */

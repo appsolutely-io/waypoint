@@ -105,7 +105,12 @@ import type { MarkdownImagePolicy } from "./markdown";
 export type { MarkdownImagePolicy } from "./markdown";
 type MarkdownModule = typeof import("./markdown");
 import { lazyChunk, useChunk } from "./chunks";
-import { problemAction, problemView } from "./problem-view";
+import {
+  pendingProblem,
+  visibleProblem,
+  problemAction,
+  problemView,
+} from "./problem-view";
 // The stock renderer's chunk, shared by every message: loaded once on first
 // use, and tried again after a failure when a message body next asks or a
 // Retry is pressed.
@@ -229,7 +234,11 @@ export interface PartMessage {
 export interface PartPending {
   id: string;
   content: string;
-  failure: { code: Problem["code"] } | null;
+  failure: {
+    code: Problem["code"];
+    id?: string;
+    host?: Problem["host"];
+  } | null;
 }
 /** A plan step as its row sees it. */
 export type PartStep = Pick<
@@ -984,8 +993,45 @@ function pendingSummary(pending: {
   return {
     id: pending.id,
     content: pending.content,
-    failure: pending.failure ? { code: pending.failure.code } : null,
+    failure: pending.failure
+      ? {
+          code: pending.failure.code,
+          id: pending.failure.id,
+          ...(pending.failure.host !== undefined && {
+            host:
+              pending.failure.host === null
+                ? null
+                : { ...pending.failure.host },
+          }),
+        }
+      : null,
   };
+}
+function PendingProblemText({
+  text,
+  restored,
+  children,
+}: {
+  text: string | undefined;
+  restored: boolean;
+  children: ReactNode;
+}) {
+  const [current, setCurrent] = useState(() => ({
+    text,
+    live: !restored,
+    revision: 0,
+  }));
+  if (current.text !== text)
+    setCurrent({ text, live: true, revision: current.revision + 1 });
+  return text === undefined ? null : (
+    <p
+      role={current.live ? "alert" : undefined}
+      key={`problem-${current.revision}`}
+    >
+      {text}
+      {children}
+    </p>
+  );
 }
 export function Part<N extends PartName>({
   name,
@@ -2327,19 +2373,11 @@ function ChatBody({
       : null;
   const plan = state.plan;
   const planView = recovery.view;
-  // The problem the alert says, when it says one.
-  const shownProblem =
-    problem &&
-    state.problem?.id !== "conversation-unavailable" &&
-    // The recovery panel states a protected plan's stop itself.
-    !(state.problem?.code === "stopped" && planView?.status) &&
-    // A confirmation refusal is shown with the confirmation.
-    !state.problem?.confirmation &&
-    !(
-      state.conversationUnavailable && state.problem?.id === "conversation-read"
-    )
-      ? state.problem
-      : undefined;
+  const shownProblem = visibleProblem(state.problem, {
+    checking: !!state.problem && checking.current.has(state.problem.id),
+    planStopped: !!planView?.status,
+    conversationUnavailable: state.conversationUnavailable,
+  });
   // Where the problem is shown: one about a message that could not be sent
   // is shown with that message; any other is about the conversation and is
   // shown after the composer.
@@ -2694,100 +2732,115 @@ function ChatBody({
                             ))
                         ),
                       )}
-                      {state.pending.map((pending, index) => (
-                        <article
-                          key={pending.id}
-                          data-role="pending"
-                          data-pending-id={pending.id}
-                          tabIndex={-1}
-                          aria-posinset={messages.length + index + 1}
-                          aria-setsize={messages.length + state.pending.length}
-                          aria-label={t("chat.roleUser")}
-                        >
-                          <Part
-                            name="bubble"
-                            slots={slots}
-                            data={{ pending: pendingSummary(pending) }}
-                          >
-                            <span data-sender="" aria-hidden="true">
-                              {t("chat.roleUser")}
-                            </span>
-                            <p>{pending.content}</p>
-                          </Part>
-                          <p
-                            id={`${pendingId}-${pending.id}`}
-                            data-pending-status={
-                              pending.failure ? "failed" : "sending"
+                      {state.pending.map((pending, index) => {
+                        const rowProblem = pendingProblem(
+                          pending,
+                          shownProblem,
+                        );
+                        const rowText = rowProblem
+                          ? (provider.problemText?.(rowProblem, {
+                              answeredElsewhere:
+                                rowProblem === answeredElsewhere.current,
+                            }) ?? defaultProblemText(rowProblem, t))
+                          : undefined;
+                        return (
+                          <article
+                            key={pending.id}
+                            data-role="pending"
+                            data-pending-id={pending.id}
+                            tabIndex={-1}
+                            aria-posinset={messages.length + index + 1}
+                            aria-setsize={
+                              messages.length + state.pending.length
                             }
+                            aria-label={t("chat.roleUser")}
                           >
-                            {t(
-                              pending.failure
-                                ? "chat.pendingFailed"
-                                : "chat.pendingSending",
-                            )}
-                          </p>
-                          {/* Its own problem, said here. Its Retry is the
-                              message's own, below; a Refresh the problem
-                              asks for stays with it. */}
-                          {messageProblem?.id === pending.id && problem ? (
-                            <p role="alert" key={state.announcement}>
-                              {problem.text}
-                              {problem.action ??
-                                (!provider.problemText &&
-                                problemAction(messageProblem) === "refresh" ? (
-                                  <ProblemAction
-                                    problem={messageProblem}
-                                    refresh={retrying}
-                                  />
-                                ) : null)}
-                            </p>
-                          ) : null}
-                          {pending.failure ? (
                             <Part
-                              name="failedSendControls"
+                              name="bubble"
                               slots={slots}
                               data={{ pending: pendingSummary(pending) }}
                             >
-                              <B
-                                aria-describedby={`${pendingId}-${pending.id}`}
-                                disabled={
-                                  state.conversationUnavailable || state.sending
-                                }
-                                onPress={() => {
-                                  void client.retry(pending.id);
-                                }}
-                              >
-                                {t("chat.retry")}
-                              </B>
-                              <B
-                                aria-describedby={`${pendingId}-${pending.id}`}
-                                disabled={state.withdrawing.includes(
-                                  pending.id,
-                                )}
-                                onPress={() => {
-                                  void client.withdraw(pending.id);
-                                }}
-                              >
-                                {t("chat.withdraw")}
-                              </B>
-                              <B
-                                aria-describedby={`${pendingId}-${pending.id}`}
-                                onPress={() => {
-                                  void client.dismiss(pending.id);
-                                }}
-                              >
-                                {t("chat.dismiss")}
-                              </B>
+                              <span data-sender="" aria-hidden="true">
+                                {t("chat.roleUser")}
+                              </span>
+                              <p>{pending.content}</p>
                             </Part>
-                          ) : null}
-                          {messageProblem?.id === pending.id ? (
-                            <ProblemDetails
-                              key={state.announcement}
-                              problem={messageProblem}
-                            />
-                          ) : null}
-                        </article>
-                      ))}
+                            <p
+                              id={`${pendingId}-${pending.id}`}
+                              data-pending-status={
+                                pending.failure ? "failed" : "sending"
+                              }
+                            >
+                              {t(
+                                pending.failure
+                                  ? "chat.pendingFailed"
+                                  : "chat.pendingSending",
+                              )}
+                            </p>
+                            <PendingProblemText
+                              key={`problem-${state.pendingRestoration?.visit ?? 0}`}
+                              text={rowText?.text}
+                              restored={
+                                state.pendingRestoration?.ids.includes(
+                                  pending.id,
+                                ) ?? false
+                              }
+                            >
+                              {rowText?.action ??
+                                (!provider.problemText &&
+                                rowProblem &&
+                                problemAction(rowProblem) === "refresh" ? (
+                                  <ProblemAction
+                                    problem={rowProblem}
+                                    refresh={retrying}
+                                  />
+                                ) : null)}
+                            </PendingProblemText>
+                            {pending.failure ? (
+                              <Part
+                                name="failedSendControls"
+                                slots={slots}
+                                data={{ pending: pendingSummary(pending) }}
+                              >
+                                <B
+                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  disabled={
+                                    state.conversationUnavailable ||
+                                    state.sending
+                                  }
+                                  onPress={() => {
+                                    void client.retry(pending.id);
+                                  }}
+                                >
+                                  {t("chat.retry")}
+                                </B>
+                                <B
+                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  disabled={state.withdrawing.includes(
+                                    pending.id,
+                                  )}
+                                  onPress={() => {
+                                    void client.withdraw(pending.id);
+                                  }}
+                                >
+                                  {t("chat.withdraw")}
+                                </B>
+                                <B
+                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  onPress={() => {
+                                    void client.dismiss(pending.id);
+                                  }}
+                                >
+                                  {t("chat.dismiss")}
+                                </B>
+                              </Part>
+                            ) : null}
+                            {rowProblem ? (
+                              <ProblemDetails problem={rowProblem} />
+                            ) : null}
+                          </article>
+                        );
+                      })}
                     </div>
                   </RenderFailures.Provider>
                 </div>

@@ -388,6 +388,10 @@ export interface ClientSnapshot {
     observerFailures: number;
     // (undocumented)
     pending: readonly PendingSend[];
+    pendingRestoration?: {
+        visit: number;
+        ids: readonly string[];
+    };
     // (undocumented)
     plan: PlanRecord | null;
     planReadOnly?: boolean;
@@ -1069,6 +1073,14 @@ export function handlePlanningRead(call: ReadTemplate, template: ReadTemplate, r
 // @public
 export function handleToolRead(call: ToolCall, manifest: readonly ManifestEntry[], request: (call: ToolCall) => Promise<unknown>): Promise<ReadResult>;
 
+// @public
+export interface HostProblemDetail {
+    // (undocumented)
+    code: string;
+    // (undocumented)
+    qualifier?: string;
+}
+
 // @public (undocumented)
 export interface HttpInit {
     // (undocumented)
@@ -1541,6 +1553,8 @@ export interface Problem {
     confirmation?: {
         reason: 'expired' | 'used' | 'stale' | 'mismatch' | 'missing';
     };
+    // (undocumented)
+    host?: HostProblemDetail | null;
     // (undocumented)
     id: string;
     // (undocumented)
@@ -2146,7 +2160,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Source | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
+export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Source | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
 
 // @public (undocumented)
 export type WinnerKind = 'stop' | 'cancel-initial' | 'cancel-review' | 'leave' | 'keep';

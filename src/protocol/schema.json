@@ -3,6 +3,15 @@
   "$id": "https://waypoint.example/schema",
   "title": "WaypointProtocol",
   "$defs": {
+    "HostProblemDetail": {
+      "type": "object",
+      "description": "Safe host-defined enumerated detail; never raw provider text.",
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "qualifier": { "type": "string", "minLength": 1, "maxLength": 128 }
+      },
+      "required": ["code"]
+    },
     "Problem": {
       "type": "object",
       "properties": {
@@ -36,6 +45,9 @@
         "retryAfter": {
           "type": "integer",
           "minimum": 0
+        },
+        "host": {
+          "anyOf": [{ "$ref": "#/$defs/HostProblemDetail" }, { "type": "null" }]
         },
         "confirmation": {
           "type": "object",

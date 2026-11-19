@@ -488,6 +488,10 @@ export interface ClientSnapshot {
     observerFailures: number;
     // (undocumented)
     pending: readonly PendingSend[];
+    pendingRestoration?: {
+        visit: number;
+        ids: readonly string[];
+    };
     // (undocumented)
     plan: PlanRecord | null;
     planReadOnly?: boolean;
@@ -1381,6 +1385,14 @@ export interface FrameToolCall {
     type: 'tool.call';
 }
 
+// @public
+export interface HostProblemDetail {
+    // (undocumented)
+    code: string;
+    // (undocumented)
+    qualifier?: string;
+}
+
 // @public (undocumented)
 export interface ImmediateDraft {
     // (undocumented)
@@ -1863,6 +1875,8 @@ export interface PartPending {
     // (undocumented)
     failure: {
         code: Problem["code"];
+        id?: string;
+        host?: Problem["host"];
     } | null;
     // (undocumented)
     id: string;
@@ -1905,6 +1919,9 @@ export interface PatchFlow {
     // (undocumented)
     title: string;
 }
+
+// @public
+export function pendingProblem(row: Pick<PendingSend, "id" | "failure">, eligibleProblem: Problem | undefined): Problem | null;
 
 // @public (undocumented)
 export interface PendingSend {
@@ -2179,6 +2196,8 @@ export interface Problem {
         reason: 'expired' | 'used' | 'stale' | 'mismatch' | 'missing';
     };
     // (undocumented)
+    host?: HostProblemDetail | null;
+    // (undocumented)
     id: string;
     // (undocumented)
     retryAfter?: number;
@@ -2186,6 +2205,16 @@ export interface Problem {
 
 // @public (undocumented)
 export type ProblemCatalogue = Readonly<Record<ProblemMessageKey, string>>;
+
+// @public (undocumented)
+export interface ProblemDisplayOptions {
+    // (undocumented)
+    checking?: boolean;
+    // (undocumented)
+    conversationUnavailable?: boolean;
+    // (undocumented)
+    planStopped?: boolean;
+}
 
 // @public (undocumented)
 export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered" | "chat.problem.details" | "chat.problem.code" | "chat.problem.reference" | "chat.problem.refresh";
@@ -2829,6 +2858,9 @@ export interface ViewMessage {
     values?: Record<string, number>;
 }
 
+// @public
+export function visibleProblem(problem: Problem | null, options?: ProblemDisplayOptions): Problem | undefined;
+
 // @public (undocumented)
 export function WaypointChat(props: WaypointChatProps): react.JSX.Element;
 
@@ -2957,7 +2989,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Source | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
+export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Source | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
 
 // @public (undocumented)
 export function WaypointProvider(props: WaypointProviderProps): react.JSX.Element;

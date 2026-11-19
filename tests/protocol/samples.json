@@ -1,4 +1,8 @@
 {
+  "HostProblemDetail": {
+    "code": "availability",
+    "qualifier": "temporary"
+  },
   "Problem": {
     "code": "refused",
     "id": "problem-a"

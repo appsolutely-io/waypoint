@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Request refusals preserve safe host enum detail without changing local problem ids. Every failed send retains its own wording and Details; eligible standalone problems override only their matching failed row. Restored outbox failures display silently, while live refusals and later own-text changes announce independently. Standalone host problem ids remain unchanged except a collision with a sending row, which receives a stable new client id.
+
+### Added
+
+- Optional `Problem.host` (`HostProblemDetail`), additive pending part detail and `ClientSnapshot.pendingRestoration` provenance. `/hooks` and `/react` share `visibleProblem` and `pendingProblem` for filtered overrides, own-failure fallback and composer placement during retry. Existing hosts sending no detail keep their behavior and actions.
+
 ## 0.1.1-next.1 - 2026-11-07
 
 A pre-release, published under the `next` dist-tag.

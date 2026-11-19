@@ -40,6 +40,8 @@ export type {
   Slots,
   WaypointChatProps,
 } from "./ui";
+export { visibleProblem, pendingProblem } from "./problem-view";
+export type { ProblemDisplayOptions } from "./problem-view";
 export { planView, keepSheet, noticeMessages } from "./plan-view";
 export type {
   ActionEntry,

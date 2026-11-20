@@ -3,7 +3,12 @@ import { runPlanConformance } from "./plans";
 import { namesAppliedAnswer } from "./card-answer";
 import type { Conversation, Problem } from "../protocol/generated";
 import { SUPPORTED_PROTOCOLS } from "../protocol/index";
-import type { ConformanceConfig, ConformanceResult } from "./index";
+import type { ConformanceConfig, ConformanceResult, HttpResult } from "./index";
+import {
+  CAPABILITY_SCENARIOS,
+  CONFORMANCE_CAPABILITIES,
+  REPLY_STOP_SCENARIO,
+} from "./scenarios";
 // Loaded on first use by the conformance entry points, outside the core
 // bundle.
 export { runFormFillConformance, runPlanConformance };
@@ -12,6 +17,18 @@ export async function runConformance(
 ): Promise<ConformanceResult> {
   const failures: string[] = [];
   const scenarios: string[] = [];
+  const skipped: string[] = [];
+  const offered = Object.keys(CAPABILITY_SCENARIOS).filter(
+    (capability) =>
+      config.profile !== "app-host" ||
+      capability !== CONFORMANCE_CAPABILITIES.plans,
+  );
+  const withoutStop = offered.filter(
+    (capability) => capability !== CONFORMANCE_CAPABILITIES.replyStop,
+  );
+  const enabled = (capability: string, peer: Peer) =>
+    offered.includes(capability) && peer.capabilities.includes(capability);
+
   const session = await config.request("/__conformance/session", {
     method: "POST",
   });
@@ -20,6 +37,7 @@ export async function runConformance(
       passed: false,
       failures: ["test session unavailable"],
       scenarios: [],
+      skipped: Object.values(CAPABILITY_SCENARIOS).flat(),
     };
   const credentials = session.body as { session: string; csrf: string };
   const headers = {
@@ -41,23 +59,31 @@ export async function runConformance(
       failures.push(name);
     }
   };
+  let peer: Peer | undefined;
   await check("negotiation", async () => {
-    const r = await post("/negotiate", { supported: SUPPORTED_PROTOCOLS });
-    return (
-      r.status === 200 &&
-      SUPPORTED_PROTOCOLS.some(
-        (version) => version === (r.body as { protocol: string }).protocol,
-      ) &&
-      Array.isArray((r.body as { capabilities: unknown }).capabilities)
+    peer = negotiatedPeer(
+      await post("/negotiate", {
+        supported: SUPPORTED_PROTOCOLS,
+        offer: { capabilities: offered },
+      }),
     );
+    return peer !== undefined;
   });
-  const formPeer = await post("/negotiate", { supported: SUPPORTED_PROTOCOLS });
-  const peer = formPeer.body as { protocol: string; capabilities?: string[] };
-  if (peer.protocol === "1.1" && peer.capabilities?.includes("form-fill")) {
+  if (!peer)
+    return {
+      passed: false,
+      failures,
+      scenarios,
+      skipped: Object.values(CAPABILITY_SCENARIOS).flat(),
+    };
+  if (
+    peer.protocol === "1.1" &&
+    enabled(CONFORMANCE_CAPABILITIES.forms, peer)
+  ) {
     const forms = await runFormFillConformance(config.request);
     failures.push(...forms.failures);
     scenarios.push(...forms.scenarios);
-  }
+  } else skipped.push(...CAPABILITY_SCENARIOS[CONFORMANCE_CAPABILITIES.forms]);
   const created = await post("/conversations", { title: "Fixture" });
   const id = (created.body as { id: string }).id;
   await check("optimistic replay", async () => {
@@ -212,7 +238,7 @@ export async function runConformance(
   await check("agreement binding", async () => {
     const bound = await post("/negotiate", {
       supported: SUPPORTED_PROTOCOLS,
-      offer: { capabilities: ["plans"] },
+      offer: { capabilities: withoutStop },
     });
     const answer = bound.body as { agreementId?: unknown };
     // A host that issues no agreement is a legacy host for this check.
@@ -250,11 +276,11 @@ export async function runConformance(
   await check("agreement keeps its answer", async () => {
     const first = await post("/negotiate", {
       supported: ["1.0"],
-      offer: { capabilities: ["plans"] },
+      offer: { capabilities: withoutStop },
     });
     const second = await post("/negotiate", {
       supported: SUPPORTED_PROTOCOLS,
-      offer: { capabilities: ["plans"] },
+      offer: { capabilities: withoutStop },
     });
     const a = first.body as { agreementId?: string; protocol?: string };
     const b = second.body as { agreementId?: string; protocol?: string };
@@ -271,14 +297,11 @@ export async function runConformance(
   });
   const stopPeer = await post("/negotiate", {
     supported: SUPPORTED_PROTOCOLS,
-    offer: { capabilities: ["reply-stop"] },
+    offer: { capabilities: [CONFORMANCE_CAPABILITIES.replyStop] },
   });
-  if (
-    (stopPeer.body as { capabilities?: string[] }).capabilities?.includes(
-      "reply-stop",
-    )
-  )
-    await check("reply stop", async () => {
+  const stopAnswer = negotiatedPeer(stopPeer);
+  if (stopAnswer && enabled(CONFORMANCE_CAPABILITIES.replyStop, stopAnswer))
+    await check(REPLY_STOP_SCENARIO, async () => {
       // A reply left being written, as the script asks.
       await post("/__conformance/script", {
         turns: [{ chunks: ["Partial answer"], interval: 0, ending: "held" }],
@@ -352,7 +375,7 @@ export async function runConformance(
       const plain = (
         (await post("/negotiate", {
           supported: SUPPORTED_PROTOCOLS,
-          offer: { capabilities: ["plans"] },
+          offer: { capabilities: withoutStop },
         })) as { body: { agreementId?: string } }
       ).body.agreementId;
       const older = plain ? await read(plain) : undefined;
@@ -372,10 +395,14 @@ export async function runConformance(
         after.content === "Partial answer"
       );
     });
-  const plans = await runPlanConformance(config.request);
-  failures.push(...plans.failures);
-  scenarios.push(...plans.scenarios);
-  return { passed: failures.length === 0, failures, scenarios };
+  else
+    skipped.push(...CAPABILITY_SCENARIOS[CONFORMANCE_CAPABILITIES.replyStop]);
+  if (enabled(CONFORMANCE_CAPABILITIES.plans, peer)) {
+    const plans = await runPlanConformance(config.request);
+    failures.push(...plans.failures);
+    scenarios.push(...plans.scenarios);
+  } else skipped.push(...CAPABILITY_SCENARIOS[CONFORMANCE_CAPABILITIES.plans]);
+  return { passed: failures.length === 0, failures, scenarios, skipped };
 }
 function bodyFor(type: string): unknown {
   const bodies: Record<string, unknown> = {
@@ -393,4 +420,21 @@ function bodyFor(type: string): unknown {
     notice: { text: "Ready" },
   };
   return bodies[type] ?? {};
+}
+
+interface Peer {
+  protocol: string;
+  capabilities: string[];
+}
+function negotiatedPeer(result: HttpResult): Peer | undefined {
+  if (result.status !== 200 || !result.body || typeof result.body !== "object")
+    return;
+  const peer = result.body as Partial<Peer>;
+  if (
+    !SUPPORTED_PROTOCOLS.some((protocol) => protocol === peer.protocol) ||
+    !Array.isArray(peer.capabilities) ||
+    !peer.capabilities.every((capability) => typeof capability === "string")
+  )
+    return;
+  return { protocol: peer.protocol!, capabilities: peer.capabilities };
 }

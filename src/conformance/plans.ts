@@ -1,6 +1,7 @@
 import type { HttpRequest, ConformanceResult } from "./index";
 import type { PlanRecord, ImmediatePlan } from "../protocol/generated";
 import { createPlanRunner } from "../core/runner";
+import { PLAN_SCENARIOS } from "./scenarios";
 export async function runPlanConformance(
   request: HttpRequest,
 ): Promise<ConformanceResult> {
@@ -19,8 +20,8 @@ export async function runPlanConformance(
       headers,
       body: JSON.stringify({ protocol: "1.0", ...(body as object) }),
     });
-  for (const mode of ["run", "refuse"]) {
-    scenarios.push(`plan ${mode}`);
+  for (const [mode, name] of Object.entries(PLAN_SCENARIOS)) {
+    scenarios.push(name);
     try {
       await post("/__conformance/script", { planScenario: mode });
       const created = await post("/conversations", { title: "Plan" });
@@ -106,8 +107,8 @@ export async function runPlanConformance(
       }
       runner.dispose();
     } catch {
-      failures.push(`plan ${mode}`);
+      failures.push(name);
     }
   }
-  return { passed: failures.length === 0, failures, scenarios };
+  return { passed: failures.length === 0, failures, scenarios, skipped: [] };
 }

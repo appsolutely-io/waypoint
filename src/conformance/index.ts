@@ -15,13 +15,14 @@ export type HttpRequest = (
 export interface ConformanceConfig {
   baseUrl: string;
   request: HttpRequest;
-  profile: "admin-host" | "app-host";
+  profile?: "admin-host" | "app-host";
   noStepUp?: boolean;
 }
 export interface ConformanceResult {
   passed: boolean;
   failures: string[];
   scenarios: string[];
+  skipped?: string[];
 }
 /** The problem a failed load of the conformance code rejects with. */
 export const CONFORMANCE_UNAVAILABLE = {

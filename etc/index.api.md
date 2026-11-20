@@ -503,7 +503,7 @@ export interface ConformanceConfig {
     // (undocumented)
     noStepUp?: boolean;
     // (undocumented)
-    profile: "admin-host" | "app-host";
+    profile?: "admin-host" | "app-host";
     // (undocumented)
     request: HttpRequest;
 }
@@ -516,6 +516,8 @@ export interface ConformanceResult {
     passed: boolean;
     // (undocumented)
     scenarios: string[];
+    // (undocumented)
+    skipped?: string[];
 }
 
 // @public (undocumented)

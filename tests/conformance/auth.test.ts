@@ -293,3 +293,45 @@ for (const [name, run] of runners) {
     );
   });
 }
+
+it("secondary negotiation adapter failures return a safe conformance result", async () => {
+  await service(
+    () => ({ headers: { "X-Host-Auth": AUTH } }),
+    { "x-host-auth": AUTH },
+    async (request) => {
+      let reached = false;
+      const guarded: HttpRequest = async (path, init) => {
+        if (path === "/negotiate") {
+          const offer = JSON.parse(init?.body ?? "{}").offer?.capabilities;
+          if (
+            Array.isArray(offer) &&
+            offer.length === 1 &&
+            offer[0] === "reply-stop"
+          ) {
+            reached = true;
+            throw new Error(AUTH);
+          }
+        }
+        return request(path, init);
+      };
+      let rejected = false;
+      let safe = false;
+      let result: ConformanceResult | undefined;
+      try {
+        result = await runConformance({
+          baseUrl: "https://example.test",
+          request: guarded,
+        });
+        safe = !JSON.stringify(result).includes(AUTH);
+      } catch {
+        rejected = true;
+      }
+      expect(reached, "the authenticated secondary negotiation ran").toBe(true);
+      expect(rejected, "adapter errors become a fixed safe result").toBe(false);
+      expect(safe, "credentials are absent from the complete result").toBe(
+        true,
+      );
+      expect(result?.passed).toBe(false);
+    },
+  );
+});

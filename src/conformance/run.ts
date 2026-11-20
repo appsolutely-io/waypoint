@@ -292,12 +292,22 @@ export async function runConformance(
       read.status === 200 && (read.body as Conversation).protocol === a.protocol
     );
   });
-  const stopPeer = await post("/negotiate", {
-    supported: SUPPORTED_PROTOCOLS,
-    offer: { capabilities: [CONFORMANCE_CAPABILITIES.replyStop] },
+  let stopAnswer: Peer | undefined;
+  let stopResult: HttpResult | undefined;
+  await check("reply stop negotiation", async () => {
+    stopResult = await post("/negotiate", {
+      supported: SUPPORTED_PROTOCOLS,
+      offer: { capabilities: [CONFORMANCE_CAPABILITIES.replyStop] },
+    });
+    stopAnswer = negotiatedPeer(stopResult);
+    return stopAnswer !== undefined;
   });
-  const stopAnswer = negotiatedPeer(stopPeer);
-  if (stopAnswer && enabled(CONFORMANCE_CAPABILITIES.replyStop, stopAnswer))
+  const stopPeer = stopResult;
+  if (
+    stopPeer &&
+    stopAnswer &&
+    enabled(CONFORMANCE_CAPABILITIES.replyStop, stopAnswer)
+  )
     await check(REPLY_STOP_SCENARIO, async () => {
       // A reply left being written, as the script asks.
       await post("/__conformance/script", {

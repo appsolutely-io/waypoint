@@ -717,12 +717,14 @@ describe.each(skins)(
         retryAfter: 1,
       }));
       await waitFor(() => expect(apply()).not.toBeNull());
+      vi.useFakeTimers({ toFake: ["Date"] });
       fireEvent.click(apply()!);
       const alert = screen.getByRole("alert");
       const retry = await within(alert).findByRole("button", {
         name: t("chat.retry"),
       });
       expect(retry.getAttribute("aria-disabled")).toBe("true");
+      vi.setSystemTime(Date.now() + 1000);
       await waitFor(
         () =>
           expect(

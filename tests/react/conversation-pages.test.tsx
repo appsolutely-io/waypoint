@@ -50,6 +50,7 @@ const outline: OutlineMessage[] = messages.map((message) => ({
   revision: "1",
 }));
 async function show() {
+  await import("../../src/react/markdown");
   const cfg = config();
   const readPage = vi.fn(
     async (

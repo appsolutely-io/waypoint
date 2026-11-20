@@ -68,8 +68,31 @@ export function installGeometry({
 } = {}): Geometry {
   const tops = new WeakMap<Element, number>();
   const isBox = (element: Element) => element.classList.contains(BOX);
-  // Messages, and the spacers a windowed transcript puts for the rest.
-  const rows = (box: Element) => [...box.querySelectorAll(ROWS)];
+  let content = new WeakMap<Element, Element[]>();
+  const observed = new WeakSet<Element>();
+  let restored = false;
+  const invalidate = () => {
+    content = new WeakMap();
+  };
+  const mutations = new MutationObserver(invalidate);
+  // Native layout reads share membership until DOM mutations invalidate it.
+  const rows = (box: Element): Element[] => {
+    if (restored) return [...box.querySelectorAll(ROWS)];
+    if (!observed.has(box)) {
+      mutations.observe(box, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+      });
+      observed.add(box);
+    }
+    if (mutations.takeRecords().length > 0) invalidate();
+    const cached = content.get(box);
+    if (cached) return cached;
+    const found = [...box.querySelectorAll(ROWS)];
+    content.set(box, found);
+    return found;
+  };
   const height = (row: Element) =>
     row.matches(GAP)
       ? parseFloat((row as HTMLElement).style.blockSize) || 0
@@ -225,6 +248,10 @@ export function installGeometry({
     },
     scrollTo: (value) => set(box(), value),
     restore() {
+      if (restored) return;
+      restored = true;
+      mutations.disconnect();
+      invalidate();
       for (const [key, descriptor] of saved)
         if (descriptor) Object.defineProperty(proto, key, descriptor);
         else delete (proto as unknown as Record<string, unknown>)[key];

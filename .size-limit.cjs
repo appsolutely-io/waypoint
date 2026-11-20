@@ -14,6 +14,8 @@ const budgets = [
     gzip: true,
     brotli: false,
     ignore: [
+      "./conversation-pages-*",
+      "../conversation-pages-*",
       "./flow-parser.js",
       "./flow-parser-*",
       "./form-session.js",
@@ -35,6 +37,8 @@ const budgets = [
     gzip: true,
     brotli: false,
     ignore: [
+      "./conversation-pages-*",
+      "../conversation-pages-*",
       "./flow-parser.js",
       "./flow-parser-*",
       "./form-session.js",
@@ -140,6 +144,8 @@ const budgets = [
     gzip: true,
     brotli: false,
     ignore: [
+      "./conversation-pages-*",
+      "../conversation-pages-*",
       "react",
       "react-dom",
       "../markdown-*",
@@ -333,6 +339,8 @@ const budgets = [
     gzip: true,
     brotli: false,
     ignore: [
+      "./conversation-pages-*",
+      "../conversation-pages-*",
       "react",
       "react-dom",
       "@testing-library/react",
@@ -377,6 +385,16 @@ module.exports = withSharedChunks(budgets, {
   // leave them out ("./chunk-*"). Each measured with Node 22's zlib, plus
   // 3%, rounded down.
   shared: [
+    {
+      name: "lazy conversation pages",
+      source: "src/core/conversation-pages.ts",
+      // Paged history loads only when the host provides readPage. Node 22
+      // measures 2,233 B at the lowest peers; add 5% and round up to 100 B.
+      limit: "2.4 KB",
+      gzip: true,
+      brotli: false,
+      ignore: ["./chunk-*"],
+    },
     {
       name: "lazy reply messages",
       source: "src/react/reply-messages.ts",

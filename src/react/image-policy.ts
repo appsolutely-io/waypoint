@@ -2,6 +2,8 @@ import { isSafeUrl } from "./urls";
 export interface MarkdownImagePolicy {
   origin?: string;
   allow?: (url: string) => boolean;
+  /** Reuse outline text across inline callbacks; change when allow decisions change. */
+  cacheKey?: string | number;
 }
 // Whether the renderer below shows an image as an image (its alt text is
 // then not visible) rather than as a link labelled with its alt text.

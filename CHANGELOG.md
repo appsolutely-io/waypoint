@@ -8,6 +8,8 @@
 - Overdue writers retain Stop and can Regenerate through the shared versions attempt; wording distinguishes a writer from an unanswered user without claiming failure. Explicit host deadline owners/versions prevent an older turn from timing a new one, and local Keep waiting holds retire on owner changes. Newer materialized frame fields survive older reads without duplicating deltas or losing started messages, while stream status reconciliation remains independent.
 - Honor `replyStatus: expected` as host activity, including empty or completed transcripts, without inferred user-age timeouts. `complete` suppresses waiting only for its own read's conversational tail. Reply failure and host activity keep separate controls and announcement owners.
 - Request refusals preserve safe host enum detail without changing local problem ids. Every failed send retains its own wording and Details; eligible standalone problems override only their matching failed row. Restored outbox failures display silently, while live refusals and later own-text changes announce independently. Standalone host problem ids remain unchanged except a collision with a sending row, which receives a stable new client id.
+- `markdownImages.cacheKey`, an optional string or number, lets equivalent inline `allow` callbacks reuse the outline's search and text caches. Change the key when image permissions change; without a key, replacing the callback still refreshes the caches. Image URL permissions are unchanged.
+- Invalid outline-search language tags explicitly use the locale-independent root (`"und"`), including when the environment defaults to Turkish.
 
 ### Added
 

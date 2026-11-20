@@ -380,8 +380,9 @@ module.exports = withSharedChunks(budgets, {
     {
       name: "lazy reply messages",
       source: "src/react/reply-messages.ts",
-      // 613 B measured.
-      limit: "631 B",
+      // With the Copy failure text: 639 B measured under Node 22; the limit
+      // is 3% above it, rounded down.
+      limit: "658 B",
       gzip: true,
       brotli: false,
       ignore: ["react", "react-dom", "./chunk-*"],

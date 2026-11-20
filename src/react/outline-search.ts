@@ -16,7 +16,7 @@ const ACCENTS = /[̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯]/g;
  * then in Unicode NFC with whitespace collapsed. Comparing at the base
  * letter follows `Intl.Collator`'s `sensitivity: "base"`, which compares
  * whole strings only, never a part of one. A language tag that is not
- * valid folds with the root locale rather than throwing.
+ * valid folds with the locale-independent root ("und") rather than throwing.
  */
 export function foldForSearch(text: string, lang?: string): string {
   const locale = validLocale(lang);
@@ -36,7 +36,7 @@ function validLocale(lang: string | undefined): string | undefined {
   try {
     return Intl.getCanonicalLocales(lang)[0];
   } catch {
-    return undefined;
+    return "und";
   }
 }
 

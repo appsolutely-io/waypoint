@@ -91,7 +91,7 @@
     "prepublishOnly": "npm run release-build",
     "api:update": "node scripts/api.mjs --local",
     "api:check": "node scripts/api.mjs",
-    "size": "size-limit",
+    "size": "node scripts/size-runtime.cjs && size-limit",
     "changeset": "changeset",
     "test:browser": "playwright test --workers=1 && npm run test:playground",
     "test:consumer": "node scripts/consumer.mjs",

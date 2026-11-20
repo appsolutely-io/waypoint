@@ -3,6 +3,15 @@
   "$id": "https://waypoint.example/schema",
   "title": "WaypointProtocol",
   "$defs": {
+    "HostProblemDetail": {
+      "type": "object",
+      "description": "Safe host-defined enumerated detail; never raw provider text.",
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "qualifier": { "type": "string", "minLength": 1, "maxLength": 128 }
+      },
+      "required": ["code"]
+    },
     "Problem": {
       "type": "object",
       "properties": {
@@ -36,6 +45,9 @@
         "retryAfter": {
           "type": "integer",
           "minimum": 0
+        },
+        "host": {
+          "anyOf": [{ "$ref": "#/$defs/HostProblemDetail" }, { "type": "null" }]
         },
         "confirmation": {
           "type": "object",
@@ -1584,6 +1596,15 @@
         }
       ]
     },
+    "MessageSender": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "avatarUrl": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
     "Message": {
       "type": "object",
       "properties": {
@@ -1596,8 +1617,9 @@
           "minLength": 1
         },
         "role": {
-          "enum": ["user", "assistant"]
+          "enum": ["user", "assistant", "notice"]
         },
+        "sender": { "$ref": "#/$defs/MessageSender" },
         "content": {
           "type": "string"
         },
@@ -1652,6 +1674,34 @@
       },
       "required": ["id", "title", "url"]
     },
+    "ReplyFailure": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "forMessageId": { "type": "string", "minLength": 1 },
+        "reason": {
+          "anyOf": [{ "$ref": "#/$defs/HostProblemDetail" }, { "type": "null" }]
+        },
+        "recovery": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": { "enum": ["regenerate", "resend"] },
+                "messageId": { "type": "string", "minLength": 1 }
+              },
+              "required": ["kind", "messageId"]
+            },
+            {
+              "type": "object",
+              "properties": { "kind": { "const": "none" } },
+              "required": ["kind"]
+            }
+          ]
+        }
+      },
+      "required": ["id"]
+    },
     "Conversation": {
       "type": "object",
       "properties": {
@@ -1675,8 +1725,27 @@
         "replyOverdueAt": {
           "type": ["number", "null"]
         },
+        "replyOverdueFor": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "replyOverdueVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "replyExpectedId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replyLabel": {
+          "type": ["string", "null"],
+          "maxLength": 200
+        },
         "replyStatus": {
           "enum": ["expected", "unavailable", "failed", "complete"]
+        },
+        "replyFailure": {
+          "anyOf": [{ "$ref": "#/$defs/ReplyFailure" }, { "type": "null" }]
         },
         "mode": {
           "const": "form-fill"
@@ -2074,7 +2143,19 @@
           "minLength": 1
         },
         "role": {
-          "enum": ["user", "assistant"]
+          "enum": ["user", "assistant", "notice"]
+        },
+        "sender": { "$ref": "#/$defs/MessageSender" },
+        "replyOverdueAt": {
+          "type": ["number", "null"]
+        },
+        "replyOverdueFor": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "versionIndex": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": ["type", "protocol", "sequence", "messageId", "role"]
@@ -2304,6 +2385,17 @@
           "items": {
             "enum": ["conversation", "conversations", "plans", "flows"]
           }
+        },
+        "replyOverdueAt": {
+          "type": ["number", "null"]
+        },
+        "replyOverdueFor": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "versionIndex": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": ["type", "protocol", "sequence", "reads"]
@@ -2875,6 +2967,81 @@
       },
       "required": ["winner", "keptFact"],
       "additionalProperties": false
+    },
+    "OutlineMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": ["user", "assistant", "notice"]
+        },
+        "sender": {
+          "$ref": "#/$defs/MessageSender"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "role", "revision", "text"]
+    },
+    "ConversationPage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "conversation": {
+              "$ref": "#/$defs/Conversation"
+            },
+            "snapshotId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "olderCursor": {
+              "type": ["string", "null"],
+              "minLength": 1
+            },
+            "outline": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/OutlineMessage"
+              }
+            },
+            "heldClientMessageIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "conversation",
+            "snapshotId",
+            "olderCursor",
+            "outline",
+            "heldClientMessageIds"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stale": {
+              "const": true
+            }
+          },
+          "required": ["stale"],
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "oneOf": [
@@ -2895,6 +3062,12 @@
     },
     {
       "$ref": "#/$defs/PlanRecord"
+    },
+    {
+      "$ref": "#/$defs/OutlineMessage"
+    },
+    {
+      "$ref": "#/$defs/ConversationPage"
     }
   ]
 }

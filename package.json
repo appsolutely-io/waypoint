@@ -83,7 +83,7 @@
   "scripts": {
     "test": "vitest run --maxWorkers=2",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p tsconfig.hooks.json && tsc --noEmit -p playground/tsconfig.json",
-    "lint": "eslint . && prettier --check . && node scripts/privacy.mjs",
+    "lint": "eslint . && prettier --check . && node scripts/privacy.mjs && node scripts/problem-ids.mjs",
     "format": "prettier --write .",
     "generate": "node scripts/generate.mjs",
     "build": "node scripts/build.mjs",

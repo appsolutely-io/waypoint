@@ -3,12 +3,21 @@
 // (a nested scrollable region); the page exposes `fixture.show(contents,
 // ids?)`, ids defaulting to m1, m2, … by position.
 import { createRoot } from "react-dom/client";
-import { createWaypointClient, type Conversation } from "../../src/index";
+import {
+  createWaypointClient,
+  type Conversation,
+  type ConversationPage,
+  type ConversationPageInput,
+} from "../../src/index";
 import { WaypointChat } from "../../src/react/index";
 import { createTestPlatform } from "../../src/testing/transport";
 import { antdSkin } from "../../src/skin-antd/index";
 import "../../src/react/styles.css";
 
+const params = new URLSearchParams(location.search);
+const PAGE_SIZE: number = 5;
+const pageSnapshots = new Map<string, Conversation>();
+let releasePage: (() => void) | undefined;
 let contents: string[] = Array.from({ length: 10 }, () => "100");
 let ids: string[] | undefined;
 const conversation = (): Conversation => ({
@@ -31,6 +40,58 @@ const client = createWaypointClient({
   transport: {
     negotiate: async () => ({ protocol: "1.0", capabilities: [] }),
     read: async () => conversation(),
+    ...(params.has("paged")
+      ? {
+          readPage: async (
+            _id: string,
+            input: ConversationPageInput,
+          ): Promise<ConversationPage> => {
+            const current = conversation();
+            const currentId = JSON.stringify(current.messages);
+            pageSnapshots.set(currentId, current);
+            const snapshotId = input.snapshotId ?? currentId;
+            const snapshot = pageSnapshots.get(snapshotId);
+            if (!snapshot) return { stale: true };
+            let end = snapshot.messages.length;
+            if (input.cursor) {
+              if (!/^before:(0|[1-9]\d*)$/.test(input.cursor))
+                return { stale: true };
+              end = Number(input.cursor.slice("before:".length));
+              if (!Number.isSafeInteger(end) || end > snapshot.messages.length)
+                return { stale: true };
+            } else if (input.aroundMessageId) {
+              const index = snapshot.messages.findIndex(
+                (message) => message.id === input.aroundMessageId,
+              );
+              if (index < 0) return { stale: true };
+              end = Math.min(
+                snapshot.messages.length,
+                (Math.floor(index / PAGE_SIZE) + 1) * PAGE_SIZE,
+              );
+            }
+            if (input.cursor && params.has("holdPages"))
+              await new Promise<void>((resolve) => {
+                releasePage = resolve;
+              });
+            const start = Math.max(0, end - PAGE_SIZE);
+            return {
+              conversation: {
+                ...snapshot,
+                messages: snapshot.messages.slice(start, end),
+              },
+              snapshotId,
+              olderCursor: start ? `before:${start}` : null,
+              heldClientMessageIds: [],
+              outline: snapshot.messages.map((message) => ({
+                id: message.id,
+                role: message.role,
+                revision: JSON.stringify(message),
+                text: message.content,
+              })),
+            };
+          },
+        }
+      : {}),
     subscribe: () => () => {},
     send: async () => {
       throw new Error("Not used");
@@ -51,7 +112,6 @@ function Sized({ text }: { text: string }) {
     <div data-sized="" style={{ height: Number(height), margin: 0 }} />
   );
 }
-const params = new URLSearchParams(location.search);
 const skin = params.get("skin");
 const scheme = params.get("scheme") === "dark" ? "dark" : "light";
 const pageLayout = params.get("layout") === "page";
@@ -71,6 +131,10 @@ createRoot(document.getElementById("root")!).render(
 );
 Object.assign(window, {
   fixture: {
+    releasePages() {
+      releasePage?.();
+      releasePage = undefined;
+    },
     async show(next: string[], nextIds?: string[]) {
       contents = next;
       ids = nextIds;

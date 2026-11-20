@@ -183,7 +183,9 @@ describe("announcements held behind a modal drawer", () => {
     await h.show([user]);
     expect(h.row().textContent).toBe(held);
     await h.open(false);
-    await waitFor(() => expect(h.row().textContent).toBe("Writing"));
+    await waitFor(() =>
+      expect(h.row().textContent).toBe("Waiting for a reply"),
+    );
     h.client.dispose();
   });
 

@@ -21,6 +21,7 @@ it("the hooks entry's graph holds React and nothing that needs a DOM or a skin",
   expect(smoke.stderr).toBe("");
   expect(smoke.status).toBe(0);
   expect(smoke.stdout).not.toMatch(/src\/react\/ui\.tsx|\.css/);
+  expect(smoke.stdout).not.toContain("src/core/client.ts");
   // Typed against the ES library only: a DOM type in its graph fails here.
   const typecheck = spawnSync(
     process.execPath,

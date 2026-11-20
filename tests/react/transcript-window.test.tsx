@@ -70,6 +70,196 @@ afterEach(() => {
   history.replaceState(null, "", location.pathname);
 });
 
+it("the controlled layout follows nested rows, spacers and live changes", () => {
+  const host = document.createElement("div");
+  host.innerHTML = `<div class="wp-transcript"><section><article data-message-id="a"></article><div data-transcript-gap style="block-size:17px"></div></section><article data-message-id="b"><div><article data-message-id="c"></article></div></article></div>`;
+  document.body.append(host);
+  geometry.clientHeight = 30;
+  geometry.heights.set("a", 40);
+  geometry.heights.set("b", 60);
+  geometry.heights.set("c", 80);
+  const first = host.querySelector<HTMLElement>('[data-message-id="a"]')!;
+  const second = host.querySelector<HTMLElement>('[data-message-id="b"]')!;
+  const nested = host.querySelector<HTMLElement>('[data-message-id="c"]')!;
+  const spacer = host.querySelector<HTMLElement>("[data-transcript-gap]")!;
+  try {
+    expect(second.getBoundingClientRect().top).toBe(57);
+    expect(nested.getBoundingClientRect().top).toBe(117);
+    expect(geometry.box().scrollHeight).toBe(197);
+    geometry.scrollTo(25);
+    expect(second.getBoundingClientRect().top).toBe(32);
+    first.remove();
+    spacer.style.blockSize = "23px";
+    geometry.heights.set("b", 70);
+    expect(second.getBoundingClientRect().top).toBe(-2);
+    expect(nested.getBoundingClientRect().top).toBe(68);
+    expect(geometry.box().scrollHeight).toBe(173);
+    second.remove();
+    expect(geometry.box().scrollTop).toBe(0);
+    expect(geometry.box().scrollHeight).toBe(30);
+  } finally {
+    host.remove();
+  }
+});
+
+describe("controlled layout membership", () => {
+  it.each([false, true])(
+    "reuses unchanged rows, including empty: %s",
+    (populated) => {
+      render(<div className="wp-transcript">{populated && <article />}</div>);
+      const box = geometry.box();
+      const query = vi.spyOn(box, "querySelectorAll");
+      const walk = vi.spyOn(document, "createTreeWalker");
+      try {
+        const first = box.scrollHeight;
+        expect(box.scrollHeight).toBe(first);
+        expect(query.mock.calls.length + walk.mock.calls.length).toBe(1);
+      } finally {
+        query.mockRestore();
+        walk.mockRestore();
+      }
+    },
+  );
+
+  it("reads synchronous insertion, reordering and selector changes", () => {
+    render(
+      <div className="wp-transcript">
+        <article data-message-id="a" />
+        <article data-message-id="b" />
+      </div>,
+    );
+    const box = geometry.box();
+    const first = box.children[0] as HTMLElement;
+    const second = box.children[1] as HTMLElement;
+    expect(second.getBoundingClientRect().top).toBe(100);
+    box.prepend(second);
+    expect(first.getBoundingClientRect().top).toBe(100);
+    first.remove();
+    const section = document.createElement("section");
+    const spacer = document.createElement("div");
+    spacer.style.blockSize = "17px";
+    section.append(spacer);
+    box.prepend(section);
+    expect(second.getBoundingClientRect().top).toBeCloseTo(0);
+    spacer.setAttribute("data-transcript-gap", "");
+    expect(second.getBoundingClientRect().top).toBe(17);
+    spacer.removeAttribute("data-transcript-gap");
+    expect(second.getBoundingClientRect().top).toBeCloseTo(0);
+    section.setAttribute("title", "irrelevant");
+    section.append(document.createTextNode("not a row"));
+    expect(second.getBoundingClientRect().top).toBeCloseTo(0);
+  });
+
+  it("refreshes after mutation delivery and then reuses the new rows", async () => {
+    render(<div className="wp-transcript" />);
+    const box = geometry.box();
+    geometry.clientHeight = 10;
+    const query = vi.spyOn(box, "querySelectorAll");
+    const walk = vi.spyOn(document, "createTreeWalker");
+    try {
+      expect(box.scrollHeight).toBe(10);
+      box.append(document.createElement("article"));
+      await Promise.resolve();
+      expect(box.scrollHeight).toBe(100);
+      expect(box.scrollHeight).toBe(100);
+      expect(query.mock.calls.length + walk.mock.calls.length).toBe(2);
+      box.append(document.createElement("article"));
+      expect(box.scrollHeight).toBe(200);
+      await Promise.resolve();
+      expect(box.scrollHeight).toBe(200);
+    } finally {
+      query.mockRestore();
+      walk.mockRestore();
+    }
+  });
+
+  it("keeps detached, reinserted and replacement boxes independent", () => {
+    const { container } = render(
+      <section>
+        <div className="wp-transcript">
+          <article />
+          <article />
+        </div>
+        <div className="wp-transcript">
+          <article />
+        </div>
+      </section>,
+    );
+    geometry.clientHeight = 10;
+    const host = container.firstElementChild!;
+    const first = host.children[0] as HTMLElement;
+    const second = host.children[1] as HTMLElement;
+    expect(first.scrollHeight).toBe(200);
+    expect(second.scrollHeight).toBe(100);
+    first.remove();
+    first.append(document.createElement("article"));
+    expect(first.scrollHeight).toBe(300);
+    expect(second.scrollHeight).toBe(100);
+    host.prepend(first);
+    const replacement = document.createElement("div");
+    replacement.className = first.className;
+    replacement.append(document.createElement("article"));
+    first.replaceWith(replacement);
+    expect(replacement.scrollHeight).toBe(100);
+    expect(first.scrollHeight).toBe(300);
+  });
+
+  it("reads current heights, keys and bounds without DOM membership changes", () => {
+    render(
+      <div className="wp-transcript">
+        <article data-message-id="a" />
+        <article data-message-id="b" />
+      </div>,
+    );
+    const box = geometry.box();
+    const first = box.children[0] as HTMLElement;
+    const second = box.children[1] as HTMLElement;
+    geometry.clientHeight = 10;
+    expect(box.scrollHeight).toBe(200);
+    geometry.heights.set("a", 40);
+    expect(second.getBoundingClientRect().top).toBe(40);
+    geometry.heights.delete("a");
+    expect(second.getBoundingClientRect().top).toBe(100);
+    geometry.heights.set("b", 30);
+    geometry.heights.clear();
+    expect(box.scrollHeight).toBe(200);
+    geometry.heights.set("renamed", 20);
+    first.setAttribute("data-message-id", "renamed");
+    expect(second.getBoundingClientRect().top).toBe(20);
+    geometry.scrollTo(100);
+    geometry.clientHeight = 115;
+    expect(box.scrollTop).toBe(5);
+    expect(second.getBoundingClientRect().top).toBe(15);
+  });
+
+  it("does not resume observing or overwrite a newer installation after restore", async () => {
+    render(
+      <div className="wp-transcript">
+        <article />
+      </div>,
+    );
+    const box = geometry.box();
+    geometry.clientHeight = 10;
+    const observe = vi.spyOn(MutationObserver.prototype, "observe");
+    let replacement: Geometry | undefined;
+    try {
+      expect(box.scrollHeight).toBe(100);
+      box.append(document.createElement("article"));
+      geometry.restore();
+      await Promise.resolve();
+      const calls = observe.mock.calls.length;
+      expect(geometry.end()).toBe(190);
+      expect(observe.mock.calls.length).toBe(calls);
+      replacement = installGeometry({ clientHeight: 25 });
+      geometry.restore();
+      expect(box.clientHeight).toBe(25);
+    } finally {
+      replacement?.restore();
+      observe.mockRestore();
+    }
+  });
+});
+
 const many = (count: number) =>
   Array.from(
     { length: count },
@@ -125,6 +315,9 @@ async function chat(count: number) {
 }
 
 it("below the threshold, every message is mounted, with no spacer", async () => {
+  const warmup = await chat(1);
+  cleanup();
+  warmup.dispose();
   const client = await chat(WINDOW_FROM - 1);
   expect(mounted()).toHaveLength(WINDOW_FROM - 1);
   expect(document.querySelector("[data-transcript-gap]")).toBeNull();
@@ -150,11 +343,13 @@ it("a long transcript mounts the latest messages, pinned at the end, and spaces 
 it("scrolled up, the window follows; Back to latest returns to the end, pinned", async () => {
   const client = await chat(1000);
   geometry.user("wheel", -50_000);
-  await settle();
+  const top = 100 * 1000 - 300 - 50_000;
+  await waitFor(() =>
+    expect(mounted()).toContain(`m${Math.floor(top / 100) + 1}`),
+  );
   const middle = mounted();
   expect(middle).not.toContain("m1000");
   expect(middle.length).toBeLessThan(40);
-  const top = 100 * 1000 - 300 - 50_000;
   expect(middle).toContain(`m${Math.floor(top / 100) + 1}`);
   await act(async () => {
     screen.getByText(english["chat.latest"]).click();
@@ -225,8 +420,8 @@ it("a message mounted again keeps its parse", async () => {
   const parsed = () => parses.filter((text) => text === "Message 1000").length;
   expect(parsed()).toBe(1);
   geometry.user("wheel", -60_000);
-  await settle();
-  expect(mounted()).not.toContain("m1000");
+  await waitFor(() => expect(mounted()).not.toContain("m1000"));
+  expect(mounted()).toContain("m398");
   await act(async () => {
     screen.getByText(english["chat.latest"]).click();
   });

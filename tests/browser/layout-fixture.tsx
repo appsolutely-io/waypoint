@@ -74,6 +74,21 @@ const conversation: Conversation = {
     },
   ],
 };
+if (params.has("senders")) {
+  conversation.messages[1]!.sender = {
+    id: "reviewer",
+    name: "Reviewer",
+    avatarUrl: "/tests/browser/wide.svg",
+  };
+  conversation.messages.push({
+    id: "notice",
+    role: "notice",
+    sender: { id: "editor", name: "Editor" },
+    content: "Review started",
+    createdAt: 4,
+    blocks: [],
+  });
+}
 // Prose for block spacing, a soft line break, indented code and an image
 // wider than any bubble.
 if (params.get("prose"))
@@ -145,7 +160,11 @@ const client = createWaypointClient({
   transport: {
     negotiate: async () => ({
       protocol: "1.0",
-      capabilities: params.get("plan") ? ["widgets", "plans"] : ["widgets"],
+      capabilities: [
+        "widgets",
+        ...(params.get("plan") ? ["plans"] : []),
+        ...(params.has("senders") ? ["notice-messages"] : []),
+      ],
     }),
     read: async () => structuredClone(conversation),
     subscribe: () => () => {},
@@ -171,6 +190,7 @@ const chat = (
       client={client}
       layout={(params.get("layout") ?? "panel") as never}
       markdownImages={{ origin: location.origin }}
+      dir={params.get("dir") === "rtl" ? "rtl" : "ltr"}
       // Without a scheme parameter the chat follows the system's.
       colorScheme={(params.get("scheme") ?? undefined) as never}
       // A host theme that only lightens the muted text, still 4.5:1 on the

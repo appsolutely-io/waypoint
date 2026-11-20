@@ -1,7 +1,13 @@
 // How a problem and the reply row are worded, as message keys and the one
 // action each offers: shared by the web chat and any UI drawn from
 // `/hooks`. No strings, no React, no DOM.
-import type { ReplyState } from "../core/client";
+import type {
+  MaybePromise,
+  PendingSend,
+  ReplyBusy,
+  ReplyPresentation,
+  ReplyState,
+} from "../core/client";
 import type { Problem } from "../protocol/generated";
 import type { MessageKey } from "./i18n";
 
@@ -42,6 +48,33 @@ export const problemAction = (
         ].includes(problem.code)
       ? "retry"
       : undefined;
+export interface ProblemDisplayOptions {
+  checking?: boolean;
+  planStopped?: boolean;
+  conversationUnavailable?: boolean;
+}
+/** The problem eligible for the shared transcript/composer presentation. */
+export function visibleProblem(
+  problem: Problem | null,
+  options: ProblemDisplayOptions = {},
+): Problem | undefined {
+  return problem &&
+    !options.checking &&
+    problem.id !== "conversation-unavailable" &&
+    !(problem.code === "stopped" && options.planStopped) &&
+    !problem.confirmation &&
+    !(options.conversationUnavailable && problem.id === "conversation-read")
+    ? problem
+    : undefined;
+}
+/** A current eligible override applies only to a row that is still failed. */
+export function pendingProblem(
+  row: Pick<PendingSend, "id" | "failure">,
+  eligibleProblem: Problem | undefined,
+): Problem | null {
+  if (!row.failure) return null;
+  return eligibleProblem?.id === row.id ? eligibleProblem : row.failure;
+}
 export interface ProblemView {
   /** The plain words for the problem. */
   key: MessageKey;
@@ -81,34 +114,113 @@ export function problemView(
     id: problem.id,
   };
 }
-export interface ReplyRowAction {
-  id: "keepWaiting" | "retry" | "stop";
-  labelKey: MessageKey;
+export interface HostBusyStopControl {
+  label: string;
+  onPress(): MaybePromise<void>;
+  disabled?: boolean;
+  busy?: boolean;
 }
-/**
- * The reply row's words and buttons for a `replyState`: Keep waiting and
- * Retry for an overdue reply (`keepWaiting()`, `retryReply()`), Retry for a
- * failed or unavailable one unless `canRetry` is false (`canRetryReply()`),
- * Stop while one is written when `canStop` (`canStopReply()`,
- * `stopReply()`).
- */
+export interface ReplyRowAction {
+  id: "keepWaiting" | "retry" | "stop" | "hostStop";
+  labelKey: MessageKey;
+  label?: string;
+}
+export interface ReplyRowView {
+  key?: MessageKey;
+  actions: ReplyRowAction[];
+  busy?: {
+    kind: "expected" | "expected-overdue";
+    key: MessageKey;
+    label?: string;
+    stop?: HostBusyStopControl;
+    actions: ReplyRowAction[];
+  };
+}
 export function replyRowView(
   state: ReplyState,
-  options: { canStop?: boolean; canRetry?: boolean } = {},
-): { key?: MessageKey; actions: ReplyRowAction[] } {
-  if (state === "none") return { actions: [] };
-  const retry: ReplyRowAction = { id: "retry", labelKey: "chat.retry" };
-  return {
-    key: `reply.${state}`,
-    actions:
-      state === "overdue"
-        ? [{ id: "keepWaiting", labelKey: "chat.reply.keepWaiting" }, retry]
-        : state === "writing"
-          ? options.canStop
-            ? [{ id: "stop", labelKey: "chat.reply.stop" }]
-            : []
-          : options.canRetry === false
-            ? []
-            : [retry],
+  options: {
+    canStop?: boolean;
+    canRetry?: boolean;
+    canRegenerate?: boolean;
+    recovery?: "regenerate" | "resend" | "none";
+    presentation?: ReplyPresentation;
+    busy?: ReplyBusy;
+    replyLabel?: string | null;
+    expectedReplyStop?: HostBusyStopControl;
+  } = {},
+): ReplyRowView {
+  const expected = state === "expected" || state === "expected-overdue";
+  const hostBusy =
+    options.busy ??
+    (expected
+      ? {
+          label: options.replyLabel ?? undefined,
+          overdue: state === "expected-overdue",
+        }
+      : undefined);
+  const wait: ReplyRowAction = {
+    id: "keepWaiting",
+    labelKey: "chat.reply.keepWaiting",
   };
+  const busy: ReplyRowView["busy"] = hostBusy && {
+    kind: hostBusy.overdue ? "expected-overdue" : "expected",
+    key: hostBusy.overdue ? "reply.expected-overdue" : "reply.expected",
+    label: hostBusy.label,
+    stop: options.expectedReplyStop,
+    actions: [
+      ...(hostBusy.overdue ? [wait] : []),
+      ...(options.expectedReplyStop
+        ? [
+            {
+              id: "hostStop" as const,
+              labelKey: "chat.reply.stop" as const,
+              label: options.expectedReplyStop.label,
+            },
+          ]
+        : []),
+    ],
+  };
+  if (state === "none") return { actions: [], ...(busy && { busy }) };
+  if (expected) return { key: busy!.key, actions: busy!.actions, busy };
+  const retry: ReplyRowAction = {
+    id: "retry",
+    labelKey:
+      options.recovery === "regenerate" ||
+      (state === "overdue" &&
+        options.presentation === "writing" &&
+        options.canRegenerate)
+        ? "chat.message.regenerate"
+        : options.recovery === "resend"
+          ? "chat.resend"
+          : "chat.retry",
+  };
+  const key: MessageKey =
+    state === "overdue"
+      ? options.presentation === "writing"
+        ? "reply.writingOverdue"
+        : options.presentation === "waiting"
+          ? "reply.waitOverdue"
+          : "reply.overdue"
+      : state === "writing" && options.presentation === "waiting"
+        ? "reply.waiting"
+        : `reply.${state}`;
+  const actions: ReplyRowAction[] =
+    state === "overdue"
+      ? options.presentation === "writing"
+        ? [
+            ...(options.canStop
+              ? [{ id: "stop" as const, labelKey: "chat.reply.stop" as const }]
+              : []),
+            retry,
+            wait,
+          ]
+        : [wait, retry]
+      : state === "writing"
+        ? options.canStop
+          ? [{ id: "stop", labelKey: "chat.reply.stop" }]
+          : []
+        : options.canRetry === false || options.recovery === "none"
+          ? []
+          : [retry];
+  return { key, actions, ...(busy && { busy }) };
 }

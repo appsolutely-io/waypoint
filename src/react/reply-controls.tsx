@@ -1,11 +1,16 @@
 // The reply's steps and controls: a lazy chunk, loaded when a reply is
 // first written, overdue, failed or unavailable, or reading on the host's
 // behalf.
-import { useContext, useId, useState } from "react";
+import { useContext, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ReplyState, ToolStep, WaypointClient } from "../core/client";
 import { ChatFocusContext, focusFor } from "./chat-focus";
 import { addMessages } from "./i18n";
-import { replyRowView } from "./problem-view";
+import {
+  replyRowView,
+  type HostBusyStopControl,
+  type ReplyRowAction,
+} from "./problem-view";
+import { conversationTail } from "../core/reply-recovery";
 import { replyEnglish, replySimplifiedChinese } from "./reply-messages";
 import { context } from "./ui";
 
@@ -53,46 +58,125 @@ function ToolSteps({ steps }: { steps: readonly ToolStep[] }) {
 export function ReplyControls({
   client,
   row,
+  expectedReplyStop,
 }: {
   client: WaypointClient;
   row: ReplyState;
+  expectedReplyStop?: HostBusyStopControl;
 }) {
   const { format: t, primitives } = context();
   const B = primitives.button;
   const focus = useContext(ChatFocusContext);
-  const steps = client.getSnapshot().toolSteps;
-  const { actions } = replyRowView(row, {
+  const snapshot = client.getSnapshot();
+  const steps = snapshot.toolSteps;
+  const tail = conversationTail(snapshot.conversation?.messages ?? []);
+  const failure = snapshot.replyFailures?.find((failure) => failure.active);
+  const terminal =
+    !snapshot.pending.some((pending) => !pending.failure) &&
+    tail?.role === "assistant" &&
+    (tail.status === "failed" || tail.status === "unavailable")
+      ? tail.status
+      : undefined;
+  const controlRow =
+    row === "expected" || row === "expected-overdue"
+      ? (failure?.status ?? terminal ?? row)
+      : row;
+  const view = replyRowView(controlRow, {
     canStop: client.canStopReply(),
     canRetry: client.canRetryReply(),
+    canRegenerate:
+      !!tail && (client.canRegenerate?.(tail.id) ?? client.canChangeVersions()),
+    recovery: failure?.failure.recovery?.kind,
+    presentation: snapshot.replyPresentation,
+    busy: snapshot.replyBusy,
+    expectedReplyStop,
   });
-  // The pressed button goes away: focus moves on to the composer.
+  const actions =
+    controlRow === "expected" || controlRow === "expected-overdue"
+      ? []
+      : view.actions;
+  const anchor = useRef<HTMLDivElement>(null);
+  const focused = useRef<{ element: Element; owner: string } | undefined>(
+    undefined,
+  );
+  useLayoutEffect(() => {
+    const before = focused.current;
+    if (before && !before.element.isConnected) {
+      focusFor(focus, anchor.current, {
+        owner: before.owner,
+        removed: before.element,
+      });
+      focused.current = undefined;
+    }
+  });
   const then = (action: () => unknown) => () => {
     const origin = focus?.originFor("reply-wait");
     void action();
     focusFor(focus, focus?.composer(), { origin, owner: focus?.owner() ?? "" });
   };
+  const press = (action: ReplyRowAction) =>
+    action.id === "stop"
+      ? () => void client.stopReply()
+      : action.id === "hostStop"
+        ? () => {
+            if (!expectedReplyStop?.disabled && !expectedReplyStop?.busy)
+              void expectedReplyStop?.onPress();
+          }
+        : then(() =>
+            action.id === "retry" ? client.retryReply() : client.keepWaiting(),
+          );
+  const button = (action: ReplyRowAction) => (
+    <B
+      key={action.id}
+      onPress={press(action)}
+      aria-disabled={
+        action.id === "hostStop"
+          ? !!expectedReplyStop?.disabled || !!expectedReplyStop?.busy
+          : undefined
+      }
+      aria-busy={
+        action.id === "hostStop" && expectedReplyStop?.busy ? true : undefined
+      }
+    >
+      {action.label ?? t(action.labelKey)}
+    </B>
+  );
   return (
     <>
       {steps.length ? <ToolSteps steps={steps} /> : null}
-      {actions.length ? (
-        <div data-reply-controls="">
-          {actions.map((action) => (
-            <B
-              key={action.id}
-              onPress={
-                // Stop keeps its place while the reply goes on.
-                action.id === "stop"
-                  ? () => void client.stopReply()
-                  : then(() =>
-                      action.id === "retry"
-                        ? client.retryReply()
-                        : client.keepWaiting(),
-                    )
-              }
-            >
-              {t(action.labelKey)}
-            </B>
-          ))}
+      <div
+        role="group"
+        aria-label={t("chat.reply.recoveryGroup")}
+        data-reply-recovery=""
+        ref={anchor}
+        tabIndex={-1}
+        onFocusCapture={(event) => {
+          focused.current = {
+            element: event.target,
+            owner: focus?.owner() ?? "",
+          };
+        }}
+      >
+        {actions.length ? (
+          <div data-reply-controls="">{actions.map(button)}</div>
+        ) : null}
+      </div>
+      {view.busy ? (
+        <div
+          role="group"
+          aria-label={t("chat.reply.hostActivityGroup")}
+          data-host-activity=""
+        >
+          <p role="status" data-host-busy="">
+            {view.busy.label ?? t(view.busy.key)}
+            {view.busy.label !== undefined &&
+            view.busy.kind === "expected-overdue" ? (
+              <> {t(view.busy.key)}</>
+            ) : null}
+          </p>
+          {view.busy.actions.length ? (
+            <div data-reply-controls="">{view.busy.actions.map(button)}</div>
+          ) : null}
         </div>
       ) : null}
     </>

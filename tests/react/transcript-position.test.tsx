@@ -56,6 +56,31 @@ const settle = (ms = 5) =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, ms));
   });
+async function withGestureClock(
+  gesture: (advance: (ms?: number) => Promise<void>) => Promise<void>,
+) {
+  const started = performance.now();
+  vi.useFakeTimers({
+    toFake: [
+      "performance",
+      "setTimeout",
+      "clearTimeout",
+      ...(typeof requestAnimationFrame === "function"
+        ? (["requestAnimationFrame", "cancelAnimationFrame"] as const)
+        : []),
+    ],
+  });
+  const advance = (ms = 5) =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  try {
+    await advance(started);
+    await gesture(advance);
+  } finally {
+    vi.useRealTimers();
+  }
+}
 async function chat(messages: Message[], skin: object = {}) {
   const base = config();
   const shown: Record<string, Message[]> = { a: messages, b: many(2, "b") };
@@ -237,29 +262,33 @@ describe.each(skins)("transcript position (%s)", (_, skin) => {
   );
   it("CK-T4 momentum reaching the end more than 150 ms after the last touchmove pins", async () => {
     await unpinnedAtTop(skin);
-    geometry.user("touch", 300);
-    await settle(100);
-    geometry.scrollTo(500);
-    await settle(100);
-    geometry.scrollTo(700);
-    await settle();
-    expect(geometry.end()).toBe(0);
-    expect(latest()).toBeNull();
+    await withGestureClock(async (advance) => {
+      geometry.user("touch", 300);
+      await advance(100);
+      geometry.scrollTo(500);
+      await advance(100);
+      geometry.scrollTo(700);
+      await advance();
+      expect(geometry.end()).toBe(0);
+      expect(latest()).toBeNull();
+    });
   });
   it("CK-T4 a delta reconciled between touchend and the final momentum scroll still pins", async () => {
     await unpinnedAtTop(skin);
-    geometry.user("touch", 300);
-    await settle(50);
-    geometry.scrollTo(500);
-    await settle(50);
-    // The newest grows between frames of the momentum.
-    geometry.heights.set("m10", 200);
-    geometry.layout();
-    await settle(50);
-    geometry.scrollTo(800);
-    await settle();
-    expect(geometry.end()).toBe(0);
-    expect(latest()).toBeNull();
+    await withGestureClock(async (advance) => {
+      geometry.user("touch", 300);
+      await advance(50);
+      geometry.scrollTo(500);
+      await advance(50);
+      // The newest grows between frames of the momentum.
+      geometry.heights.set("m10", 200);
+      geometry.layout();
+      await advance(50);
+      geometry.scrollTo(800);
+      await advance();
+      expect(geometry.end()).toBe(0);
+      expect(latest()).toBeNull();
+    });
   });
   it("CK-T5 unpinned: the anchor keeps its offset when content above it grows", async () => {
     await unpinnedAtTop(skin);

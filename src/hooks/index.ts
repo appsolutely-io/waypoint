@@ -15,9 +15,15 @@ export { planView, keepSheet } from "../react/plan-view";
 export {
   problemView,
   problemAction,
+  visibleProblem,
+  pendingProblem,
   replyRowView,
 } from "../react/problem-view";
-export type { ProblemView, ReplyRowAction } from "../react/problem-view";
+export type {
+  ProblemView,
+  ProblemDisplayOptions,
+  ReplyRowAction,
+} from "../react/problem-view";
 export type { FormatMessage, MessageValues } from "../react/i18n";
 export type {
   ActionEntry,
@@ -59,3 +65,5 @@ export type {
 export type { ScopeSignal } from "../core/scope";
 export type * from "../core/runner";
 export type * from "../core/form-fill";
+
+export type { HostBusyStopControl, ReplyRowView } from "../react/problem-view";

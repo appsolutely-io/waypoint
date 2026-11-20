@@ -43,6 +43,8 @@ async function chat(capabilities: string[], locale?: string) {
     },
   });
   await client.ready;
+  // Cold module transformation must finish before timing the Stop interaction.
+  await import("../../src/react/reply-controls");
   render(<WaypointChat client={client} locale={locale} />);
   await waitFor(() =>
     expect(document.querySelector('[data-message-id="a"]')).not.toBeNull(),

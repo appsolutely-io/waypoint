@@ -14,6 +14,7 @@ import type {
   IntentTarget,
   PlanIntentReply,
   PlanRecord,
+  Problem,
 } from "../protocol/generated";
 
 export interface CapturedIntent {
@@ -187,7 +188,7 @@ export interface IntentContext {
   };
   // The current conversation scope.
   scope(): ScopeSignal;
-  report(problem: { code: string; id: string; retryAfter?: number }): void;
+  report(problem: Problem): void;
   // A factual read of the plan under the core's read ownership: its scope,
   // the read, and whether it is still the live read when it settles.
   read(

@@ -1,4 +1,25 @@
 {
+  "MessageSender": {
+    "id": "reviewer",
+    "name": "Reviewer",
+    "avatarUrl": "/reviewer.png"
+  },
+  "HostProblemDetail": {
+    "code": "availability",
+    "qualifier": "temporary"
+  },
+  "ReplyFailure": {
+    "id": "failure-episode",
+    "forMessageId": "assistant-message",
+    "reason": {
+      "code": "availability",
+      "qualifier": "temporary"
+    },
+    "recovery": {
+      "kind": "regenerate",
+      "messageId": "assistant-message"
+    }
+  },
   "Problem": {
     "code": "refused",
     "id": "problem-a"
@@ -864,5 +885,23 @@
     "id": "s1",
     "title": "Order 1042",
     "url": "https://example.test/orders/1042"
+  },
+  "OutlineMessage": {
+    "id": "message-a",
+    "role": "assistant",
+    "revision": "1",
+    "text": "Hello"
+  },
+  "ConversationPage": {
+    "conversation": {
+      "protocol": "1.0",
+      "id": "conversation-a",
+      "title": "Example",
+      "messages": []
+    },
+    "snapshotId": "snapshot",
+    "olderCursor": null,
+    "outline": [],
+    "heldClientMessageIds": []
   }
 }

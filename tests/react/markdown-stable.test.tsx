@@ -11,6 +11,7 @@ import { config } from "../support/client";
 afterEach(cleanup);
 
 it("a focused code block and a table keep their elements across a re-render", async () => {
+  await import("../../src/react/markdown");
   const base = config();
   const client = createWaypointClient({
     ...base,

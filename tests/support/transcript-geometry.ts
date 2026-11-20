@@ -68,19 +68,45 @@ export function installGeometry({
 } = {}): Geometry {
   const tops = new WeakMap<Element, number>();
   const isBox = (element: Element) => element.classList.contains(BOX);
-  // Messages, and the spacers a windowed transcript puts for the rest.
-  const rows = (box: Element) => [...box.querySelectorAll(ROWS)];
+  let content = new WeakMap<Element, Element[]>();
+  const observed = new WeakSet<Element>();
+  let restored = false;
+  const invalidate = () => {
+    content = new WeakMap();
+  };
+  const mutations = new MutationObserver(invalidate);
+  // Native layout reads share membership until DOM mutations invalidate it.
+  const rows = (box: Element): Element[] => {
+    if (restored) return [...box.querySelectorAll(ROWS)];
+    if (!observed.has(box)) {
+      mutations.observe(box, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+      });
+      observed.add(box);
+    }
+    if (mutations.takeRecords().length > 0) invalidate();
+    const cached = content.get(box);
+    if (cached) return cached;
+    const found = [...box.querySelectorAll(ROWS)];
+    content.set(box, found);
+    return found;
+  };
   const height = (row: Element) =>
     row.matches(GAP)
       ? parseFloat((row as HTMLElement).style.blockSize) || 0
       : (geometry.heights.get(rowKey(row)) ?? defaultHeight);
-  const scrollHeight = (box: Element) =>
+  const scrollHeight = (
+    box: Element,
+    content: readonly Element[] = rows(box),
+  ) =>
     Math.max(
       geometry.clientHeight,
-      rows(box).reduce((sum, row) => sum + height(row), 0),
+      content.reduce((sum, row) => sum + height(row), 0),
     );
-  const max = (box: Element) =>
-    Math.max(0, scrollHeight(box) - geometry.clientHeight);
+  const max = (box: Element, content?: readonly Element[]) =>
+    Math.max(0, scrollHeight(box, content) - geometry.clientHeight);
   const fire = (box: Element) =>
     setTimeout(() => box.dispatchEvent(new Event("scroll")), 0);
   const top = (box: Element) => tops.get(box) ?? 0;
@@ -90,9 +116,10 @@ export function installGeometry({
     tops.set(box, clamped);
     fire(box);
   };
-  const clamp = (box: Element) => {
-    if (top(box) > max(box)) {
-      tops.set(box, max(box));
+  const clamp = (box: Element, content?: readonly Element[]) => {
+    const end = max(box, content);
+    if (top(box) > end) {
+      tops.set(box, end);
       fire(box);
     }
   };
@@ -169,9 +196,10 @@ export function installGeometry({
         return DOMRect.fromRect({ y: 0, height: geometry.clientHeight });
       const box = this.closest(`.${BOX}`);
       if (box && this.matches(ROWS)) {
-        clamp(box);
+        const content = rows(box);
+        clamp(box, content);
         let y = -top(box);
-        for (const row of rows(box)) {
+        for (const row of content) {
           if (row === this) break;
           y += height(row);
         }
@@ -220,6 +248,10 @@ export function installGeometry({
     },
     scrollTo: (value) => set(box(), value),
     restore() {
+      if (restored) return;
+      restored = true;
+      mutations.disconnect();
+      invalidate();
       for (const [key, descriptor] of saved)
         if (descriptor) Object.defineProperty(proto, key, descriptor);
         else delete (proto as unknown as Record<string, unknown>)[key];

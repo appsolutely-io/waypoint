@@ -1,6 +1,7 @@
 /* Generated from schema.json. */
 
 export type WaypointProtocol =
+  | HostProblemDetail
   | Problem
   | Negotiation
   | NegotiationOfferWire
@@ -44,8 +45,10 @@ export type WaypointProtocol =
   | BlockNotice
   | ExtensionBlock
   | Block
+  | MessageSender
   | Message
   | Source
+  | ReplyFailure
   | Conversation
   | ReplyMessage
   | ReplyConfirm
@@ -85,7 +88,9 @@ export type WaypointProtocol =
   | LeaveAcknowledgment
   | DecisionVersions
   | KeptFact
-  | FinalHistory;
+  | FinalHistory
+  | OutlineMessage
+  | ConversationPage;
 export type Plan = ImmediateDraft | ImmediatePlan | TimedPlan;
 export type PlanState =
   | 'proposed'
@@ -158,7 +163,12 @@ export type Conversation = {
   title: string;
   messages: Message[];
   replyOverdueAt?: number | null;
+  replyOverdueFor?: string | null;
+  replyOverdueVersion?: number;
+  replyExpectedId?: string;
+  replyLabel?: string | null;
   replyStatus?: 'expected' | 'unavailable' | 'failed' | 'complete';
+  replyFailure?: ReplyFailure | null;
   mode?: 'form-fill';
   subject?: FormSubject;
   parentConversationId?: string;
@@ -214,7 +224,25 @@ export type CreateConversation = {
   field?: string;
   clientCreationId?: string;
 };
+export type ConversationPage =
+  | {
+      conversation: Conversation;
+      snapshotId: string;
+      olderCursor: string | null;
+      outline: OutlineMessage[];
+      heldClientMessageIds: string[];
+    }
+  | {
+      stale: true;
+    };
 
+/**
+ * Safe host-defined enumerated detail; never raw provider text.
+ */
+export interface HostProblemDetail {
+  code: string;
+  qualifier?: string;
+}
 export interface Problem {
   code:
     | 'update-required'
@@ -238,6 +266,7 @@ export interface Problem {
     | 'agreement-expired';
   id: string;
   retryAfter?: number;
+  host?: HostProblemDetail | null;
   /**
    * Why a confirmation was refused; only with code refused.
    */
@@ -735,10 +764,16 @@ export interface ExtensionBlock {
   answered?: boolean;
   answer?: CardAnswer;
 }
+export interface MessageSender {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+}
 export interface Message {
   id: string;
   clientMessageId?: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'notice';
+  sender?: MessageSender;
   content: string;
   blocks: Block[];
   createdAt: number;
@@ -756,6 +791,19 @@ export interface Source {
   id: string;
   title: string;
   url: string;
+}
+export interface ReplyFailure {
+  id: string;
+  forMessageId?: string;
+  reason?: HostProblemDetail | null;
+  recovery?:
+    | {
+        kind: 'regenerate' | 'resend';
+        messageId: string;
+      }
+    | {
+        kind: 'none';
+      };
 }
 export interface ReplyMessage {
   kind: 'message';
@@ -876,7 +924,11 @@ export interface FrameMessageStart {
   protocol: string;
   sequence: number;
   messageId: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'notice';
+  sender?: MessageSender;
+  replyOverdueAt?: number | null;
+  replyOverdueFor?: string | null;
+  versionIndex?: number;
 }
 export interface FrameTextDelta {
   type: 'text.delta';
@@ -939,6 +991,9 @@ export interface FrameStale {
   protocol: string;
   sequence: number;
   reads: ('conversation' | 'conversations' | 'plans' | 'flows')[];
+  replyOverdueAt?: number | null;
+  replyOverdueFor?: string | null;
+  versionIndex?: number;
 }
 export interface FrameProblem {
   type: 'problem';
@@ -968,4 +1023,11 @@ export interface PatchFlow {
   flowId: string;
   favourite: boolean;
   title: string;
+}
+export interface OutlineMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'notice';
+  sender?: MessageSender;
+  revision: string;
+  text: string;
 }

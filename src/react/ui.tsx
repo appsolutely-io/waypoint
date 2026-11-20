@@ -28,7 +28,9 @@ import {
 import type {
   Block,
   Message,
+  OutlineMessage,
   Problem,
+  ReplyFailure,
   PlanRecord,
   Reply,
 } from "../protocol/generated";
@@ -42,6 +44,7 @@ import {
   confirmationOf,
   flowTabId,
   type ReplyState,
+  type ReplyFailureRecord,
   type WaypointClient,
 } from "../core/client";
 import type { Capability } from "../protocol/index";
@@ -101,11 +104,21 @@ export {
 };
 import type { ActionEntry, ActionId, PlanView, StepStatus } from "./plan-view";
 import type { BlockSummary } from "./plan-view";
-import type { MarkdownImagePolicy } from "./markdown";
-export type { MarkdownImagePolicy } from "./markdown";
+import type { MarkdownImagePolicy } from "./image-policy";
+import { normalizeSender } from "../core/message-sender";
+import { SenderAvatar, senderName } from "./sender";
+export type { MarkdownImagePolicy } from "./image-policy";
 type MarkdownModule = typeof import("./markdown");
 import { lazyChunk, useChunk } from "./chunks";
-import { problemAction, problemView } from "./problem-view";
+import {
+  pendingProblem,
+  visibleProblem,
+  replyRowView,
+  type HostBusyStopControl,
+  problemAction,
+  problemView,
+} from "./problem-view";
+import { conversationTail } from "../core/reply-recovery";
 // The stock renderer's chunk, shared by every message: loaded once on first
 // use, and tried again after a failure when a message body next asks or a
 // Retry is pressed.
@@ -149,10 +162,22 @@ const LazyConfirmation = lazy(() => import("./confirmation-view"));
 const blocksChunk = lazyChunk(() => import("./blocks"));
 // The controls of the reply being written, loaded when one is first shown.
 const replyControlsChunk = lazyChunk(() => import("./reply-controls"));
-function ReplyControls(props: { client: WaypointClient; row: ReplyState }) {
+function ReplyControls(props: {
+  client: WaypointClient;
+  row: ReplyState;
+  expectedReplyStop?: HostBusyStopControl;
+}) {
+  const active =
+    props.row !== "none" || props.client.getSnapshot().toolSteps.length > 0;
+  const [requested, setRequested] = useState(active);
   const load = useChunk(replyControlsChunk);
-  useEffect(() => replyControlsChunk.request(), []);
-  return load.status === "ready" ? (
+  useEffect(() => {
+    if (active) {
+      setRequested(true);
+      replyControlsChunk.request();
+    }
+  }, [active]);
+  return requested && load.status === "ready" ? (
     <load.module.ReplyControls {...props} />
   ) : null;
 }
@@ -221,6 +246,7 @@ export type PartName =
 export interface PartMessage {
   id: string;
   role: Message["role"];
+  sender?: Message["sender"];
   status?: Message["status"];
   versionIndex?: number;
   versionCount?: number;
@@ -229,7 +255,11 @@ export interface PartMessage {
 export interface PartPending {
   id: string;
   content: string;
-  failure: { code: Problem["code"] } | null;
+  failure: {
+    code: Problem["code"];
+    id?: string;
+    host?: Problem["host"];
+  } | null;
 }
 /** A plan step as its row sees it. */
 export type PartStep = Pick<
@@ -389,6 +419,11 @@ export interface WaypointProviderProps {
     problem: Problem,
     context?: { answeredElsewhere: boolean },
   ) => { text: string; action?: ReactNode };
+  expectedReplyStop?: HostBusyStopControl;
+  replyFailureText?: (failure: ReplyFailure) => {
+    text: string;
+    action?: ReactNode;
+  };
   format?: FormatMessage;
   locale?: string;
   dir?: "ltr" | "rtl";
@@ -984,8 +1019,45 @@ function pendingSummary(pending: {
   return {
     id: pending.id,
     content: pending.content,
-    failure: pending.failure ? { code: pending.failure.code } : null,
+    failure: pending.failure
+      ? {
+          code: pending.failure.code,
+          id: pending.failure.id,
+          ...(pending.failure.host !== undefined && {
+            host:
+              pending.failure.host === null
+                ? null
+                : { ...pending.failure.host },
+          }),
+        }
+      : null,
   };
+}
+function PendingProblemText({
+  text,
+  restored,
+  children,
+}: {
+  text: string | undefined;
+  restored: boolean;
+  children: ReactNode;
+}) {
+  const [current, setCurrent] = useState(() => ({
+    text,
+    live: !restored,
+    revision: 0,
+  }));
+  if (current.text !== text)
+    setCurrent({ text, live: true, revision: current.revision + 1 });
+  return text === undefined ? null : (
+    <p
+      role={current.live ? "alert" : undefined}
+      key={`problem-${current.revision}`}
+    >
+      {text}
+      {children}
+    </p>
+  );
 }
 export function Part<N extends PartName>({
   name,
@@ -1323,6 +1395,7 @@ const EXCERPT_SLOT = "\u{E000}";
 const FILTER_DELAY_MS = 150;
 const noSubscription = () => () => {};
 const noVersion = () => 0;
+type TranscriptEntry = Message | OutlineMessage;
 function TranscriptOutline({
   messages,
   excerpts,
@@ -1336,7 +1409,7 @@ function TranscriptOutline({
   sourceOf,
   lang,
 }: {
-  messages: readonly Message[];
+  messages: readonly TranscriptEntry[];
   excerpts: readonly (string | undefined)[];
   anchor: (messageId: string) => string;
   open: boolean;
@@ -1345,8 +1418,8 @@ function TranscriptOutline({
   // What the filter holds, and each message's folded text to match it in.
   query: string;
   onQuery: (query: string) => void;
-  search: SearchIndex<Message>;
-  sourceOf: (message: Message) => unknown;
+  search: SearchIndex<TranscriptEntry>;
+  sourceOf: (message: TranscriptEntry) => unknown;
   lang?: string;
 }) {
   const { format: t, primitives } = context();
@@ -1407,11 +1480,7 @@ function TranscriptOutline({
         {open
           ? shown.map(({ message, index }) => {
               const values = {
-                role: t(
-                  message.role === "user"
-                    ? "chat.roleUser"
-                    : "chat.roleAssistant",
-                ),
+                role: senderName(message, t),
                 position: index + 1,
               };
               const text = excerpts[index];
@@ -1530,6 +1599,7 @@ function RowActions({ slots, message }: { slots?: Slots; message: Message }) {
         message: {
           id: message.id,
           role: message.role,
+          sender: normalizeSender(message.sender),
           status: message.status,
           versionIndex: message.versionIndex,
           versionCount: message.versionCount,
@@ -1540,11 +1610,35 @@ function RowActions({ slots, message }: { slots?: Slots; message: Message }) {
     </Part>
   );
 }
+interface FailurePresentation {
+  record: ReplyFailureRecord;
+  view: { text: string; action?: ReactNode };
+}
+function ReplyFailureText({
+  failure,
+  announce,
+}: {
+  failure: FailurePresentation;
+  announce?: boolean;
+}) {
+  return (
+    <div
+      data-reply-failure={failure.record.failure.id}
+      role={announce ? "status" : undefined}
+    >
+      <p>
+        {failure.view.text}
+        {failure.view.action}
+      </p>
+    </div>
+  );
+}
 // One message of the transcript. It renders again only when one of its
 // props changes: a delta into another message, or a keystroke in the
 // composer, leaves it as it is.
 const MessageRow = memo(function MessageRow({
   message,
+  failure,
   slots,
   anchorId,
   writing,
@@ -1557,6 +1651,7 @@ const MessageRow = memo(function MessageRow({
   setSize,
 }: {
   message: Message;
+  failure?: FailurePresentation;
   slots?: Slots;
   anchorId: string;
   // Still streaming in: what it says is not final.
@@ -1573,14 +1668,12 @@ const MessageRow = memo(function MessageRow({
   posInSet?: number;
   setSize?: number;
 }) {
-  const t = context().format;
+  const { format: t, markdownImages, extraUrlSchemes } = context();
   const parse = useMemo(() => {
     const source = bodySource(message);
     return (made: () => ReactNode) => rows.parses.get(message.id, source, made);
   }, [rows, message]);
-  const sender = t(
-    message.role === "user" ? "chat.roleUser" : "chat.roleAssistant",
-  );
+  const sender = senderName(message, t);
   return (
     <article
       id={anchorId}
@@ -1604,6 +1697,7 @@ const MessageRow = memo(function MessageRow({
           message: {
             id: message.id,
             role: message.role,
+            sender: normalizeSender(message.sender),
             content: message.content,
             status: message.status,
             versionIndex: message.versionIndex,
@@ -1614,6 +1708,11 @@ const MessageRow = memo(function MessageRow({
       >
         {/* Seen first in the bubble; said once, as the article's name. */}
         <span data-sender="" aria-hidden="true">
+          <SenderAvatar
+            src={message.sender?.avatarUrl}
+            images={markdownImages}
+            extraSchemes={extraUrlSchemes}
+          />
           {sender}
         </span>
         <BodyOf.Provider value={message.id}>
@@ -1626,7 +1725,7 @@ const MessageRow = memo(function MessageRow({
           </ParseOf.Provider>
         </BodyOf.Provider>
         {/* Seen in the bubble; said once, by the reply row. */}
-        {writing ? (
+        {failure ? null : writing ? (
           <span data-writing="" aria-hidden="true">
             {t("reply.writing")}
           </span>
@@ -1664,6 +1763,12 @@ const MessageRow = memo(function MessageRow({
           );
         })}
       </Part>
+      {failure ? (
+        <ReplyFailureText
+          failure={failure}
+          announce={message.role !== "assistant"}
+        />
+      ) : null}
       {actions ? <RowActions slots={slots} message={message} /> : null}
     </article>
   );
@@ -1780,6 +1885,19 @@ function ChatBody({
     (id) => ownerKey(client, id),
   );
   const messages = state.conversation?.messages ?? [];
+  const indexed = state.history?.outline;
+  const outlineMessages = useMemo<readonly TranscriptEntry[]>(() => {
+    if (!indexed) return messages;
+    const loaded = new Map(messages.map((message) => [message.id, message]));
+    const entries: TranscriptEntry[] = indexed.map(
+      (entry) => loaded.get(entry.id) ?? entry,
+    );
+    const known = new Set(indexed.map((entry) => entry.id));
+    return [
+      ...entries,
+      ...messages.filter((message) => !known.has(message.id)),
+    ];
+  }, [indexed, messages]);
   const shownId = state.conversation?.id;
   // The outline's disclosure is kept per shown conversation; a switch
   // collapses it.
@@ -1805,6 +1923,17 @@ function ChatBody({
     () => messages.map((message) => message.id),
     [messages],
   );
+  const outlineIds = useMemo(
+    () => (indexed ? outlineMessages.map((message) => message.id) : messageIds),
+    [indexed, outlineMessages, messageIds],
+  );
+  const outlinePositions = useMemo(
+    () =>
+      indexed
+        ? new Map(outlineIds.map((id, index) => [id, index + 1]))
+        : undefined,
+    [indexed, outlineIds],
+  );
   const transcriptWindow = useTranscriptWindow(
     transcript,
     transcriptContent,
@@ -1812,6 +1941,38 @@ function ChatBody({
     position.pinned,
     position.anchorId(),
   );
+  const [pageTarget, setPageTarget] = useState<{
+    id: string;
+    onReveal: () => void;
+  }>();
+  useEffect(() => {
+    if (!pageTarget || !messageIds.includes(pageTarget.id)) return;
+    transcriptWindow.reveal(pageTarget.id, pageTarget.onReveal);
+    setPageTarget(undefined);
+  }, [pageTarget, messageIds, transcriptWindow]);
+  const revealMessage = (id: string, onReveal: () => void) => {
+    if (messageIds.includes(id)) transcriptWindow.reveal(id, onReveal);
+    else
+      void client.loadMessage(id).then((loaded) => {
+        if (loaded) setPageTarget({ id, onReveal });
+      });
+  };
+  useEffect(() => {
+    const element = transcript.current;
+    if (!element || !state.history?.hasOlder) return;
+    const older = () => {
+      const history = client.getSnapshot().history;
+      if (
+        element.scrollTop <= 1 &&
+        history?.hasOlder &&
+        !history.loading &&
+        !history.failed
+      )
+        void client.loadOlder();
+    };
+    element.addEventListener("scroll", older, { passive: true });
+    return () => element.removeEventListener("scroll", older);
+  }, [client, shownId, state.history?.hasOlder]);
   // A link to a message the window has not mounted (the page's address
   // names its anchor) mounts it, then shows it at the top of the box.
   const revealLinked = () => {
@@ -1877,24 +2038,24 @@ function ChatBody({
     const messageId = article.getAttribute("data-message-id");
     const at =
       messageId !== null
-        ? messageIds.indexOf(messageId)
-        : messageIds.length +
+        ? outlineIds.indexOf(messageId)
+        : outlineIds.length +
           pendingIds.indexOf(article.getAttribute("data-pending-id")!);
     const next = at + (event.key === "PageDown" ? 1 : -1);
-    if (at < 0 || next < 0 || next >= messageIds.length + pendingIds.length)
+    if (at < 0 || next < 0 || next >= outlineIds.length + pendingIds.length)
       return;
     event.preventDefault();
-    if (next >= messageIds.length) {
+    if (next >= outlineIds.length) {
       // A message being sent is always mounted, after the window.
-      const id = pendingIds[next - messageIds.length];
+      const id = pendingIds[next - outlineIds.length];
       const row = [
         ...feed.querySelectorAll<HTMLElement>("article[data-pending-id]"),
       ].find((element) => element.getAttribute("data-pending-id") === id);
       if (row) focusFor(chatFocus.value, row, { origin, owner });
       return;
     }
-    const id = messageIds[next]!;
-    transcriptWindow.reveal(id, () =>
+    const id = outlineIds[next]!;
+    revealMessage(id, () =>
       focusFor(chatFocus.value, position.toMessage(id), { origin, owner }),
     );
   };
@@ -2158,20 +2319,33 @@ function ChatBody({
     bodies,
   );
   // Labels are made only while the outline shows them.
-  const excerpts = outlineOpen ? messages.map(excerptOf) : [];
+  const excerpts = outlineOpen
+    ? outlineMessages.map((message) =>
+        "revision" in message ? excerpt(message.text) : excerptOf(message),
+      )
+    : [];
   // The filter reads each message's whole visible text, folded once per
   // source in idle slices while the outline is open.
-  const search = useRef(new SearchIndex<Message>()).current;
-  const searchSourceOf = (message: Message): unknown =>
-    visibilityUnknown ? message : message.content;
+  const search = useRef(new SearchIndex<TranscriptEntry>()).current;
+  const searchSourceOf = (message: TranscriptEntry): unknown =>
+    "revision" in message
+      ? message.text
+      : visibilityUnknown
+        ? message
+        : message.content;
   const searched = useMemo(
     () =>
-      messages.map((message) => ({
+      outlineMessages.map((message) => ({
         id: message.id,
-        source: visibilityUnknown ? message : message.content,
+        source:
+          "revision" in message
+            ? message.text
+            : visibilityUnknown
+              ? message
+              : message.content,
         message,
       })),
-    [messages, visibilityUnknown],
+    [outlineMessages, visibilityUnknown],
   );
   // Its inputs: each message's version (its source), the chat's language,
   // the parser being ready and what it is told. The host's excerpt is read
@@ -2192,11 +2366,13 @@ function ChatBody({
     searched,
     (message) =>
       foldForSearch(
-        visibilityUnknown
-          ? (provider.messageExcerpt?.(message) ?? "")
-          : markdownModule
-            ? visibleOf(message, markdownModule)
-            : message.content,
+        "revision" in message
+          ? message.text
+          : visibilityUnknown
+            ? (provider.messageExcerpt?.(message) ?? "")
+            : markdownModule
+              ? visibleOf(message, markdownModule)
+              : message.content,
         provider.lang,
       ),
   );
@@ -2207,6 +2383,50 @@ function ChatBody({
     () => (outlineOpen ? () => search.stop() : undefined),
     [outlineOpen, search],
   );
+  const failurePresentations = useMemo(
+    () =>
+      (state.replyFailures ?? []).map((record): FailurePresentation => ({
+        record,
+        view: record.failure.reason
+          ? (provider.replyFailureText?.(record.failure) ?? {
+              text: t(`reply.${record.status}`),
+            })
+          : { text: t(`reply.${record.status}`) },
+      })),
+    [state.replyFailures, provider.replyFailureText, t],
+  );
+  const failuresByMessage = useMemo(
+    () =>
+      new Map(
+        failurePresentations
+          .filter((failure) => failure.record.messageId)
+          .map((failure) => [failure.record.messageId!, failure]),
+      ),
+    [failurePresentations],
+  );
+  const activeFailure = failurePresentations.find(
+    (failure) => failure.record.active,
+  );
+  const unanchoredFailure =
+    activeFailure &&
+    !messages.some((message) => message.id === activeFailure.record.messageId)
+      ? activeFailure
+      : undefined;
+  const failureAnnouncements = useMemo(
+    () =>
+      new Map(
+        failurePresentations
+          .filter((failure) =>
+            messages.some(
+              (message) =>
+                message.id === failure.record.messageId &&
+                message.role === "assistant",
+            ),
+          )
+          .map((failure) => [failure.record.messageId!, failure.view.text]),
+      ),
+    [failurePresentations, messages],
+  );
   const liveRegion = useRef<HTMLDivElement>(null);
   const announcement = useAnnouncements(
     client,
@@ -2214,6 +2434,7 @@ function ChatBody({
     excerptOf,
     t,
     liveRegion,
+    failureAnnouncements,
   );
   // A flow run started by a press here. Focus moves to the composer only
   // when this run's own navigation succeeded and its conversation is
@@ -2269,18 +2490,24 @@ function ChatBody({
   const row = state.replyState;
   // The reply being written, while the reply row says so: whatever ended it
   // (a failure, a lost stream) ends its busy state too.
-  const last = messages.at(-1);
+  const last = conversationTail(messages);
   const writingId =
-    row === "writing" && last?.status === "writing" ? last.id : undefined;
+    (row === "writing" || row === "overdue") &&
+    last?.role === "assistant" &&
+    last.status === "writing"
+      ? last.id
+      : undefined;
   // The host ended the reply itself: the reply says so, and the message
   // region announces it, so the row's live region stays quiet.
   const endedInReply =
     last?.role === "assistant" &&
-    (last.status === "failed" || last.status === "unavailable") &&
-    row === last.status;
+    (last.status === "failed" || last.status === "unavailable");
   // Held while a modal drawer makes the row inert; said once it is live.
   const replyRow = useRef<HTMLDivElement>(null);
   const heldRow = useHeldWhileInert(row, replyRow);
+  const rowView = replyRowView(heldRow, {
+    presentation: state.replyPresentation,
+  });
   const respond = (block: Block, messageId: string) => (reply: CardAnswer) => {
     const pressed = deepActiveElement(document);
     const id = cardReplyId(state.conversationId, messageId, block.id, reply);
@@ -2332,19 +2559,11 @@ function ChatBody({
       : null;
   const plan = state.plan;
   const planView = recovery.view;
-  // The problem the alert says, when it says one.
-  const shownProblem =
-    problem &&
-    state.problem?.id !== "conversation-unavailable" &&
-    // The recovery panel states a protected plan's stop itself.
-    !(state.problem?.code === "stopped" && planView?.status) &&
-    // A confirmation refusal is shown with the confirmation.
-    !state.problem?.confirmation &&
-    !(
-      state.conversationUnavailable && state.problem?.id === "conversation-read"
-    )
-      ? state.problem
-      : undefined;
+  const shownProblem = visibleProblem(state.problem, {
+    checking: !!state.problem && checking.current.has(state.problem.id),
+    planStopped: !!planView?.status,
+    conversationUnavailable: state.conversationUnavailable,
+  });
   // Where the problem is shown: one about a message that could not be sent
   // is shown with that message; any other is about the conversation and is
   // shown after the composer.
@@ -2600,9 +2819,9 @@ function ChatBody({
             ) : null}
             <Part name="transcript" slots={slots}>
               <div onFocusCapture={recordTranscriptFocus}>
-                {messages.length ? (
+                {outlineMessages.length ? (
                   <TranscriptOutline
-                    messages={messages}
+                    messages={outlineMessages}
                     excerpts={excerpts}
                     anchor={anchor}
                     open={outlineOpen}
@@ -2623,7 +2842,7 @@ function ChatBody({
                     onNavigate={(messageId) => {
                       const origin = chatFocus.value.originFor("outline");
                       const owner = chatFocus.value.owner();
-                      transcriptWindow.reveal(messageId, () =>
+                      revealMessage(messageId, () =>
                         focusFor(
                           chatFocus.value,
                           position.toMessage(messageId),
@@ -2640,6 +2859,32 @@ function ChatBody({
                   aria-label={t("chat.transcript")}
                   tabIndex={-1}
                 >
+                  {state.history &&
+                  (state.history.hasOlder ||
+                    state.history.loading ||
+                    state.history.failed) ? (
+                    <div data-history="">
+                      {state.history.failed ? (
+                        <p role="status">{t("chat.historyFailed")}</p>
+                      ) : null}
+                      <B
+                        disabled={state.history.loading}
+                        onPress={() => {
+                          void (state.history?.hasOlder
+                            ? client.loadOlder()
+                            : client.refresh());
+                        }}
+                      >
+                        {t(
+                          state.history.loading
+                            ? "chat.historyLoading"
+                            : state.history.failed
+                              ? "chat.retry"
+                              : "chat.historyOlder",
+                        )}
+                      </B>
+                    </div>
+                  ) : null}
                   <RenderFailures.Provider value={renderFailures}>
                     {/* The messages are a feed (WAI-ARIA 1.2, "feed"):
                         each article says its place among all of them,
@@ -2681,9 +2926,15 @@ function ChatBody({
                             .map((message, offset) => (
                               <MessageRow
                                 key={message.id}
-                                posInSet={segment.from + offset + 1}
-                                setSize={messages.length + state.pending.length}
+                                posInSet={
+                                  outlinePositions?.get(message.id) ??
+                                  segment.from + offset + 1
+                                }
+                                setSize={
+                                  outlineMessages.length + state.pending.length
+                                }
                                 message={message}
+                                failure={failuresByMessage.get(message.id)}
                                 slots={slots}
                                 anchorId={anchor(message.id)}
                                 writing={message.id === writingId}
@@ -2699,100 +2950,115 @@ function ChatBody({
                             ))
                         ),
                       )}
-                      {state.pending.map((pending, index) => (
-                        <article
-                          key={pending.id}
-                          data-role="pending"
-                          data-pending-id={pending.id}
-                          tabIndex={-1}
-                          aria-posinset={messages.length + index + 1}
-                          aria-setsize={messages.length + state.pending.length}
-                          aria-label={t("chat.roleUser")}
-                        >
-                          <Part
-                            name="bubble"
-                            slots={slots}
-                            data={{ pending: pendingSummary(pending) }}
-                          >
-                            <span data-sender="" aria-hidden="true">
-                              {t("chat.roleUser")}
-                            </span>
-                            <p>{pending.content}</p>
-                          </Part>
-                          <p
-                            id={`${pendingId}-${pending.id}`}
-                            data-pending-status={
-                              pending.failure ? "failed" : "sending"
+                      {state.pending.map((pending, index) => {
+                        const rowProblem = pendingProblem(
+                          pending,
+                          shownProblem,
+                        );
+                        const rowText = rowProblem
+                          ? (provider.problemText?.(rowProblem, {
+                              answeredElsewhere:
+                                rowProblem === answeredElsewhere.current,
+                            }) ?? defaultProblemText(rowProblem, t))
+                          : undefined;
+                        return (
+                          <article
+                            key={pending.id}
+                            data-role="pending"
+                            data-pending-id={pending.id}
+                            tabIndex={-1}
+                            aria-posinset={outlineMessages.length + index + 1}
+                            aria-setsize={
+                              outlineMessages.length + state.pending.length
                             }
+                            aria-label={t("chat.roleUser")}
                           >
-                            {t(
-                              pending.failure
-                                ? "chat.pendingFailed"
-                                : "chat.pendingSending",
-                            )}
-                          </p>
-                          {/* Its own problem, said here. Its Retry is the
-                              message's own, below; a Refresh the problem
-                              asks for stays with it. */}
-                          {messageProblem?.id === pending.id && problem ? (
-                            <p role="alert" key={state.announcement}>
-                              {problem.text}
-                              {problem.action ??
-                                (!provider.problemText &&
-                                problemAction(messageProblem) === "refresh" ? (
-                                  <ProblemAction
-                                    problem={messageProblem}
-                                    refresh={retrying}
-                                  />
-                                ) : null)}
-                            </p>
-                          ) : null}
-                          {pending.failure ? (
                             <Part
-                              name="failedSendControls"
+                              name="bubble"
                               slots={slots}
                               data={{ pending: pendingSummary(pending) }}
                             >
-                              <B
-                                aria-describedby={`${pendingId}-${pending.id}`}
-                                disabled={
-                                  state.conversationUnavailable || state.sending
-                                }
-                                onPress={() => {
-                                  void client.retry(pending.id);
-                                }}
-                              >
-                                {t("chat.retry")}
-                              </B>
-                              <B
-                                aria-describedby={`${pendingId}-${pending.id}`}
-                                disabled={state.withdrawing.includes(
-                                  pending.id,
-                                )}
-                                onPress={() => {
-                                  void client.withdraw(pending.id);
-                                }}
-                              >
-                                {t("chat.withdraw")}
-                              </B>
-                              <B
-                                aria-describedby={`${pendingId}-${pending.id}`}
-                                onPress={() => {
-                                  void client.dismiss(pending.id);
-                                }}
-                              >
-                                {t("chat.dismiss")}
-                              </B>
+                              <span data-sender="" aria-hidden="true">
+                                {t("chat.roleUser")}
+                              </span>
+                              <p>{pending.content}</p>
                             </Part>
-                          ) : null}
-                          {messageProblem?.id === pending.id ? (
-                            <ProblemDetails
-                              key={state.announcement}
-                              problem={messageProblem}
-                            />
-                          ) : null}
-                        </article>
-                      ))}
+                            <p
+                              id={`${pendingId}-${pending.id}`}
+                              data-pending-status={
+                                pending.failure ? "failed" : "sending"
+                              }
+                            >
+                              {t(
+                                pending.failure
+                                  ? "chat.pendingFailed"
+                                  : "chat.pendingSending",
+                              )}
+                            </p>
+                            <PendingProblemText
+                              key={`problem-${state.pendingRestoration?.visit ?? 0}`}
+                              text={rowText?.text}
+                              restored={
+                                state.pendingRestoration?.ids.includes(
+                                  pending.id,
+                                ) ?? false
+                              }
+                            >
+                              {rowText?.action ??
+                                (!provider.problemText &&
+                                rowProblem &&
+                                problemAction(rowProblem) === "refresh" ? (
+                                  <ProblemAction
+                                    problem={rowProblem}
+                                    refresh={retrying}
+                                  />
+                                ) : null)}
+                            </PendingProblemText>
+                            {pending.failure ? (
+                              <Part
+                                name="failedSendControls"
+                                slots={slots}
+                                data={{ pending: pendingSummary(pending) }}
+                              >
+                                <B
+                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  disabled={
+                                    state.conversationUnavailable ||
+                                    state.sending
+                                  }
+                                  onPress={() => {
+                                    void client.retry(pending.id);
+                                  }}
+                                >
+                                  {t("chat.retry")}
+                                </B>
+                                <B
+                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  disabled={state.withdrawing.includes(
+                                    pending.id,
+                                  )}
+                                  onPress={() => {
+                                    void client.withdraw(pending.id);
+                                  }}
+                                >
+                                  {t("chat.withdraw")}
+                                </B>
+                                <B
+                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  onPress={() => {
+                                    void client.dismiss(pending.id);
+                                  }}
+                                >
+                                  {t("chat.dismiss")}
+                                </B>
+                              </Part>
+                            ) : null}
+                            {rowProblem ? (
+                              <ProblemDetails problem={rowProblem} />
+                            ) : null}
+                          </article>
+                        );
+                      })}
                     </div>
                   </RenderFailures.Provider>
                 </div>
@@ -2831,7 +3097,11 @@ function ChatBody({
             </Part>
             <Part name="replyRow" slots={slots}>
               <div ref={replyRow} role="status" data-reply-state={row}>
-                {heldRow === "none" || endedInReply ? null : (
+                {heldRow === "none" ||
+                heldRow === "expected" ||
+                heldRow === "expected-overdue" ||
+                endedInReply ||
+                activeFailure ? null : (
                   <p
                     // A reply being written shows it in its bubble: the row
                     // says it once, to assistive technology only.
@@ -2841,13 +3111,18 @@ function ChatBody({
                         : undefined
                     }
                   >
-                    {t(`reply.${heldRow}`)}
+                    {rowView.key ? t(rowView.key) : null}
                   </p>
                 )}
               </div>
-              {row !== "none" || state.toolSteps.length ? (
-                <ReplyControls client={client} row={row} />
+              {unanchoredFailure ? (
+                <ReplyFailureText failure={unanchoredFailure} announce />
               ) : null}
+              <ReplyControls
+                client={client}
+                row={row}
+                expectedReplyStop={provider.expectedReplyStop}
+              />
             </Part>
             {narrow ? planPanel : null}
             {actionsAfterPlan ? (

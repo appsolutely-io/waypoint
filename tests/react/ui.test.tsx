@@ -146,11 +146,11 @@ it("keeps recovery visible and controls disabled after another problem replaces 
     (screen.getByRole("button", { name: "Retry" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
-  expect(screen.getByRole("alert").textContent).toContain(
+  expect(document.querySelector("[data-announcement]")?.textContent).toContain(
     "does not stop a server turn",
   );
   act(() => client.report({ code: "unavailable", id: "storage-write" }));
-  expect(screen.getByRole("alert").textContent).toContain(
+  expect(document.querySelector("[data-announcement]")?.textContent).toContain(
     "does not stop a server turn",
   );
   expect(

@@ -12,16 +12,23 @@ export type HttpRequest = (
   path: string,
   init?: HttpInit,
 ) => Promise<HttpResult>;
-export interface ConformanceConfig {
+export interface ConformanceAuthOptions {
+  headers?: Record<string, string>;
+  authenticate?(
+    session: unknown,
+  ): Record<string, string> | Promise<Record<string, string>>;
+}
+export interface ConformanceConfig extends ConformanceAuthOptions {
   baseUrl: string;
   request: HttpRequest;
-  profile: "admin-host" | "app-host";
+  profile?: "admin-host" | "app-host";
   noStepUp?: boolean;
 }
 export interface ConformanceResult {
   passed: boolean;
   failures: string[];
   scenarios: string[];
+  skipped?: string[];
 }
 /** The problem a failed load of the conformance code rejects with. */
 export const CONFORMANCE_UNAVAILABLE = {
@@ -45,12 +52,14 @@ export async function runConformance(
 }
 export async function runPlanConformance(
   request: HttpRequest,
+  options?: ConformanceAuthOptions,
 ): Promise<ConformanceResult> {
-  return (await load()).runPlanConformance(request);
+  return (await load()).runPlanConformance(request, options);
 }
 export async function runFormFillConformance(
   request: HttpRequest,
+  options?: ConformanceAuthOptions,
 ): Promise<ConformanceResult> {
-  return (await load()).runFormFillConformance(request);
+  return (await load()).runFormFillConformance(request, options);
 }
 export type ConformanceBlock = Block;

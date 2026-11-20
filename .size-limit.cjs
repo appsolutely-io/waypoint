@@ -6,14 +6,15 @@ const budgets = [
   {
     name: "core with lazy recovery",
     path: "dist/index.js",
-    // One esbuild bundle deduplicates reachable static/dynamic dependencies.
-    // gzip level 9 minus size-limit's 32-byte empty-project deduction:
-    // 3% above the measured size, rounded down. Measured at 20,767 B with
-    // the reply stop, the wait for an overdue reply and the feedback port.
-    limit: "21.390 kB",
+    // Reachable reply recovery and frame reconciliation remain covered by the deduplicated aggregate guard.
+    // Node 22 maximum across lockfile/lowest peers: 25,730 B;
+    // add 5% and round up to 100 B.
+    limit: "27.1 KB",
     gzip: true,
     brotli: false,
     ignore: [
+      "./conversation-pages-*",
+      "../conversation-pages-*",
       "./flow-parser.js",
       "./flow-parser-*",
       "./form-session.js",
@@ -25,16 +26,15 @@ const budgets = [
   {
     name: "core",
     path: "dist/index.js",
-    // Besides the read-handler failure reported once per load, the frozen
-    // read-only Keep review and the bounded read after a reply, a stopped
-    // reply's dropped text, the version each stop is for and the wait an
-    // overdue reply is given again must act on frames and timers here.
-    // Measured with Node 22's zlib: 15,756 B; the limit is 3% above it,
-    // rounded down.
-    limit: "16.228 kB",
+    // Synchronous reply state, recovery eligibility, frame reconciliation and cancellation ownership belong to every core consumer.
+    // Node 22 maximum across lockfile/lowest peers: 19,577 B;
+    // add 5% and round up to 100 B.
+    limit: "20.6 KB",
     gzip: true,
     brotli: false,
     ignore: [
+      "./conversation-pages-*",
+      "../conversation-pages-*",
       "./flow-parser.js",
       "./flow-parser-*",
       "./form-session.js",
@@ -63,9 +63,10 @@ const budgets = [
   {
     name: "lazy client actions",
     path: "dist/on-demand.js",
-    // Measured plus 10%: 2.3 kB with the prepared flow document and the
-    // confirmation's send and run start.
-    limit: "2.55 KB",
+    // Host failure observation joins scoped recovery and other optional client actions behind the on-demand entry.
+    // Node 22 maximum across lockfile/lowest peers: 3,240 B;
+    // add 5% and round up to 100 B.
+    limit: "3.5 KB",
     gzip: true,
     brotli: false,
   },
@@ -94,10 +95,10 @@ const budgets = [
   {
     name: "lazy conformance runners",
     path: "dist/conformance.js",
-    // The reply stop check, with its stop of another version and its
-    // agreement check: measured with Node 22's zlib at 5,371 B, the limit
-    // is 3% above it, rounded down.
-    limit: "5.532 KB",
+    // Authenticated sessions, safe adapter failures and negotiated scenario selection stay in the opt-in runner.
+    // Node 22 maximum across lockfile/lowest peers: 6,225 B;
+    // add 5% and round up to 100 B.
+    limit: "6.6 KB",
     gzip: true,
     brotli: false,
   },
@@ -118,28 +119,15 @@ const budgets = [
   {
     name: "react",
     path: "dist/react/index.js",
-    // The budget covers eager form controls and modal feedback. Besides the layout,
-    // token, target-size and narrow conversation list work, the entry holds
-    // what a chat needs before any chunk loads: the saved requests' drawer
-    // opening on the press, the read-only plan state, held announcements,
-    // the form fields' typed editors and guarded Regenerate, the focus
-    // handoffs, the shared load-failure notice whose Retry stays while
-    // it loads again, and a card that stays answered once the host accepted
-    // its answer. Stopping a reply needs the stopped mark in the bubble and
-    // the loader of the lazy reply controls in the entry. What keeps a long
-    // conversation cheap is here too, since the first render needs it: the
-    // memoised message row, the provider's stable props, the selector hooks,
-    // the cache of what was made from each shown message, the idle preload
-    // of the Markdown chunk, and the transcript's window with its feed keys
-    // and the outline's filter, which reach messages it has not mounted.
-    // Measured with size-limit under Node 26 at 43,315 B; the limit is 3%
-    // above it, rounded down. Node 22's zlib, as CI runs it, measures the
-    // same bundle about 0.5% larger: 44,254 B against 44,036 B with the
-    // outline's idle search.
-    limit: "44.614 KB",
+    // Reply recovery, host activity, named senders, notice rows and paged navigation retain synchronous UI behavior.
+    // Node 22 maximum across lockfile/lowest peers: 46,755 B;
+    // add 5% and round up to 100 B.
+    limit: "49.1 KB",
     gzip: true,
     brotli: false,
     ignore: [
+      "./conversation-pages-*",
+      "../conversation-pages-*",
       "react",
       "react-dom",
       "../markdown-*",
@@ -165,14 +153,10 @@ const budgets = [
   {
     name: "hooks",
     path: "dist/hooks/index.js",
-    // The renderer-neutral hooks with the client code they import: keys
-    // only, no strings and no formatter (those are `messages` and a
-    // locale); React is the host's. With problemView and replyRowView,
-    // which a native UI needs to word a problem and the reply row as the
-    // web chat does, and the selector hooks that let a native list follow
-    // one message: measured with Node 22's zlib at 5,828 B. The limit is 3%
-    // above it, rounded down.
-    limit: "6.002 kB",
+    // Renderer-neutral reply presentations share recovery eligibility and host-activity decisions with the web UI.
+    // Node 22 maximum across lockfile/lowest peers: 6,136 B;
+    // add 5% and round up to 100 B.
+    limit: "6.5 KB",
     gzip: true,
     brotli: false,
     ignore: ["react"],
@@ -189,19 +173,20 @@ const budgets = [
   {
     name: "messages en",
     path: "dist/messages/en/index.js",
-    // English text of every key the hooks return, the reply row's and the
-    // message actions' included (replyRowView returns them). Measured with
-    // Node 22's zlib: 5,195 B; the limit is 3% above it, rounded down.
-    limit: "5.35 kB",
+    // English reply recovery, host activity and named-sender/notice text is available to renderer-neutral hosts.
+    // Node 22 maximum across lockfile/lowest peers: 5,427 B;
+    // add 5% and round up to 100 B.
+    limit: "5.7 KB",
     gzip: true,
     brotli: false,
   },
   {
     name: "messages zh-Hans",
     path: "dist/messages/zh-Hans/index.js",
-    // Simplified Chinese text of the same keys. Measured with Node 22's
-    // zlib: 6,092 B; the limit is 3% above it, rounded down.
-    limit: "6.274 kB",
+    // Simplified Chinese reply recovery, host activity and named-sender/notice text matches the English catalogue.
+    // Node 22 maximum across lockfile/lowest peers: 6,341 B;
+    // add 5% and round up to 100 B.
+    limit: "6.7 KB",
     gzip: true,
     brotli: false,
   },
@@ -250,9 +235,10 @@ const budgets = [
   {
     name: "lazy reply controls",
     path: "dist/reply-controls-*.js",
-    // The tool steps, Stop, Keep waiting and Retry: 969 B measured, plus
-    // 3%, rounded down.
-    limit: "998 B",
+    // Independent recovery and host-activity controls retain their focus handoffs in the optional reply chunk.
+    // Node 22 maximum across lockfile/lowest peers: 1,600 B;
+    // add 5% and round up to 100 B.
+    limit: "1.7 KB",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],
@@ -260,9 +246,10 @@ const budgets = [
   {
     name: "lazy message actions",
     path: "dist/message-actions-*.js",
-    // Copy, Regenerate, Edit, feedback and the version walk, and saying
-    // when Copy fails: 1,463 B measured, plus 3%, rounded down.
-    limit: "1.506 KB",
+    // Host-selected regeneration shares message actions and their scoped recovery guard.
+    // Node 22 maximum across lockfile/lowest peers: 1,543 B;
+    // add 5% and round up to 100 B.
+    limit: "1.7 KB",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],
@@ -321,18 +308,15 @@ const budgets = [
   {
     name: "testing",
     path: "dist/testing/index.js",
-    // The testing entry is opt-in and never reaches end users; the
-    // focus, transcript and announcement contracts need the space, and it
-    // bundles the react entry, so it grows with the react entry above. It
-    // also bundles the form session and the form fields. With the reply
-    // stop in the scripted host, the transcript's window and the outline's
-    // idle search, measured with Node 22's zlib (size-limit's own bundle,
-    // gzipped at level 9 in Node 22.23) at 64,146 B; the limit is 3% above
-    // it, rounded down.
-    limit: "66.07 KB",
+    // The scripted host and React test fixtures include reply recovery, reconciliation and the expanded presentation contracts.
+    // Node 22 maximum across lockfile/lowest peers: 70,774 B;
+    // add 5% and round up to 100 B.
+    limit: "74.4 KB",
     gzip: true,
     brotli: false,
     ignore: [
+      "./conversation-pages-*",
+      "../conversation-pages-*",
       "react",
       "react-dom",
       "@testing-library/react",
@@ -374,9 +358,19 @@ module.exports = withSharedChunks(budgets, {
   dist: "dist",
   // Chunks the build splits out of lazy chunks only, named by hash; each is
   // found by a source module it holds. The lazy chunks that import them
-  // leave them out ("./chunk-*"). Each measured with Node 22's zlib, plus
-  // 3%, rounded down.
+  // leave them out ("./chunk-*"). Each entry records its Node 22
+  // measurement and headroom.
   shared: [
+    {
+      name: "lazy conversation pages",
+      source: "src/core/conversation-pages.ts",
+      // Paged history loads only when the host provides readPage. Node 22
+      // measures 2,233 B at the lowest peers; add 5% and round up to 100 B.
+      limit: "2.4 KB",
+      gzip: true,
+      brotli: false,
+      ignore: ["./chunk-*"],
+    },
     {
       name: "lazy reply messages",
       source: "src/react/reply-messages.ts",

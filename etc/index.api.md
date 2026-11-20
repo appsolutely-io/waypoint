@@ -299,7 +299,7 @@ export interface CanonicalRequest {
 export function canTransition(from: PlanState, to: PlanState): boolean;
 
 // @public (undocumented)
-export const CAPABILITIES: readonly ["plans", "flows", "widgets", "step-up", "scheduled", "form-fill", "plan-recovery", "plan-leave", "plan-keep", "reply-stop"];
+export const CAPABILITIES: readonly ["plans", "flows", "widgets", "step-up", "scheduled", "form-fill", "plan-recovery", "plan-leave", "plan-keep", "reply-stop", "notice-messages"];
 
 // @public (undocumented)
 export type Capability = (typeof CAPABILITIES)[number];
@@ -345,6 +345,8 @@ export interface ClientConfig {
     // (undocumented)
     reads?: ReadPorts;
     // (undocumented)
+    replies?: ReplyRecoveryPort;
+    // (undocumented)
     storage?: StoragePort;
     // (undocumented)
     tabs?: readonly FlowTab[];
@@ -381,6 +383,8 @@ export interface ClientSnapshot {
     // (undocumented)
     hints: readonly string[];
     // (undocumented)
+    history?: ConversationHistory;
+    // (undocumented)
     intentAlert: IntentAlert | null;
     intentNotice: IntentNotice | null;
     intentOverlays: Readonly<Record<string, IntentOverlay>>;
@@ -388,6 +392,10 @@ export interface ClientSnapshot {
     observerFailures: number;
     // (undocumented)
     pending: readonly PendingSend[];
+    pendingRestoration?: {
+        visit: number;
+        ids: readonly string[];
+    };
     // (undocumented)
     plan: PlanRecord | null;
     planReadOnly?: boolean;
@@ -395,6 +403,11 @@ export interface ClientSnapshot {
     problem: Problem | null;
     // (undocumented)
     protocol: string | null;
+    // (undocumented)
+    replyBusy?: ReplyBusy;
+    replyFailures?: readonly ReplyFailureRecord[];
+    // (undocumented)
+    replyPresentation?: ReplyPresentation;
     // (undocumented)
     replyState: ReplyState;
     restored: readonly RestoredMessage[];
@@ -483,16 +496,24 @@ export const CONFORMANCE_UNAVAILABLE: {
 };
 
 // @public (undocumented)
+export interface ConformanceAuthOptions {
+    // (undocumented)
+    authenticate?(session: unknown): Record<string, string> | Promise<Record<string, string>>;
+    // (undocumented)
+    headers?: Record<string, string>;
+}
+
+// @public (undocumented)
 export type ConformanceBlock = Block;
 
 // @public (undocumented)
-export interface ConformanceConfig {
+export interface ConformanceConfig extends ConformanceAuthOptions {
     // (undocumented)
     baseUrl: string;
     // (undocumented)
     noStepUp?: boolean;
     // (undocumented)
-    profile: "admin-host" | "app-host";
+    profile?: "admin-host" | "app-host";
     // (undocumented)
     request: HttpRequest;
 }
@@ -505,6 +526,8 @@ export interface ConformanceResult {
     passed: boolean;
     // (undocumented)
     scenarios: string[];
+    // (undocumented)
+    skipped?: string[];
 }
 
 // @public (undocumented)
@@ -516,12 +539,59 @@ export type Conversation = {
     title: string;
     messages: Message[];
     replyOverdueAt?: number | null;
+    replyOverdueFor?: string | null;
+    replyOverdueVersion?: number;
+    replyExpectedId?: string;
+    replyLabel?: string | null;
     replyStatus?: 'expected' | 'unavailable' | 'failed' | 'complete';
+    replyFailure?: ReplyFailure | null;
     mode?: 'form-fill';
     subject?: FormSubject;
     parentConversationId?: string;
     field?: string;
 };
+
+// @public (undocumented)
+export interface ConversationHistory {
+    // (undocumented)
+    failed: boolean;
+    // (undocumented)
+    hasOlder: boolean;
+    // (undocumented)
+    loading: boolean;
+    // (undocumented)
+    outline: readonly OutlineMessage[];
+}
+
+// @public (undocumented)
+export type ConversationPage = {
+    conversation: Conversation;
+    snapshotId: string;
+    olderCursor: string | null;
+    outline: OutlineMessage[];
+    heldClientMessageIds: string[];
+} | {
+    stale: true;
+};
+
+// @public (undocumented)
+export type ConversationPageInput = {
+    clientMessageIds: readonly string[];
+    signal: ScopeSignal;
+    context?: ReaderRequestContext;
+} & ({
+    cursor?: never;
+    aroundMessageId?: never;
+    snapshotId?: string;
+} | {
+    cursor: string;
+    snapshotId: string;
+    aroundMessageId?: never;
+} | {
+    aroundMessageId: string;
+    snapshotId?: string;
+    cursor?: never;
+});
 
 // @public (undocumented)
 export class ConversationReadError extends Error {
@@ -938,11 +1008,19 @@ export interface FrameMessageStart {
     // (undocumented)
     protocol: string;
     // (undocumented)
-    role: 'user' | 'assistant';
+    replyOverdueAt?: number | null;
+    // (undocumented)
+    replyOverdueFor?: string | null;
+    // (undocumented)
+    role: 'user' | 'assistant' | 'notice';
+    // (undocumented)
+    sender?: MessageSender;
     // (undocumented)
     sequence: number;
     // (undocumented)
     type: 'message.start';
+    // (undocumented)
+    versionIndex?: number;
 }
 
 // @public (undocumented)
@@ -1022,9 +1100,15 @@ export interface FrameStale {
     // (undocumented)
     reads: ('conversation' | 'conversations' | 'plans' | 'flows')[];
     // (undocumented)
+    replyOverdueAt?: number | null;
+    // (undocumented)
+    replyOverdueFor?: string | null;
+    // (undocumented)
     sequence: number;
     // (undocumented)
     type: 'stale';
+    // (undocumented)
+    versionIndex?: number;
 }
 
 // @public (undocumented)
@@ -1068,6 +1152,14 @@ export function handlePlanningRead(call: ReadTemplate, template: ReadTemplate, r
 
 // @public
 export function handleToolRead(call: ToolCall, manifest: readonly ManifestEntry[], request: (call: ToolCall) => Promise<unknown>): Promise<ReadResult>;
+
+// @public
+export interface HostProblemDetail {
+    // (undocumented)
+    code: string;
+    // (undocumented)
+    qualifier?: string;
+}
 
 // @public (undocumented)
 export interface HttpInit {
@@ -1302,7 +1394,9 @@ export interface Message {
     // (undocumented)
     id: string;
     // (undocumented)
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'notice';
+    // (undocumented)
+    sender?: MessageSender;
     sources?: Source[];
     // (undocumented)
     status?: 'writing' | 'completed' | 'failed' | 'unavailable' | 'stopped';
@@ -1313,6 +1407,16 @@ export interface Message {
 }
 
 // @public (undocumented)
+export interface MessageSender {
+    // (undocumented)
+    avatarUrl?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    name: string;
+}
+
+// @public (undocumented)
 export interface MessageVersionInput {
     // (undocumented)
     clientReplyId: string;
@@ -1320,6 +1424,8 @@ export interface MessageVersionInput {
     conversationId: string;
     // (undocumented)
     messageId: string;
+    // (undocumented)
+    signal?: ScopeSignal;
 }
 
 // @public (undocumented)
@@ -1386,6 +1492,20 @@ export interface Outcome {
     stepId: string;
     // (undocumented)
     version?: string;
+}
+
+// @public (undocumented)
+export interface OutlineMessage {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    revision: string;
+    // (undocumented)
+    role: 'user' | 'assistant' | 'notice';
+    // (undocumented)
+    sender?: MessageSender;
+    // (undocumented)
+    text: string;
 }
 
 // @public (undocumented)
@@ -1542,6 +1662,8 @@ export interface Problem {
         reason: 'expired' | 'used' | 'stale' | 'mismatch' | 'missing';
     };
     // (undocumented)
+    host?: HostProblemDetail | null;
+    // (undocumented)
     id: string;
     // (undocumented)
     retryAfter?: number;
@@ -1663,6 +1785,14 @@ export interface ReplyAction {
 }
 
 // @public (undocumented)
+export interface ReplyBusy {
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    overdue: boolean;
+}
+
+// @public (undocumented)
 export interface ReplyConfirm {
     // (undocumented)
     clientReplyId: string;
@@ -1676,6 +1806,38 @@ export interface ReplyConfirm {
     planId: string;
     // (undocumented)
     protocol: string;
+}
+
+// @public (undocumented)
+export interface ReplyDecisionInput {
+    // (undocumented)
+    activityAt?: number;
+    // (undocumented)
+    askedAt?: number;
+    // (undocumented)
+    completeTailId?: string;
+    // (undocumented)
+    conversation?: Conversation | null;
+    // (undocumented)
+    failed?: boolean;
+    // (undocumented)
+    generation?: number;
+    // (undocumented)
+    heldUntil?: number;
+    // (undocumented)
+    messages: readonly Message[];
+    // (undocumented)
+    now: number;
+    // (undocumented)
+    overdueAt?: number;
+    // (undocumented)
+    pending: readonly PendingSend[];
+    // (undocumented)
+    streamLost?: boolean;
+    // (undocumented)
+    unavailable?: boolean;
+    // (undocumented)
+    version?: number;
 }
 
 // @public (undocumented)
@@ -1694,6 +1856,35 @@ export interface ReplyDelivery {
     acceptance?: ExecutionAcceptance;
     // (undocumented)
     id: string;
+}
+
+// @public (undocumented)
+export interface ReplyFailure {
+    // (undocumented)
+    forMessageId?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    reason?: HostProblemDetail | null;
+    // (undocumented)
+    recovery?: {
+        kind: 'regenerate' | 'resend';
+        messageId: string;
+    } | {
+        kind: 'none';
+    };
+}
+
+// @public (undocumented)
+export interface ReplyFailureRecord {
+    // (undocumented)
+    active: boolean;
+    // (undocumented)
+    failure: ReplyFailure;
+    // (undocumented)
+    messageId?: string;
+    // (undocumented)
+    status: "failed" | "unavailable";
 }
 
 // @public (undocumented)
@@ -1772,21 +1963,33 @@ export interface ReplyPlanValues {
 }
 
 // @public (undocumented)
-export function replyRow(input: {
-    messages: readonly Message[];
-    pending: readonly PendingSend[];
-    now: number;
-    askedAt?: number;
-    overdueAt?: number;
-    heldUntil?: number;
-    unavailable?: boolean;
-    failed?: boolean;
-    streamLost?: boolean;
-    activityAt?: number;
-}): ReplyState;
+export type ReplyPresentation = "writing" | "waiting" | "expected";
 
 // @public (undocumented)
-export type ReplyState = "none" | "writing" | "unavailable" | "failed" | "overdue";
+export interface ReplyRecoveryInput extends MessageVersionInput {
+    // (undocumented)
+    kind: "regenerate" | "resend";
+    // (undocumented)
+    signal: ScopeSignal;
+}
+
+// @public (undocumented)
+export interface ReplyRecoveryPort {
+    // (undocumented)
+    recover(input: ReplyRecoveryInput): MaybePromise<ReplyRecoveryResult>;
+}
+
+// @public (undocumented)
+export type ReplyRecoveryResult = void | {
+    accepted: false;
+    problem: Problem;
+};
+
+// @public (undocumented)
+export function replyRow(input: ReplyDecisionInput): ReplyState;
+
+// @public (undocumented)
+export type ReplyState = "none" | "writing" | "unavailable" | "failed" | "overdue" | "expected" | "expected-overdue";
 
 // @public
 export interface ReplyStop {
@@ -1839,7 +2042,7 @@ export interface RunFlow {
 }
 
 // @public (undocumented)
-export function runFormFillConformance(request: HttpRequest): Promise<ConformanceResult>;
+export function runFormFillConformance(request: HttpRequest, options?: ConformanceAuthOptions): Promise<ConformanceResult>;
 
 // @public (undocumented)
 export interface RunnerPorts {
@@ -1863,7 +2066,7 @@ export interface RunnerPorts {
 }
 
 // @public (undocumented)
-export function runPlanConformance(request: HttpRequest): Promise<ConformanceResult>;
+export function runPlanConformance(request: HttpRequest, options?: ConformanceAuthOptions): Promise<ConformanceResult>;
 
 // @public (undocumented)
 export interface ScopeSignal {
@@ -2026,6 +2229,8 @@ export interface TransportPort {
     // (undocumented)
     read(conversationId: string, context?: ReaderRequestContext): Promise<Conversation>;
     // (undocumented)
+    readPage?(conversationId: string, input: ConversationPageInput): Promise<ConversationPage>;
+    // (undocumented)
     send(reply: Reply & {
         extensions?: Record<string, unknown>;
     }, conversationId: string, context?: ReaderRequestContext): Promise<ReplyDelivery>;
@@ -2053,6 +2258,8 @@ export interface WaypointClient {
     // (undocumented)
     canKeepChanges(id?: string): boolean;
     canPrepareFlow(): boolean;
+    // (undocumented)
+    canRegenerate?(messageId: string): boolean;
     canRetryReply(): boolean;
     canSendFeedback(): boolean;
     canStopReply(): boolean;
@@ -2078,6 +2285,10 @@ export interface WaypointClient {
     leavePlan(id?: string): Promise<void>;
     // (undocumented)
     loadFlows(): Promise<void>;
+    // (undocumented)
+    loadMessage(messageId: string): Promise<boolean>;
+    // (undocumented)
+    loadOlder(): Promise<boolean>;
     // (undocumented)
     on(listener: (event: WaypointEvent) => void): () => void;
     prepareFlow(id?: string): Promise<Flow | void>;
@@ -2146,7 +2357,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Source | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
+export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | Message | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory | OutlineMessage | ConversationPage;
 
 // @public (undocumented)
 export type WinnerKind = 'stop' | 'cancel-initial' | 'cancel-review' | 'leave' | 'keep';

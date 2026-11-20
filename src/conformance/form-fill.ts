@@ -1,17 +1,20 @@
-import type { HttpRequest, ConformanceResult } from "./index";
+import type {
+  HttpRequest,
+  ConformanceResult,
+  ConformanceAuthOptions,
+} from "./index";
+import { authenticateSession, authFailure } from "./auth";
 import type { Conversation, BlockFormFill } from "../protocol/generated";
+import { FORM_SCENARIOS } from "./scenarios";
 export async function runFormFillConformance(
-  request: HttpRequest,
+  rawRequest: HttpRequest,
+  options?: ConformanceAuthOptions,
 ): Promise<ConformanceResult> {
   const failures: string[] = [],
     scenarios: string[] = [];
-  const session = await request("/__conformance/session", { method: "POST" });
-  const credentials = session.body as { session: string; csrf: string };
-  const headers = {
-    "Content-Type": "application/json",
-    Cookie: `waypoint=${credentials.session}`,
-    "X-CSRF-Token": credentials.csrf,
-  };
+  const session = await authenticateSession(rawRequest, options);
+  if (!session) return authFailure();
+  const { request, headers } = session;
   const post = (path: string, value: unknown) =>
     request(path, {
       method: "POST",
@@ -49,19 +52,20 @@ export async function runFormFillConformance(
       passed: false,
       failures: ["form create"],
       scenarios: ["form create"],
+      skipped: [],
     };
   }
   await check(
-    "form creation replay",
+    FORM_SCENARIOS.replay,
     async () =>
       ((await post("/conversations", create)).body as Conversation).id ===
       root.id,
   );
-  await check("form mode survives refetch", async () => {
+  await check(FORM_SCENARIOS.refetch, async () => {
     const value = (await read(root.id)).body as Conversation;
     return value.mode === "form-fill" && value.subject?.key === subject.key;
   });
-  await check("form subject filtering", async () => {
+  await check(FORM_SCENARIOS.filtering, async () => {
     await post("/conversations", {
       ...create,
       subject: { ...subject, key: "form-fixture-b" },
@@ -109,9 +113,9 @@ export async function runFormFillConformance(
       Array.isArray(block.body.values.title!.validation.messages)
     );
   };
-  await check("form values and validation replay", () => checkFill(root.id));
+  await check(FORM_SCENARIOS.validation, () => checkFill(root.id));
   await check(
-    "form rejects non-low input",
+    FORM_SCENARIOS.sensitive,
     async () =>
       (
         await post(`/conversations/${root.id}/replies`, {
@@ -126,7 +130,7 @@ export async function runFormFillConformance(
         })
       ).status >= 400,
   );
-  await check("form child inherits mode and values", async () => {
+  await check(FORM_SCENARIOS.child, async () => {
     const child = (
       await post("/conversations", {
         ...create,
@@ -143,7 +147,7 @@ export async function runFormFillConformance(
     );
   });
   await check(
-    "form rejects wrong-subject child",
+    FORM_SCENARIOS.wrongSubject,
     async () =>
       (
         await post("/conversations", {
@@ -155,7 +159,7 @@ export async function runFormFillConformance(
         })
       ).status >= 400,
   );
-  await check("form refuses general replies", async () => {
+  await check(FORM_SCENARIOS.general, async () => {
     const ordinary = await post("/conversations", {
       title: "Ordinary fixture",
     });
@@ -182,5 +186,5 @@ export async function runFormFillConformance(
       (refused.body as { code?: string } | null)?.code === "refused"
     );
   });
-  return { passed: failures.length === 0, failures, scenarios };
+  return { passed: failures.length === 0, failures, scenarios, skipped: [] };
 }

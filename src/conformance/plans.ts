@@ -1,26 +1,29 @@
-import type { HttpRequest, ConformanceResult } from "./index";
+import type {
+  HttpRequest,
+  ConformanceResult,
+  ConformanceAuthOptions,
+} from "./index";
+import { authenticateSession, authFailure } from "./auth";
 import type { PlanRecord, ImmediatePlan } from "../protocol/generated";
 import { createPlanRunner } from "../core/runner";
+import { PLAN_SCENARIOS } from "./scenarios";
 export async function runPlanConformance(
-  request: HttpRequest,
+  rawRequest: HttpRequest,
+  options?: ConformanceAuthOptions,
 ): Promise<ConformanceResult> {
   const failures: string[] = [];
   const scenarios: string[] = [];
-  const session = await request("/__conformance/session", { method: "POST" });
-  const credentials = session.body as { session: string; csrf: string };
-  const headers = {
-    "Content-Type": "application/json",
-    Cookie: `waypoint=${credentials.session}`,
-    "X-CSRF-Token": credentials.csrf,
-  };
+  const session = await authenticateSession(rawRequest, options);
+  if (!session) return authFailure();
+  const { request, headers } = session;
   const post = (path: string, body: unknown) =>
     request(path, {
       method: "POST",
       headers,
       body: JSON.stringify({ protocol: "1.0", ...(body as object) }),
     });
-  for (const mode of ["run", "refuse"]) {
-    scenarios.push(`plan ${mode}`);
+  for (const [mode, name] of Object.entries(PLAN_SCENARIOS)) {
+    scenarios.push(name);
     try {
       await post("/__conformance/script", { planScenario: mode });
       const created = await post("/conversations", { title: "Plan" });
@@ -106,8 +109,8 @@ export async function runPlanConformance(
       }
       runner.dispose();
     } catch {
-      failures.push(`plan ${mode}`);
+      failures.push(name);
     }
   }
-  return { passed: failures.length === 0, failures, scenarios };
+  return { passed: failures.length === 0, failures, scenarios, skipped: [] };
 }

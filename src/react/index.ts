@@ -40,6 +40,8 @@ export type {
   Slots,
   WaypointChatProps,
 } from "./ui";
+export { visibleProblem, pendingProblem, replyRowView } from "./problem-view";
+export type { ProblemDisplayOptions } from "./problem-view";
 export { planView, keepSheet, noticeMessages } from "./plan-view";
 export type {
   ActionEntry,
@@ -90,3 +92,9 @@ export * from "./field-adornment";
 export * from "./form-fill";
 export * from "./conversation-rail";
 export type * from "../core/form-fill";
+
+export type {
+  HostBusyStopControl,
+  ReplyRowAction,
+  ReplyRowView,
+} from "./problem-view";

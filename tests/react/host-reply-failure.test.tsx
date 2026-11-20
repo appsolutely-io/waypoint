@@ -42,6 +42,7 @@ const failed = (value: ReplyFailure | null = failure): Conversation => ({
 });
 
 it("host failure is shown below partial assistant text exactly once", async () => {
+  await import("../../src/react/markdown");
   const base = config();
   const recover = vi.fn(async () => {});
   const client = createWaypointClient({
@@ -131,6 +132,7 @@ it("Resend does not append a second user message", async () => {
 });
 
 it("an explicit none recovery hides the failed message Regenerate", async () => {
+  await import("../../src/react/markdown");
   const base = config();
   const client = createWaypointClient({
     ...base,
@@ -161,6 +163,7 @@ it("an explicit none recovery hides the failed message Regenerate", async () => 
 });
 
 it("host failure changes use one existing message announcement owner", async () => {
+  await import("../../src/react/markdown");
   const base = config();
   let current: Conversation = {
     ...failed(),

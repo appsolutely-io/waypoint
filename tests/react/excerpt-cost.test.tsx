@@ -34,6 +34,7 @@ const message = (id: string): Message =>
   }) as Message;
 const history = Array.from({ length: 10 }, (_, i) => message(`m${i}`));
 async function chat() {
+  await import("../../src/react/markdown");
   const base = config();
   let shown = history;
   const client = createWaypointClient({
@@ -89,6 +90,7 @@ describe("excerpt cost", () => {
     expect(segment).toHaveBeenCalledTimes(11);
   });
   it("CK-E-cost a changed image policy projects again", async () => {
+    await import("../../src/react/markdown");
     const base = config();
     const shown = [{ ...message("p1"), content: "Look ![Alt](/x.png)" }];
     const client = createWaypointClient({

@@ -37,6 +37,7 @@ const status = () =>
 const links = () => document.querySelectorAll("[data-outline-link]").length;
 
 it("rebuilds the index when the parser becomes ready", async () => {
+  await vi.importActual("../../src/react/markdown");
   const messages = ["About **apples**", "About pears", "More **apples**"].map(
     (content, index) =>
       ({
@@ -71,6 +72,7 @@ it("rebuilds the index when the parser becomes ready", async () => {
   await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
   // Made from the raw text while the parser is not there yet.
   await waitFor(() => expect(status()).toBe("2 messages match"));
+  expect(document.querySelectorAll(".wp-markdown")).toHaveLength(0);
   const seen: string[] = [];
   const observer = new MutationObserver(() => seen.push(status()));
   observer.observe(document.querySelector("nav[data-outline]")!, {

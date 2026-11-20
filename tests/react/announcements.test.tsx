@@ -340,14 +340,31 @@ describe.each(skins)("announcements (%s)", (_, skin) => {
     ]);
     await waitFor(() => expect(h.emissions.at(-1)).toBe("2 new replies"));
     const count = h.emissions.length;
-    // A rapid burst of frames inside one batch.
-    for (let i = 0; i < 10; i++)
-      await h.set("a", [
-        ...before,
-        reply("z1", "", null),
-        reply("z2", "Filled", null),
-        ...Array.from({ length: i + 1 }, (_, j) => reply(`burst${j}`)),
-      ]);
+    // Keep the burst inside one batch regardless of rendering time.
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        ...(typeof requestAnimationFrame === "function"
+          ? (["requestAnimationFrame", "cancelAnimationFrame"] as const)
+          : []),
+      ],
+    });
+    try {
+      for (let i = 0; i < 10; i++)
+        await h.set("a", [
+          ...before,
+          reply("z1", "", null),
+          reply("z2", "Filled", null),
+          ...Array.from({ length: i + 1 }, (_, j) => reply(`burst${j}`)),
+        ]);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ANNOUNCEMENT_BATCH_MS);
+        await vi.runOnlyPendingTimersAsync();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
     await waitFor(() => expect(h.emissions.length).toBe(count + 1));
     await quiet();
     expect(h.emissions.length).toBe(count + 1);

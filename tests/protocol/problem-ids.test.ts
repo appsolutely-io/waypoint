@@ -72,37 +72,41 @@ function collect(program: ts.Program, files: readonly string[]): Set<string> {
     return undefined;
   };
   const visit = (node: ts.Node) => {
-    if (
-      ts.isObjectLiteralExpression(node) &&
-      (problem(checker.getContextualType(node)) ||
-        problem(checker.getTypeAtLocation(node)))
-    ) {
-      for (const property of node.properties) {
-        if (
-          ts.isPropertyAssignment(property) &&
-          propertyName(property.name) === "id"
-        )
-          add(property.initializer);
-        if (
-          ts.isShorthandPropertyAssignment(property) &&
-          property.name.text === "id"
-        )
-          add(property.name);
+    if (ts.isObjectLiteralExpression(node)) {
+      const properties = node.properties.filter(
+        (
+          property,
+        ): property is ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
+          (ts.isPropertyAssignment(property) ||
+            ts.isShorthandPropertyAssignment(property)) &&
+          propertyName(property.name) === "id",
+      );
+      if (
+        properties.length &&
+        (problem(checker.getContextualType(node)) ||
+          problem(checker.getTypeAtLocation(node)))
+      ) {
+        for (const property of properties)
+          add(
+            ts.isPropertyAssignment(property)
+              ? property.initializer
+              : property.name,
+          );
       }
     }
     if (ts.isCallExpression(node)) {
       let symbol = checker.getSymbolAtLocation(node.expression);
       if (symbol && symbol.flags & ts.SymbolFlags.Alias)
         symbol = checker.getAliasedSymbol(symbol);
-      const signature = checker.getResolvedSignature(node);
       if (
         symbol &&
         ["asProblem", "readProblem"].includes(symbol.name) &&
-        signature &&
-        problem(checker.getReturnTypeOfSignature(signature)) &&
         node.arguments[1]
-      )
-        add(node.arguments[1]);
+      ) {
+        const signature = checker.getResolvedSignature(node);
+        if (signature && problem(checker.getReturnTypeOfSignature(signature)))
+          add(node.arguments[1]);
+      }
       if (
         ts.isPropertyAccessExpression(node.expression) &&
         node.expression.name.text === "includes" &&

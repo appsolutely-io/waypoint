@@ -26,7 +26,6 @@ export type {
 } from "./reply-state";
 import {
   conversationTail,
-  observeReplyFailure,
   replyFailures,
   recoveryRequest,
   type RecoveryRequest,
@@ -1368,7 +1367,21 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           replyFailure: normalizeReplyFailure(raw.replyFailure),
         }),
       });
-      if (scope.aborted || owner?.aborted || isDisposed())
+      const observer =
+        conversation.replyFailure || failureMemory.size
+          ? await within(
+              loadActionModule(),
+              STARTUP_STEP_BUDGET_MS,
+              owner ?? scope,
+            )
+          : undefined;
+      if (observer === budgetExceeded) throw new Error("reply details budget");
+      if (
+        scope.aborted ||
+        owner?.aborted ||
+        isDisposed() ||
+        bound !== agreement
+      )
         return { kind: "superseded", conversationId: id };
       if (
         token !== readGeneration &&
@@ -1387,7 +1400,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         conversation.replyStatus === "complete"
           ? conversationTail(conversation.messages)?.id
           : undefined;
-      observeReplyFailure(failureMemory, {
+      observer?.observeReplyFailure(failureMemory, {
         ...adoptedConversation,
         messages: conversation.messages,
       });
@@ -1437,7 +1450,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       await persist();
       return result;
     } catch (error) {
-      if (isDisposed() || scope.aborted)
+      if (
+        isDisposed() ||
+        scope.aborted ||
+        owner?.aborted ||
+        bound !== agreement
+      )
         return { kind: "superseded", conversationId: id };
       if (token !== readGeneration)
         return { kind: "superseded", conversationId: id };
@@ -2414,10 +2432,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   };
   // Actions that wait for readiness first and are not needed for the
   // first render load with their own chunk on first use.
+  let actionModule: Promise<typeof import("./on-demand")> | undefined;
+  const loadActionModule = () => (actionModule ??= import("./on-demand"));
   let onDemand: Promise<OnDemand> | undefined;
   let actionCode: OnDemand | undefined;
   const later = <T = void>(use: (actions: OnDemand) => Promise<T>) =>
-    (onDemand ??= import("./on-demand").then(
+    (onDemand ??= loadActionModule().then(
       (module) =>
         (actionCode = module.createOnDemand({
           ready,

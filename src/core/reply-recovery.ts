@@ -1,8 +1,4 @@
-import type {
-  Conversation,
-  Message,
-  ReplyFailure,
-} from "../protocol/generated";
+import type { Message, ReplyFailure } from "../protocol/generated";
 import type { ClientConfig, ClientSnapshot } from "./client";
 
 export interface ReplyFailureRecord {
@@ -37,7 +33,7 @@ function turn(messages: readonly Message[], id: string): number {
     if (messages[index]!.role === "user") return index;
   return at;
 }
-function related(
+export function related(
   messages: readonly Message[],
   anchor: string | undefined,
   id: string,
@@ -46,61 +42,6 @@ function related(
   if (anchor === id) return true;
   const before = turn(messages, anchor);
   return before >= 0 && before === turn(messages, id);
-}
-export function observeReplyFailure(
-  memory: Map<string, RetainedReplyFailure>,
-  conversation: Conversation,
-): void {
-  const failure = conversation.replyFailure;
-  const tail = conversationTail(conversation.messages);
-  if (!failure) {
-    for (const [id, record] of memory)
-      if (
-        failure === null ||
-        (tail && related(conversation.messages, record.messageId, tail.id))
-      )
-        memory.delete(id);
-    return;
-  }
-  const old = memory.get(failure.id);
-  const explicitTarget =
-    failure.forMessageId ??
-    (failure.recovery && failure.recovery.kind !== "none"
-      ? failure.recovery.messageId
-      : undefined);
-  let messageId = explicitTarget ?? (old ? old.messageId : tail?.id);
-  const targetIndex = conversation.messages.findIndex(
-    (message) => message.id === messageId,
-  );
-  if (targetIndex >= 0 && conversation.messages[targetIndex]!.role === "user")
-    for (
-      let index = targetIndex + 1;
-      index < conversation.messages.length;
-      index++
-    ) {
-      const message = conversation.messages[index]!;
-      if (message.role === "user") break;
-      if (message.role === "assistant") messageId = message.id;
-    }
-  const message = conversation.messages.find((entry) => entry.id === messageId);
-  const status =
-    conversation.replyStatus === "failed" ||
-    conversation.replyStatus === "unavailable"
-      ? conversation.replyStatus
-      : message?.status === "failed" || message?.status === "unavailable"
-        ? message.status
-        : old?.status;
-  if (!status) return;
-  if (messageId)
-    for (const [id, record] of memory)
-      if (id !== failure.id && record.messageId === messageId)
-        memory.delete(id);
-  memory.set(failure.id, {
-    failure,
-    messageId,
-    status,
-    retired: old?.retired ?? false,
-  });
 }
 export function replyFailures(
   memory: Map<string, RetainedReplyFailure>,

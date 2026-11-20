@@ -1,5 +1,5 @@
 // Client actions that wait on the client or a host first and are never
-// needed for the first render: message versions, flow lists, favourites
+// needed by ordinary first renders: message versions, flow lists, favourites
 // and runs, plan resume and undo retry, and reading a plan again. Loaded
 // the first time one is used.
 import {
@@ -18,7 +18,69 @@ import {
 import { validateFlowDocument } from "./flows";
 import type { ExecutionAcceptance, Flow, Problem } from "../protocol/generated";
 import type { Scope, ScopeSignal } from "./scope";
-import type { RecoveryRequest } from "./reply-recovery";
+import {
+  conversationTail,
+  related,
+  type RecoveryRequest,
+  type RetainedReplyFailure,
+} from "./reply-recovery";
+import type { Conversation } from "../protocol/generated";
+
+export function observeReplyFailure(
+  memory: Map<string, RetainedReplyFailure>,
+  conversation: Conversation,
+): void {
+  const failure = conversation.replyFailure;
+  const tail = conversationTail(conversation.messages);
+  if (!failure) {
+    for (const [id, record] of memory)
+      if (
+        failure === null ||
+        (tail && related(conversation.messages, record.messageId, tail.id))
+      )
+        memory.delete(id);
+    return;
+  }
+  const old = memory.get(failure.id);
+  const explicitTarget =
+    failure.forMessageId ??
+    (failure.recovery && failure.recovery.kind !== "none"
+      ? failure.recovery.messageId
+      : undefined);
+  let messageId = explicitTarget ?? (old ? old.messageId : tail?.id);
+  const targetIndex = conversation.messages.findIndex(
+    (message) => message.id === messageId,
+  );
+  if (targetIndex >= 0 && conversation.messages[targetIndex]!.role === "user")
+    for (
+      let index = targetIndex + 1;
+      index < conversation.messages.length;
+      index++
+    ) {
+      const message = conversation.messages[index]!;
+      if (message.role === "user") break;
+      if (message.role === "assistant") messageId = message.id;
+    }
+  const message = conversation.messages.find((entry) => entry.id === messageId);
+  const status =
+    conversation.replyStatus === "failed" ||
+    conversation.replyStatus === "unavailable"
+      ? conversation.replyStatus
+      : message?.status === "failed" || message?.status === "unavailable"
+        ? message.status
+        : old?.status;
+  if (!status) return;
+  if (messageId)
+    for (const [id, record] of memory)
+      if (id !== failure.id && record.messageId === messageId)
+        memory.delete(id);
+  memory.set(failure.id, {
+    failure,
+    messageId,
+    status,
+    retired: old?.retired ?? false,
+  });
+}
 
 /** What the client lends these actions: its own state and ownership. */
 export interface OnDemandContext {

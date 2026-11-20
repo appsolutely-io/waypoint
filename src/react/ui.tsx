@@ -1935,18 +1935,18 @@ function ChatBody({
   );
   const [pageTarget, setPageTarget] = useState<{
     id: string;
-    focus: () => void;
+    onReveal: () => void;
   }>();
   useEffect(() => {
     if (!pageTarget || !messageIds.includes(pageTarget.id)) return;
-    transcriptWindow.reveal(pageTarget.id, pageTarget.focus);
+    transcriptWindow.reveal(pageTarget.id, pageTarget.onReveal);
     setPageTarget(undefined);
   }, [pageTarget, messageIds, transcriptWindow]);
-  const revealMessage = (id: string, focus: () => void) => {
-    if (messageIds.includes(id)) transcriptWindow.reveal(id, focus);
+  const revealMessage = (id: string, onReveal: () => void) => {
+    if (messageIds.includes(id)) transcriptWindow.reveal(id, onReveal);
     else
       void client.loadMessage(id).then((loaded) => {
-        if (loaded) setPageTarget({ id, focus });
+        if (loaded) setPageTarget({ id, onReveal });
       });
   };
   useEffect(() => {

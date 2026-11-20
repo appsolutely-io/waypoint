@@ -1,4 +1,9 @@
 {
+  "MessageSender": {
+    "id": "reviewer",
+    "name": "Reviewer",
+    "avatarUrl": "/reviewer.png"
+  },
   "HostProblemDetail": {
     "code": "availability",
     "qualifier": "temporary"

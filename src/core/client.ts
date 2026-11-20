@@ -1661,10 +1661,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       markAs(frame.messageId, frame.status, mark?.read ?? shown.status);
       setStatus(frame.messageId, frame.status);
     }
+    if (frame.type === "message.start" && shown && frame.sender)
+      framePatch(frame.messageId, () => ({ sender: frame.sender }));
     if (frame.type === "message.start" && state.conversation && !shown) {
       const message: Message = {
         id: frame.messageId,
         role: frame.role,
+        ...(frame.sender && { sender: frame.sender }),
         content: "",
         blocks: [],
         createdAt: config.platform.clock.now(),

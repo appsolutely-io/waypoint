@@ -1,6 +1,7 @@
 import type { Conversation, Frame, Message } from "../protocol/generated";
 import type { PendingSend, ReplyState } from "./client";
 import { conversationTail } from "./reply-recovery";
+import { normalizeSender } from "./message-sender";
 
 export const REPLY_STALL_MS = 15000;
 export type ReplyPresentation = "writing" | "waiting" | "expected";
@@ -47,6 +48,11 @@ const time = (value: unknown): value is number | null =>
 export function normalizeReplyConversation(value: Conversation): Conversation {
   return {
     ...value,
+    messages: value.messages.map((message) => {
+      const { sender: raw, ...rest } = message;
+      const sender = normalizeSender(raw);
+      return { ...rest, ...(sender && { sender }) };
+    }),
     replyStatus: ["expected", "failed", "unavailable", "complete"].includes(
       value.replyStatus ?? "",
     )
@@ -78,6 +84,9 @@ export function normalizeReplyFrame(frame: Frame): Frame {
   if (frame.type !== "message.start" && frame.type !== "stale") return frame;
   return {
     ...frame,
+    ...(frame.type === "message.start" && {
+      sender: normalizeSender(frame.sender),
+    }),
     replyOverdueAt: time(frame.replyOverdueAt)
       ? frame.replyOverdueAt
       : undefined,

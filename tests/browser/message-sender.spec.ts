@@ -207,3 +207,62 @@ test("a chat inside a plain-bubble chat keeps its own tinted bubble", async ({
   expect(edge).toBe(0);
   expect(userBg).not.toEqual(assistantBg);
 });
+
+for (const skin of ["neutral", "antd"])
+  for (const dir of ["ltr", "rtl"])
+    for (const width of [360, 1280])
+      test(`sender and notice layouts work in both skins RTL and narrow widths: ${skin} ${dir} ${width}`, async ({
+        page,
+      }, testInfo) => {
+        await page.setViewportSize({ width, height: 900 });
+        await open(page, `skin=${skin}&senders=1&dir=${dir}&norail=1`);
+        await page.evaluate(() => document.fonts.ready);
+        const reply = page.getByRole("article", {
+          name: "Reviewer",
+          exact: true,
+        });
+        const notice = page.getByRole("article", {
+          name: "Editor",
+          exact: true,
+        });
+        await expect(reply).toBeVisible();
+        await expect(notice).toContainText("Review started");
+        const avatar = reply.locator("[data-avatar]");
+        await expect(avatar).toBeVisible();
+        await expect(avatar).toHaveAttribute("alt", "");
+        const geometry = await avatar.evaluate((image) => {
+          const rect = image.getBoundingClientRect();
+          return {
+            width: rect.width,
+            height: rect.height,
+            complete: (image as HTMLImageElement).complete,
+            natural: (image as HTMLImageElement).naturalWidth,
+          };
+        });
+        expect(geometry.width).toBeGreaterThan(0);
+        expect(geometry.width).toBeLessThanOrEqual(24);
+        expect(geometry.height).toBe(geometry.width);
+        expect(geometry.complete && geometry.natural > 0).toBe(true);
+        await expect(
+          notice.getByRole("button", { name: "Copy", exact: true }),
+        ).toBeVisible();
+        await expect(notice.locator("[data-version-walk]")).toHaveCount(0);
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        ).toBe(true);
+        const outline = page.getByRole("button", {
+          name: "Message outline",
+          exact: true,
+        });
+        await outline.click();
+        await page
+          .getByRole("link", { name: /Editor.*Review started/ })
+          .click();
+        await expect(notice).toBeFocused();
+        await page.screenshot({
+          path: testInfo.outputPath("sender.png"),
+          fullPage: true,
+        });
+      });

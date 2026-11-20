@@ -91,6 +91,15 @@
 .waypoint [data-sender] + * {
   margin-block-start: var(--wp-space1);
 }
+.waypoint [data-avatar] {
+  --wp-avatar-size: min(calc(var(--wp-space) * 3), 1.5rem);
+  inline-size: var(--wp-avatar-size);
+  block-size: var(--wp-avatar-size);
+  vertical-align: middle;
+  object-fit: cover;
+  border-radius: var(--wp-radius);
+  margin-inline-end: var(--wp-space1);
+}
 /* The user's messages sit at the inline end on an accent-tinted surface,
    the assistant's at the start on the surface. The tint is 16% in dark,
    where the surfaces are closer, so the two read as far apart as in light.

@@ -299,7 +299,7 @@ export interface CanonicalRequest {
 export function canTransition(from: PlanState, to: PlanState): boolean;
 
 // @public (undocumented)
-export const CAPABILITIES: readonly ["plans", "flows", "widgets", "step-up", "scheduled", "form-fill", "plan-recovery", "plan-leave", "plan-keep", "reply-stop"];
+export const CAPABILITIES: readonly ["plans", "flows", "widgets", "step-up", "scheduled", "form-fill", "plan-recovery", "plan-leave", "plan-keep", "reply-stop", "notice-messages"];
 
 // @public (undocumented)
 export type Capability = (typeof CAPABILITIES)[number];
@@ -958,7 +958,9 @@ export interface FrameMessageStart {
     // (undocumented)
     replyOverdueFor?: string | null;
     // (undocumented)
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'notice';
+    // (undocumented)
+    sender?: MessageSender;
     // (undocumented)
     sequence: number;
     // (undocumented)
@@ -1338,7 +1340,9 @@ export interface Message {
     // (undocumented)
     id: string;
     // (undocumented)
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'notice';
+    // (undocumented)
+    sender?: MessageSender;
     sources?: Source[];
     // (undocumented)
     status?: 'writing' | 'completed' | 'failed' | 'unavailable' | 'stopped';
@@ -1346,6 +1350,16 @@ export interface Message {
     versionCount?: number;
     // (undocumented)
     versionIndex?: number;
+}
+
+// @public (undocumented)
+export interface MessageSender {
+    // (undocumented)
+    avatarUrl?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    name: string;
 }
 
 // @public (undocumented)
@@ -2269,7 +2283,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | Message | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
+export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | Message | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
 
 // @public (undocumented)
 export type WinnerKind = 'stop' | 'cancel-initial' | 'cancel-review' | 'leave' | 'keep';

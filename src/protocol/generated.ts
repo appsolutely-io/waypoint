@@ -45,6 +45,7 @@ export type WaypointProtocol =
   | BlockNotice
   | ExtensionBlock
   | Block
+  | MessageSender
   | Message
   | Source
   | ReplyFailure
@@ -750,10 +751,16 @@ export interface ExtensionBlock {
   answered?: boolean;
   answer?: CardAnswer;
 }
+export interface MessageSender {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+}
 export interface Message {
   id: string;
   clientMessageId?: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'notice';
+  sender?: MessageSender;
   content: string;
   blocks: Block[];
   createdAt: number;
@@ -904,7 +911,8 @@ export interface FrameMessageStart {
   protocol: string;
   sequence: number;
   messageId: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'notice';
+  sender?: MessageSender;
   replyOverdueAt?: number | null;
   replyOverdueFor?: string | null;
   versionIndex?: number;

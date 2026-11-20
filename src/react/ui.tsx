@@ -103,8 +103,10 @@ export {
 };
 import type { ActionEntry, ActionId, PlanView, StepStatus } from "./plan-view";
 import type { BlockSummary } from "./plan-view";
-import type { MarkdownImagePolicy } from "./markdown";
-export type { MarkdownImagePolicy } from "./markdown";
+import type { MarkdownImagePolicy } from "./image-policy";
+import { normalizeSender } from "../core/message-sender";
+import { SenderAvatar, senderName } from "./sender";
+export type { MarkdownImagePolicy } from "./image-policy";
 type MarkdownModule = typeof import("./markdown");
 import { lazyChunk, useChunk } from "./chunks";
 import {
@@ -235,6 +237,7 @@ export type PartName =
 export interface PartMessage {
   id: string;
   role: Message["role"];
+  sender?: Message["sender"];
   status?: Message["status"];
   versionIndex?: number;
   versionCount?: number;
@@ -1467,11 +1470,7 @@ function TranscriptOutline({
         {open
           ? shown.map(({ message, index }) => {
               const values = {
-                role: t(
-                  message.role === "user"
-                    ? "chat.roleUser"
-                    : "chat.roleAssistant",
-                ),
+                role: senderName(message, t),
                 position: index + 1,
               };
               const text = excerpts[index];
@@ -1590,6 +1589,7 @@ function RowActions({ slots, message }: { slots?: Slots; message: Message }) {
         message: {
           id: message.id,
           role: message.role,
+          sender: normalizeSender(message.sender),
           status: message.status,
           versionIndex: message.versionIndex,
           versionCount: message.versionCount,
@@ -1658,14 +1658,12 @@ const MessageRow = memo(function MessageRow({
   posInSet?: number;
   setSize?: number;
 }) {
-  const t = context().format;
+  const { format: t, markdownImages, extraUrlSchemes } = context();
   const parse = useMemo(() => {
     const source = bodySource(message);
     return (made: () => ReactNode) => rows.parses.get(message.id, source, made);
   }, [rows, message]);
-  const sender = t(
-    message.role === "user" ? "chat.roleUser" : "chat.roleAssistant",
-  );
+  const sender = senderName(message, t);
   return (
     <article
       id={anchorId}
@@ -1689,6 +1687,7 @@ const MessageRow = memo(function MessageRow({
           message: {
             id: message.id,
             role: message.role,
+            sender: normalizeSender(message.sender),
             content: message.content,
             status: message.status,
             versionIndex: message.versionIndex,
@@ -1699,6 +1698,11 @@ const MessageRow = memo(function MessageRow({
       >
         {/* Seen first in the bubble; said once, as the article's name. */}
         <span data-sender="" aria-hidden="true">
+          <SenderAvatar
+            src={message.sender?.avatarUrl}
+            images={markdownImages}
+            extraSchemes={extraUrlSchemes}
+          />
           {sender}
         </span>
         <BodyOf.Provider value={message.id}>

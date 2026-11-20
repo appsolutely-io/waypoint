@@ -219,6 +219,7 @@ export function createOnDemand(context: OnDemandContext) {
       if (
         !config.versions ||
         !message ||
+        message.role === "notice" ||
         (operation === "edit" && message.role !== "user") ||
         (operation === "select" &&
           (!Number.isInteger(index) ||

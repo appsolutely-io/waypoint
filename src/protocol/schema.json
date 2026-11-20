@@ -1596,6 +1596,15 @@
         }
       ]
     },
+    "MessageSender": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "avatarUrl": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
     "Message": {
       "type": "object",
       "properties": {
@@ -1608,8 +1617,9 @@
           "minLength": 1
         },
         "role": {
-          "enum": ["user", "assistant"]
+          "enum": ["user", "assistant", "notice"]
         },
+        "sender": { "$ref": "#/$defs/MessageSender" },
         "content": {
           "type": "string"
         },
@@ -2133,8 +2143,9 @@
           "minLength": 1
         },
         "role": {
-          "enum": ["user", "assistant"]
+          "enum": ["user", "assistant", "notice"]
         },
+        "sender": { "$ref": "#/$defs/MessageSender" },
         "replyOverdueAt": {
           "type": ["number", "null"]
         },

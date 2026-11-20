@@ -107,7 +107,10 @@ export function MessageActions({
       {t(label === "good" ? "chat.message.good" : "chat.message.bad")}
     </B>
   );
-  const walk = client.canChangeVersions() ? versionWalk(message) : null;
+  const walk =
+    message.role !== "notice" && client.canChangeVersions()
+      ? versionWalk(message)
+      : null;
   // A reply the host ended unfinished is not an answer: nothing to copy or
   // rate, and the reply row's Retry already asks for it again. Its other
   // versions can still be walked to.
@@ -161,7 +164,9 @@ export function MessageActions({
           {t("chat.message.copy")}
         </B>
       )}
-      {ended ? null : (reply ? canRegenerate : client.canChangeVersions()) ? (
+      {ended || message.role === "notice" ? null : (
+          reply ? canRegenerate : client.canChangeVersions()
+        ) ? (
         reply ? (
           <B
             aria-disabled={busy}

@@ -5,11 +5,11 @@
 // capabilities); where a fact is absent it says "not known yet" or shows
 // nothing. It never decides authority: every press still goes through the
 // client, which refuses what it must.
-import {
-  confirmationOf,
-  type IntentAlert,
-  type IntentOverlay,
-  type KeepChangesReviewResult,
+import { confirmationOf } from "../core/confirmation";
+import type {
+  IntentAlert,
+  IntentOverlay,
+  KeepChangesReviewResult,
 } from "../core/client";
 import type { IntentNotice } from "../core/intent";
 import type {

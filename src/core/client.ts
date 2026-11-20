@@ -1,4 +1,5 @@
 import type { FormSession } from "./form-fill";
+import { confirmationOf } from "./confirmation";
 import { loadReadHandlers, STREAM_READS_UNAVAILABLE } from "./reads";
 import { load as loadReads, loaded as readCode } from "./reads-load";
 import { createPlanRunner, PlanReadRefused, type RunnerPorts } from "./runner";
@@ -59,7 +60,6 @@ import type {
   OutlineMessage,
   Frame,
   Message,
-  ConfirmationRecord,
   PlanRecord,
   Problem,
   ReplyFailure,
@@ -3721,25 +3721,8 @@ export function readProblem(error: unknown, id: string): Problem {
     ...(host !== undefined && { host }),
   };
 }
-/**
- * The plan's confirmation record, when it is bound to this plan, this
- * conversation and the plan's host revision. A record without a whole
- * revision is never a match; a legacy plan record has no revision of its
- * own to compare, so its host refuses a stale token.
- */
-export function confirmationOf(
-  plan: PlanRecord | null | undefined,
-  conversationId: string | undefined,
-): ConfirmationRecord | undefined {
-  const record = plan?.confirmation;
-  return record &&
-    record.planId === plan!.id &&
-    record.conversationId === conversationId &&
-    Number.isInteger(record.revision) &&
-    record.revision === (plan!.recovery ?? record).revision
-    ? record
-    : undefined;
-}
+export { confirmationOf };
+
 const REASONS = ["expired", "used", "stale", "mismatch", "missing"];
 const PROBLEM_CODES: readonly Problem["code"][] = [
   "update-required",

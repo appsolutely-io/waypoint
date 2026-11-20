@@ -2,11 +2,8 @@
 // its actions. What is shown is computed by plan-view; every press goes
 // through the client.
 import { useCallback, useEffect, useState } from "react";
-import {
-  confirmationOf,
-  type KeepChangesReview,
-  type WaypointClient,
-} from "../core/client";
+import { confirmationOf } from "../core/confirmation";
+import type { KeepChangesReview, WaypointClient } from "../core/client";
 import type { IntentKind } from "../protocol/generated";
 import {
   keepSheet,

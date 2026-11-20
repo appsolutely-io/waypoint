@@ -125,6 +125,9 @@ async function chat(count: number) {
 }
 
 it("below the threshold, every message is mounted, with no spacer", async () => {
+  const warmup = await chat(1);
+  cleanup();
+  warmup.dispose();
   const client = await chat(WINDOW_FROM - 1);
   expect(mounted()).toHaveLength(WINDOW_FROM - 1);
   expect(document.querySelector("[data-transcript-gap]")).toBeNull();
@@ -150,7 +153,7 @@ it("a long transcript mounts the latest messages, pinned at the end, and spaces 
 it("scrolled up, the window follows; Back to latest returns to the end, pinned", async () => {
   const client = await chat(1000);
   geometry.user("wheel", -50_000);
-  await settle();
+  await waitFor(() => expect(mounted()).not.toContain("m1000"));
   const middle = mounted();
   expect(middle).not.toContain("m1000");
   expect(middle.length).toBeLessThan(40);
@@ -225,8 +228,7 @@ it("a message mounted again keeps its parse", async () => {
   const parsed = () => parses.filter((text) => text === "Message 1000").length;
   expect(parsed()).toBe(1);
   geometry.user("wheel", -60_000);
-  await settle();
-  expect(mounted()).not.toContain("m1000");
+  await waitFor(() => expect(mounted()).not.toContain("m1000"));
   await act(async () => {
     screen.getByText(english["chat.latest"]).click();
   });

@@ -343,11 +343,13 @@ it("a long transcript mounts the latest messages, pinned at the end, and spaces 
 it("scrolled up, the window follows; Back to latest returns to the end, pinned", async () => {
   const client = await chat(1000);
   geometry.user("wheel", -50_000);
-  await waitFor(() => expect(mounted()).not.toContain("m1000"));
+  const top = 100 * 1000 - 300 - 50_000;
+  await waitFor(() =>
+    expect(mounted()).toContain(`m${Math.floor(top / 100) + 1}`),
+  );
   const middle = mounted();
   expect(middle).not.toContain("m1000");
   expect(middle.length).toBeLessThan(40);
-  const top = 100 * 1000 - 300 - 50_000;
   expect(middle).toContain(`m${Math.floor(top / 100) + 1}`);
   await act(async () => {
     screen.getByText(english["chat.latest"]).click();
@@ -419,6 +421,7 @@ it("a message mounted again keeps its parse", async () => {
   expect(parsed()).toBe(1);
   geometry.user("wheel", -60_000);
   await waitFor(() => expect(mounted()).not.toContain("m1000"));
+  expect(mounted()).toContain("m398");
   await act(async () => {
     screen.getByText(english["chat.latest"]).click();
   });

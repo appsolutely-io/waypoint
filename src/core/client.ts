@@ -37,7 +37,6 @@ export type { ReplyFailureRecord } from "./reply-recovery";
 import { revisionOf, type StoredRecord } from "./stored-record";
 import type {
   IntentAlert,
-  IntentContext,
   IntentMachine,
   IntentNotice,
   IntentOverlay,
@@ -2261,7 +2260,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             publish: update,
             client,
             scope: () => conversationScope.signal,
-            report: report as IntentContext["report"],
+            report,
             // The core's own read ownership: a newer plan read or a retired
             // scope supersedes this one, and only a live read is published.
             read(id) {

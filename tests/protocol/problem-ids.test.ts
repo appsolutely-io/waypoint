@@ -173,6 +173,9 @@ it("reserved problem id documentation covers every client fixed id", () => {
     .find((line) => line.startsWith("Host problem ids MUST NOT"))!;
   expect(ids.size).toBeGreaterThan(0);
   expect(undocumented(ids, sentence)).toEqual([]);
+  expect(undocumented(ids, sentence.replace("`intent`", ""))).toContain(
+    "intent",
+  );
   const first = [...ids][0]!;
   expect(undocumented(ids, sentence.replace(`\`${first}\``, ""))).toContain(
     first,
@@ -211,6 +214,8 @@ it("the problem id collector uses Problem types for spreads and excludes action 
     const action = { id: "action-id", label: "Action" };
     declare function report(problem: Problem): void;
     report({ code: "refused", id: "report-id" });
+    declare const context: { report(problem: Problem): void };
+    context.report({ code: "sign-in", id: "context-id" });
     const another = { id: "other-action-id" };
     declare function asProblem(error: unknown, id: string): Problem;
     asProblem(null, "normalizer-id");
@@ -247,6 +252,7 @@ it("the problem id collector uses Problem types for spreads and excludes action 
       "imported-normalizer-id",
       "constant-id",
       "report-id",
+      "context-id",
       "normalizer-id",
       "selector-id",
       "member-id",

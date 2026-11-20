@@ -82,7 +82,14 @@ function collect(program: ts.Program, files: readonly string[]): Set<string> {
           propertyName(property.name) === "id",
       );
       if (
-        properties.length &&
+        properties.some(
+          (property) =>
+            literal(
+              ts.isPropertyAssignment(property)
+                ? property.initializer
+                : property.name,
+            ) !== undefined,
+        ) &&
         (problem(checker.getContextualType(node)) ||
           problem(checker.getTypeAtLocation(node)))
       ) {
@@ -95,7 +102,9 @@ function collect(program: ts.Program, files: readonly string[]): Set<string> {
       }
     }
     if (ts.isCallExpression(node)) {
-      let symbol = checker.getSymbolAtLocation(node.expression);
+      let symbol = node.arguments[1]
+        ? checker.getSymbolAtLocation(node.expression)
+        : undefined;
       if (symbol && symbol.flags & ts.SymbolFlags.Alias)
         symbol = checker.getAliasedSymbol(symbol);
       if (
@@ -110,6 +119,7 @@ function collect(program: ts.Program, files: readonly string[]): Set<string> {
       if (
         ts.isPropertyAccessExpression(node.expression) &&
         node.expression.name.text === "includes" &&
+        array(node.expression.expression) &&
         node.arguments.some(hasProblemId)
       ) {
         for (const entry of array(node.expression.expression)?.elements ?? [])
@@ -125,8 +135,10 @@ function collect(program: ts.Program, files: readonly string[]): Set<string> {
         ts.SyntaxKind.ExclamationEqualsToken,
       ].includes(node.operatorToken.kind)
     ) {
-      if (problemId(node.left)) add(node.right);
-      if (problemId(node.right)) add(node.left);
+      if (literal(node.right) !== undefined && problemId(node.left))
+        add(node.right);
+      if (literal(node.left) !== undefined && problemId(node.right))
+        add(node.left);
     }
     ts.forEachChild(node, visit);
   };
@@ -141,6 +153,7 @@ const options: ts.CompilerOptions = {
   strict: true,
   skipLibCheck: true,
   esModuleInterop: true,
+  types: [],
 };
 function undocumented(ids: Set<string>, sentence: string): string[] {
   const spans = new Set(
@@ -186,9 +199,14 @@ it("reserved problem id documentation covers every client fixed id", () => {
 
 it("the problem id collector uses Problem types for spreads and excludes action ids", () => {
   const file = resolve("src/hooks/problem-id-fixture.ts");
+  const helper = resolve("src/react/problem-id-helper.ts");
   const text = `import type { Problem } from ${JSON.stringify(generated)};
+    import { fixedId, importedProblem, asProblem as normalize } from ${JSON.stringify(helper)};
     const base: Problem = { code: "refused", id: "base-id" };
     const spread: Problem = { ...base, id: "spread-id" };
+    const imported: Problem = { ...base, id: fixedId };
+    report(importedProblem());
+    normalize(null, "imported-normalizer-id");
     const constant = { code: "refused", id: "constant-id" } as const satisfies Problem;
     const action = { id: "action-id", label: "Action" };
     declare function report(problem: Problem): void;
@@ -202,13 +220,31 @@ it("the problem id collector uses Problem types for spreads and excludes action 
   const host = ts.createCompilerHost(options);
   const read = host.readFile.bind(host);
   const exists = host.fileExists.bind(host);
-  host.readFile = (name) => (name === file ? text : read(name));
-  host.fileExists = (name) => name === file || exists(name);
-  const program = ts.createProgram([file, generated], options, host);
-  expect(collect(program, [file])).toEqual(
+  const fixtures = new Map([
+    [file, text],
+    [
+      helper,
+      `import type { Problem } from ${JSON.stringify(generated)};
+      export const fixedId = "imported-id";
+      export function importedProblem(): Problem {
+        return { code: "refused", id: "helper-id" };
+      }
+      export function asProblem(error: unknown, id: string): Problem {
+        return { code: "refused", id };
+      }
+    `,
+    ],
+  ]);
+  host.readFile = (name) => fixtures.get(name) ?? read(name);
+  host.fileExists = (name) => fixtures.has(name) || exists(name);
+  const program = ts.createProgram([file, helper, generated], options, host);
+  expect(collect(program, [file, helper])).toEqual(
     new Set([
       "base-id",
       "spread-id",
+      "imported-id",
+      "helper-id",
+      "imported-normalizer-id",
       "constant-id",
       "report-id",
       "normalizer-id",

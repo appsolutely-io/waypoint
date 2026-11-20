@@ -481,6 +481,8 @@ export interface ClientSnapshot {
     // (undocumented)
     hints: readonly string[];
     // (undocumented)
+    history?: ConversationHistory;
+    // (undocumented)
     intentAlert: IntentAlert | null;
     intentNotice: IntentNotice | null;
     intentOverlays: Readonly<Record<string, IntentOverlay>>;
@@ -620,6 +622,48 @@ export type Conversation = {
     parentConversationId?: string;
     field?: string;
 };
+
+// @public (undocumented)
+export interface ConversationHistory {
+    // (undocumented)
+    failed: boolean;
+    // (undocumented)
+    hasOlder: boolean;
+    // (undocumented)
+    loading: boolean;
+    // (undocumented)
+    outline: readonly OutlineMessage[];
+}
+
+// @public (undocumented)
+export type ConversationPage = {
+    conversation: Conversation;
+    snapshotId: string;
+    olderCursor: string | null;
+    outline: OutlineMessage[];
+    heldClientMessageIds: string[];
+} | {
+    stale: true;
+};
+
+// @public (undocumented)
+export type ConversationPageInput = {
+    clientMessageIds: readonly string[];
+    signal: ScopeSignal;
+    context?: ReaderRequestContext;
+} & ({
+    cursor?: never;
+    aroundMessageId?: never;
+    snapshotId?: string;
+} | {
+    cursor: string;
+    snapshotId: string;
+    aroundMessageId?: never;
+} | {
+    aroundMessageId: string;
+    snapshotId?: string;
+    cursor?: never;
+});
 
 // @public (undocumented)
 export function ConversationRail(input: ConversationRailProps): react.JSX.Element;
@@ -809,6 +853,9 @@ export const english: {
     readonly "chat.restoredEdit": "Edit";
     readonly "chat.restoredDiscard": "Discard";
     readonly "chat.dismiss": "Dismiss";
+    readonly "chat.historyOlder": "Load older messages";
+    readonly "chat.historyLoading": "Loading older messages…";
+    readonly "chat.historyFailed": "Earlier messages could not be loaded.";
     readonly "chat.latest": "Back to latest";
     readonly "chat.latestNew": "{count, plural, one {Back to latest, # new reply} other {Back to latest, # new replies}}";
     readonly "chat.outline": "Message outline";
@@ -1796,6 +1843,20 @@ export interface Outcome {
     stepId: string;
     // (undocumented)
     version?: string;
+}
+
+// @public (undocumented)
+export interface OutlineMessage {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    revision: string;
+    // (undocumented)
+    role: 'user' | 'assistant' | 'notice';
+    // (undocumented)
+    sender?: MessageSender;
+    // (undocumented)
+    text: string;
 }
 
 // @public
@@ -2882,6 +2943,8 @@ export interface TransportPort {
     // (undocumented)
     read(conversationId: string, context?: ReaderRequestContext): Promise<Conversation>;
     // (undocumented)
+    readPage?(conversationId: string, input: ConversationPageInput): Promise<ConversationPage>;
+    // (undocumented)
     send(reply: Reply & {
         extensions?: Record<string, unknown>;
     }, conversationId: string, context?: ReaderRequestContext): Promise<ReplyDelivery>;
@@ -3040,6 +3103,10 @@ export interface WaypointClient {
     // (undocumented)
     loadFlows(): Promise<void>;
     // (undocumented)
+    loadMessage(messageId: string): Promise<boolean>;
+    // (undocumented)
+    loadOlder(): Promise<boolean>;
+    // (undocumented)
     on(listener: (event: WaypointEvent) => void): () => void;
     prepareFlow(id?: string): Promise<Flow | void>;
     readPlan(id?: string): Promise<void>;
@@ -3107,7 +3174,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | Message | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory;
+export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | Message | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory | OutlineMessage | ConversationPage;
 
 // @public (undocumented)
 export function WaypointProvider(props: WaypointProviderProps): react.JSX.Element;

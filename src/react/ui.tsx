@@ -28,6 +28,7 @@ import {
 import type {
   Block,
   Message,
+  OutlineMessage,
   Problem,
   ReplyFailure,
   PlanRecord,
@@ -1386,6 +1387,7 @@ const EXCERPT_SLOT = "\u{E000}";
 const FILTER_DELAY_MS = 150;
 const noSubscription = () => () => {};
 const noVersion = () => 0;
+type TranscriptEntry = Message | OutlineMessage;
 function TranscriptOutline({
   messages,
   excerpts,
@@ -1399,7 +1401,7 @@ function TranscriptOutline({
   sourceOf,
   lang,
 }: {
-  messages: readonly Message[];
+  messages: readonly TranscriptEntry[];
   excerpts: readonly (string | undefined)[];
   anchor: (messageId: string) => string;
   open: boolean;
@@ -1408,8 +1410,8 @@ function TranscriptOutline({
   // What the filter holds, and each message's folded text to match it in.
   query: string;
   onQuery: (query: string) => void;
-  search: SearchIndex<Message>;
-  sourceOf: (message: Message) => unknown;
+  search: SearchIndex<TranscriptEntry>;
+  sourceOf: (message: TranscriptEntry) => unknown;
   lang?: string;
 }) {
   const { format: t, primitives } = context();
@@ -1875,6 +1877,19 @@ function ChatBody({
     (id) => ownerKey(client, id),
   );
   const messages = state.conversation?.messages ?? [];
+  const indexed = state.history?.outline;
+  const outlineMessages = useMemo<readonly TranscriptEntry[]>(() => {
+    if (!indexed) return messages;
+    const loaded = new Map(messages.map((message) => [message.id, message]));
+    const entries: TranscriptEntry[] = indexed.map(
+      (entry) => loaded.get(entry.id) ?? entry,
+    );
+    const known = new Set(indexed.map((entry) => entry.id));
+    return [
+      ...entries,
+      ...messages.filter((message) => !known.has(message.id)),
+    ];
+  }, [indexed, messages]);
   const shownId = state.conversation?.id;
   // The outline's disclosure is kept per shown conversation; a switch
   // collapses it.
@@ -1900,6 +1915,17 @@ function ChatBody({
     () => messages.map((message) => message.id),
     [messages],
   );
+  const outlineIds = useMemo(
+    () => (indexed ? outlineMessages.map((message) => message.id) : messageIds),
+    [indexed, outlineMessages, messageIds],
+  );
+  const outlinePositions = useMemo(
+    () =>
+      indexed
+        ? new Map(outlineIds.map((id, index) => [id, index + 1]))
+        : undefined,
+    [indexed, outlineIds],
+  );
   const transcriptWindow = useTranscriptWindow(
     transcript,
     transcriptContent,
@@ -1907,6 +1933,38 @@ function ChatBody({
     position.pinned,
     position.anchorId(),
   );
+  const [pageTarget, setPageTarget] = useState<{
+    id: string;
+    focus: () => void;
+  }>();
+  useEffect(() => {
+    if (!pageTarget || !messageIds.includes(pageTarget.id)) return;
+    transcriptWindow.reveal(pageTarget.id, pageTarget.focus);
+    setPageTarget(undefined);
+  }, [pageTarget, messageIds, transcriptWindow]);
+  const revealMessage = (id: string, focus: () => void) => {
+    if (messageIds.includes(id)) transcriptWindow.reveal(id, focus);
+    else
+      void client.loadMessage(id).then((loaded) => {
+        if (loaded) setPageTarget({ id, focus });
+      });
+  };
+  useEffect(() => {
+    const element = transcript.current;
+    if (!element || !state.history?.hasOlder) return;
+    const older = () => {
+      const history = client.getSnapshot().history;
+      if (
+        element.scrollTop <= 1 &&
+        history?.hasOlder &&
+        !history.loading &&
+        !history.failed
+      )
+        void client.loadOlder();
+    };
+    element.addEventListener("scroll", older, { passive: true });
+    return () => element.removeEventListener("scroll", older);
+  }, [client, shownId, state.history?.hasOlder]);
   // A link to a message the window has not mounted (the page's address
   // names its anchor) mounts it, then shows it at the top of the box.
   const revealLinked = () => {
@@ -1972,24 +2030,24 @@ function ChatBody({
     const messageId = article.getAttribute("data-message-id");
     const at =
       messageId !== null
-        ? messageIds.indexOf(messageId)
-        : messageIds.length +
+        ? outlineIds.indexOf(messageId)
+        : outlineIds.length +
           pendingIds.indexOf(article.getAttribute("data-pending-id")!);
     const next = at + (event.key === "PageDown" ? 1 : -1);
-    if (at < 0 || next < 0 || next >= messageIds.length + pendingIds.length)
+    if (at < 0 || next < 0 || next >= outlineIds.length + pendingIds.length)
       return;
     event.preventDefault();
-    if (next >= messageIds.length) {
+    if (next >= outlineIds.length) {
       // A message being sent is always mounted, after the window.
-      const id = pendingIds[next - messageIds.length];
+      const id = pendingIds[next - outlineIds.length];
       const row = [
         ...feed.querySelectorAll<HTMLElement>("article[data-pending-id]"),
       ].find((element) => element.getAttribute("data-pending-id") === id);
       if (row) focusFor(chatFocus.value, row, { origin, owner });
       return;
     }
-    const id = messageIds[next]!;
-    transcriptWindow.reveal(id, () =>
+    const id = outlineIds[next]!;
+    revealMessage(id, () =>
       focusFor(chatFocus.value, position.toMessage(id), { origin, owner }),
     );
   };
@@ -2249,20 +2307,33 @@ function ChatBody({
     bodies,
   );
   // Labels are made only while the outline shows them.
-  const excerpts = outlineOpen ? messages.map(excerptOf) : [];
+  const excerpts = outlineOpen
+    ? outlineMessages.map((message) =>
+        "revision" in message ? excerpt(message.text) : excerptOf(message),
+      )
+    : [];
   // The filter reads each message's whole visible text, folded once per
   // source in idle slices while the outline is open.
-  const search = useRef(new SearchIndex<Message>()).current;
-  const searchSourceOf = (message: Message): unknown =>
-    visibilityUnknown ? message : message.content;
+  const search = useRef(new SearchIndex<TranscriptEntry>()).current;
+  const searchSourceOf = (message: TranscriptEntry): unknown =>
+    "revision" in message
+      ? message.text
+      : visibilityUnknown
+        ? message
+        : message.content;
   const searched = useMemo(
     () =>
-      messages.map((message) => ({
+      outlineMessages.map((message) => ({
         id: message.id,
-        source: visibilityUnknown ? message : message.content,
+        source:
+          "revision" in message
+            ? message.text
+            : visibilityUnknown
+              ? message
+              : message.content,
         message,
       })),
-    [messages, visibilityUnknown],
+    [outlineMessages, visibilityUnknown],
   );
   // Its inputs: each message's version (its source), the chat's language,
   // the parser being ready and what it is told. The host's excerpt is read
@@ -2282,11 +2353,13 @@ function ChatBody({
     searched,
     (message) =>
       foldForSearch(
-        visibilityUnknown
-          ? (provider.messageExcerpt?.(message) ?? "")
-          : markdownModule
-            ? visibleOf(message, markdownModule)
-            : message.content,
+        "revision" in message
+          ? message.text
+          : visibilityUnknown
+            ? (provider.messageExcerpt?.(message) ?? "")
+            : markdownModule
+              ? visibleOf(message, markdownModule)
+              : message.content,
         provider.lang,
       ),
   );
@@ -2733,9 +2806,9 @@ function ChatBody({
             ) : null}
             <Part name="transcript" slots={slots}>
               <div onFocusCapture={recordTranscriptFocus}>
-                {messages.length ? (
+                {outlineMessages.length ? (
                   <TranscriptOutline
-                    messages={messages}
+                    messages={outlineMessages}
                     excerpts={excerpts}
                     anchor={anchor}
                     open={outlineOpen}
@@ -2756,7 +2829,7 @@ function ChatBody({
                     onNavigate={(messageId) => {
                       const origin = chatFocus.value.originFor("outline");
                       const owner = chatFocus.value.owner();
-                      transcriptWindow.reveal(messageId, () =>
+                      revealMessage(messageId, () =>
                         focusFor(
                           chatFocus.value,
                           position.toMessage(messageId),
@@ -2773,6 +2846,32 @@ function ChatBody({
                   aria-label={t("chat.transcript")}
                   tabIndex={-1}
                 >
+                  {state.history &&
+                  (state.history.hasOlder ||
+                    state.history.loading ||
+                    state.history.failed) ? (
+                    <div data-history="">
+                      {state.history.failed ? (
+                        <p role="status">{t("chat.historyFailed")}</p>
+                      ) : null}
+                      <B
+                        disabled={state.history.loading}
+                        onPress={() => {
+                          void (state.history?.hasOlder
+                            ? client.loadOlder()
+                            : client.refresh());
+                        }}
+                      >
+                        {t(
+                          state.history.loading
+                            ? "chat.historyLoading"
+                            : state.history.failed
+                              ? "chat.retry"
+                              : "chat.historyOlder",
+                        )}
+                      </B>
+                    </div>
+                  ) : null}
                   <RenderFailures.Provider value={renderFailures}>
                     {/* The messages are a feed (WAI-ARIA 1.2, "feed"):
                         each article says its place among all of them,
@@ -2814,8 +2913,13 @@ function ChatBody({
                             .map((message, offset) => (
                               <MessageRow
                                 key={message.id}
-                                posInSet={segment.from + offset + 1}
-                                setSize={messages.length + state.pending.length}
+                                posInSet={
+                                  outlinePositions?.get(message.id) ??
+                                  segment.from + offset + 1
+                                }
+                                setSize={
+                                  outlineMessages.length + state.pending.length
+                                }
                                 message={message}
                                 failure={failuresByMessage.get(message.id)}
                                 slots={slots}
@@ -2850,9 +2954,9 @@ function ChatBody({
                             data-role="pending"
                             data-pending-id={pending.id}
                             tabIndex={-1}
-                            aria-posinset={messages.length + index + 1}
+                            aria-posinset={outlineMessages.length + index + 1}
                             aria-setsize={
-                              messages.length + state.pending.length
+                              outlineMessages.length + state.pending.length
                             }
                             aria-label={t("chat.roleUser")}
                           >

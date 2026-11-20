@@ -2967,6 +2967,81 @@
       },
       "required": ["winner", "keptFact"],
       "additionalProperties": false
+    },
+    "OutlineMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": ["user", "assistant", "notice"]
+        },
+        "sender": {
+          "$ref": "#/$defs/MessageSender"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "role", "revision", "text"]
+    },
+    "ConversationPage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "conversation": {
+              "$ref": "#/$defs/Conversation"
+            },
+            "snapshotId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "olderCursor": {
+              "type": ["string", "null"],
+              "minLength": 1
+            },
+            "outline": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/OutlineMessage"
+              }
+            },
+            "heldClientMessageIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "conversation",
+            "snapshotId",
+            "olderCursor",
+            "outline",
+            "heldClientMessageIds"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stale": {
+              "const": true
+            }
+          },
+          "required": ["stale"],
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "oneOf": [
@@ -2987,6 +3062,12 @@
     },
     {
       "$ref": "#/$defs/PlanRecord"
+    },
+    {
+      "$ref": "#/$defs/OutlineMessage"
+    },
+    {
+      "$ref": "#/$defs/ConversationPage"
     }
   ]
 }

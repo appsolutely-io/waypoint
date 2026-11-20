@@ -36,7 +36,7 @@ type HostConversation = Conversation & {
   replyExpectedId?: string;
   replyLabel?: string | null;
 };
-function harness(fields: Partial<HostConversation> = {}) {
+function harness(fields: Partial<HostConversation> = {}, paged = false) {
   const manual = createManualClock(1000);
   let current: HostConversation = {
     protocol: "1.0",
@@ -68,6 +68,26 @@ function harness(fields: Partial<HostConversation> = {}) {
         capabilities: ["reply-stop"],
       }),
       read,
+      ...(paged
+        ? {
+            readPage: async () => {
+              const conversation = await read();
+              return {
+                conversation,
+                snapshotId: JSON.stringify(conversation),
+                olderCursor: null,
+                heldClientMessageIds: [],
+                outline: conversation.messages.map((message) => ({
+                  id: message.id,
+                  role: message.role,
+                  sender: message.sender,
+                  text: message.content,
+                  revision: JSON.stringify(message),
+                })),
+              };
+            },
+          }
+        : {}),
       subscribe: (_id, value) => {
         listener = value;
         return () => {};
@@ -387,50 +407,59 @@ it.each([false, true])(
   },
 );
 
-it("a read whose snapshot already contains streamed text does not duplicate it", async () => {
-  const h = harness({ messages: [user, writer] });
-  await h.client.ready;
-  h.set({ messages: [user, { ...writer, content: "Partial more" }] });
-  const release = h.hold();
-  const read = h.client.refresh();
-  await flush();
-  h.frame({ type: "text.delta", messageId: "a", text: " more" });
-  await flush();
-  release();
-  await read;
-  expect(h.snapshot().conversation?.messages.at(-1)?.content).toBe(
-    "Partial more",
-  );
-});
+it.each(["whole", "paged"])(
+  "a read whose snapshot already contains streamed text does not duplicate it (%s)",
+  async (mode) => {
+    const h = harness({ messages: [user, writer] }, mode === "paged");
+    await h.client.ready;
+    h.set({ messages: [user, { ...writer, content: "Partial more" }] });
+    const release = h.hold();
+    const read = h.client.refresh();
+    await flush();
+    h.frame({ type: "text.delta", messageId: "a", text: " more" });
+    await flush();
+    release();
+    await read;
+    expect(h.snapshot().conversation?.messages.at(-1)?.content).toBe(
+      "Partial more",
+    );
+  },
+);
 
-it("a read supplies fields the newer frame did not write", async () => {
-  const h = harness({ messages: [user, writer] });
-  await h.client.ready;
-  h.set({ messages: [user, { ...writer, versionCount: 4 }] });
-  const release = h.hold();
-  const read = h.client.refresh();
-  await flush();
-  h.frame({ type: "text.delta", messageId: "a", text: " more" });
-  await flush();
-  release();
-  await read;
-  expect(h.snapshot().conversation?.messages.at(-1)).toMatchObject({
-    content: "Partial more",
-    versionCount: 4,
-  });
-});
+it.each(["whole", "paged"])(
+  "a read supplies fields the newer frame did not write (%s)",
+  async (mode) => {
+    const h = harness({ messages: [user, writer] }, mode === "paged");
+    await h.client.ready;
+    h.set({ messages: [user, { ...writer, versionCount: 4 }] });
+    const release = h.hold();
+    const read = h.client.refresh();
+    await flush();
+    h.frame({ type: "text.delta", messageId: "a", text: " more" });
+    await flush();
+    release();
+    await read;
+    expect(h.snapshot().conversation?.messages.at(-1)).toMatchObject({
+      content: "Partial more",
+      versionCount: 4,
+    });
+  },
+);
 
-it("a read issued after a frame replaces the included overlay", async () => {
-  const h = harness({ messages: [user, writer] });
-  await h.client.ready;
-  h.frame({ type: "text.delta", messageId: "a", text: " more" });
-  await flush();
-  h.set({ messages: [user, { ...writer, content: "Authoritative" }] });
-  await h.client.refresh();
-  expect(h.snapshot().conversation?.messages.at(-1)?.content).toBe(
-    "Authoritative",
-  );
-});
+it.each(["whole", "paged"])(
+  "a read issued after a frame replaces the included overlay (%s)",
+  async (mode) => {
+    const h = harness({ messages: [user, writer] }, mode === "paged");
+    await h.client.ready;
+    h.frame({ type: "text.delta", messageId: "a", text: " more" });
+    await flush();
+    h.set({ messages: [user, { ...writer, content: "Authoritative" }] });
+    await h.client.refresh();
+    expect(h.snapshot().conversation?.messages.at(-1)?.content).toBe(
+      "Authoritative",
+    );
+  },
+);
 
 it("a deadline frame applied after read issuance survives adoption", async () => {
   const h = harness({ messages: [user, writer] });

@@ -88,6 +88,9 @@ export const english: {
     readonly "chat.restoredEdit": "Edit";
     readonly "chat.restoredDiscard": "Discard";
     readonly "chat.dismiss": "Dismiss";
+    readonly "chat.historyOlder": "Load older messages";
+    readonly "chat.historyLoading": "Loading older messages…";
+    readonly "chat.historyFailed": "Earlier messages could not be loaded.";
     readonly "chat.latest": "Back to latest";
     readonly "chat.latestNew": "{count, plural, one {Back to latest, # new reply} other {Back to latest, # new replies}}";
     readonly "chat.outline": "Message outline";

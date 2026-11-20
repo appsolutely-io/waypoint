@@ -69,6 +69,9 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.restoredEdit": "Edit",
   "chat.restoredDiscard": "Discard",
   "chat.dismiss": "Dismiss",
+  "chat.historyOlder": "Load older messages",
+  "chat.historyLoading": "Loading older messages…",
+  "chat.historyFailed": "Earlier messages could not be loaded.",
   "chat.latest": "Back to latest",
   "chat.latestNew":
     "{count, plural, one {Back to latest, # new reply} other {Back to latest, # new replies}}",

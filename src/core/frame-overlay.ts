@@ -58,13 +58,15 @@ export class FrameOverlay {
     value: Conversation,
     token: number,
     live: readonly Message[],
+    tokens?: ReadonlyMap<string, number>,
   ): Conversation {
     const included = new Set(value.messages.map((message) => message.id));
     const messages = value.messages.map((message) => {
       const record = this.messages.get(message.id);
       if (!record) return message;
-      const result = merge(message, record.fields, token);
-      if (record.present !== undefined && token > record.present)
+      const messageToken = tokens?.get(message.id) ?? token;
+      const result = merge(message, record.fields, messageToken);
+      if (record.present !== undefined && messageToken > record.present)
         record.present = undefined;
       if (!record.fields.size && record.present === undefined)
         this.messages.delete(message.id);

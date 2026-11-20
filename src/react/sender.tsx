@@ -3,7 +3,10 @@ import type { Message } from "../protocol/generated";
 import type { FormatMessage } from "./i18n";
 import { showsImage, type MarkdownImagePolicy } from "./image-policy";
 
-export function senderName(message: Message, format: FormatMessage): string {
+export function senderName(
+  message: Pick<Message, "role" | "sender">,
+  format: FormatMessage,
+): string {
   return (
     message.sender?.name ??
     format(

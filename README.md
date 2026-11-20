@@ -293,6 +293,30 @@ For a protected test endpoint, keep a UTF-8 JSON string header map in a private 
 
 The protocol documents (this README and `docs/`) state requirements in plain English ("must", "never", "only"), binding as written. [The reply protocol](docs/reply-protocol.md), which covers stopping a reply and the other reply features a host can offer, uses the capitalised key words; the others do not use the capitalised key words of [BCP 14](https://www.rfc-editor.org/info/bcp14) ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)). The schema uses [JSON Schema 2020-12](https://json-schema.org/draft/2020-12). YAML parsing uses [js-yaml's JSON schema](https://github.com/nodeca/js-yaml), rejecting duplicate keys, aliases and executable tags. API snapshots use [API Extractor reports](https://api-extractor.com/pages/setup/configure_api_report/). The antd skin follows its [token and algorithm APIs](https://ant.design/docs/react/customize-theme/).
 
+**Paged conversation history.** Existing `TransportPort.read(conversationId, context?)` still returns the whole conversation. A host with complete history indexing can opt into `readPage(conversationId, input)`; the client then uses that port for reads. Route and authentication remain host-owned. For example, when `existingTransport` and `hostPages` are supplied by the application:
+
+```ts
+import type {
+  ConversationPage,
+  ConversationPageInput,
+  TransportPort,
+} from "@appsolutely-io/waypoint";
+
+const transport: TransportPort = {
+  ...existingTransport,
+  readPage: (
+    conversationId: string,
+    input: ConversationPageInput,
+  ): Promise<ConversationPage> => hostPages.read({ conversationId, ...input }),
+};
+```
+
+`ConversationPageInput` supplies captured pending `clientMessageIds`, a portable cancellation `signal`, optional negotiated `context`, and mutually exclusive `cursor`/`aroundMessageId` selectors. A cursor requires its `snapshotId`; neither selector means the latest page. Forward the signal and binding to the real request. Each `ConversationPage` returns `{ conversation, snapshotId, olderCursor, outline, heldClientMessageIds }`, or `{ stale: true }` for an invalidated cursor. The conversation has this page's bodies and normal metadata; `outline` contains **every** message in order, each `{ id, role, sender?, revision, text }`. A revision changes whenever any body, status, version, block answer, sender or source changes. `text` is the host's plain, reader-visible excerpt/filter text. Receipts may name only the pending ids requested by that call. Tail-only appends keep backward cursors usable.
+
+The first read loads only the latest page. The transcript's top control and older-boundary scrolling load one predecessor at a time; the outline searches the complete host index, and selecting an unloaded entry loads its predecessors before moving focus. Feed positions count the full index plus live-only frames. `snapshot.history` exposes the authoritative outline and `hasOlder`/`loading`/`failed`; headless hosts call `client.loadOlder()` or `client.loadMessage(id)`. Stream-only messages join the effective outline without invented host revision tokens.
+
+A latest refresh retains unchanged loaded history. Changed loaded revisions are fetched privately with `aroundMessageId`, sharing a page when possible, before metadata, bodies, outline and receipts publish together. Failed or malformed aggregates retain the prior visible snapshot/outbox. Historical pages cannot replace newer metadata or revisions; stream writes remain protected by the snapshot's original read generation. Conversation/binding/target changes and superseding latest reads cancel real page requests; frames alone do not. An explicit Retry handles invalid cursor chains. Complete outlines and receipts cost host indexing work and index bandwidth; they avoid eager body loading without losing all-history navigation/search. A host lacking those guarantees must keep full reads. See [conversation reads](docs/reply-protocol.md#conversation-reads).
+
 **Message senders and notices.** Optional `Message.sender` and `message.start.sender` carry `{ id, name, avatarUrl? }`. The nonempty display name (up to 80 characters) labels the message visibly and accessibly, including custom bubbles; bubble/action parts receive detached sender data. Sender metadata never grants actions. Avatars are decorative, capped in size, retain the name on errors, and require both the safe URL policy and explicit `markdownImages` origin/allow permission. `extraUrlSchemes` alone does not permit image downloads.
 
 The `notice-messages` capability opts into `role: "notice"` in reads and starts. Hosts must intersect the client's offer before sending notices and omit notice-only entries for older clients. Notices stay in the transcript, feed, outline and anchors, and can Copy; they never gain Edit, Regenerate, ratings, Stop or version selection. They do not create reply waiting, erase an unanswered user's wait or interrupt an active writer. Missing sender fields keep the exact legacy role labels. Exhaustive role switches must handle the new notice member.

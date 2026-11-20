@@ -88,7 +88,9 @@ export type WaypointProtocol =
   | LeaveAcknowledgment
   | DecisionVersions
   | KeptFact
-  | FinalHistory;
+  | FinalHistory
+  | OutlineMessage
+  | ConversationPage;
 export type Plan = ImmediateDraft | ImmediatePlan | TimedPlan;
 export type PlanState =
   | 'proposed'
@@ -222,6 +224,17 @@ export type CreateConversation = {
   field?: string;
   clientCreationId?: string;
 };
+export type ConversationPage =
+  | {
+      conversation: Conversation;
+      snapshotId: string;
+      olderCursor: string | null;
+      outline: OutlineMessage[];
+      heldClientMessageIds: string[];
+    }
+  | {
+      stale: true;
+    };
 
 /**
  * Safe host-defined enumerated detail; never raw provider text.
@@ -1010,4 +1023,11 @@ export interface PatchFlow {
   flowId: string;
   favourite: boolean;
   title: string;
+}
+export interface OutlineMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'notice';
+  sender?: MessageSender;
+  revision: string;
+  text: string;
 }

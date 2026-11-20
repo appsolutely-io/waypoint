@@ -11,7 +11,7 @@ import { resolve } from "node:path";
 import { expect, it } from "vitest";
 import ts from "typescript";
 
-import { collect, options } from "../../scripts/problem-ids.mjs";
+import { collect, options, undocumented } from "../../scripts/problem-ids.mjs";
 
 const generated = resolve("src/protocol/generated.ts");
 
@@ -36,6 +36,10 @@ it("the problem id collector uses Problem types for spreads and excludes action 
     asProblem(null, "normalizer-id");
     if (base.id === "selector-id") report(spread);
     ["member-id"].includes(base.id);
+    const readonlyIds: readonly string[] = ["readonly-member-id"] as const;
+    readonlyIds.includes(base.id);
+    (["asserted-member-id"] as readonly string[]).includes(base.id);
+    ((["checked-member-id"] satisfies readonly string[])).includes(base.id);
   `;
   const host = ts.createCompilerHost(options);
   const read = host.readFile.bind(host);
@@ -58,7 +62,8 @@ it("the problem id collector uses Problem types for spreads and excludes action 
   host.readFile = (name) => fixtures.get(name) ?? read(name);
   host.fileExists = (name) => fixtures.has(name) || exists(name);
   const program = ts.createProgram([file, helper, generated], options, host);
-  expect(collect(program, [file, helper])).toEqual(
+  const ids = collect(program, [file, helper]);
+  expect(ids).toEqual(
     new Set([
       "base-id",
       "spread-id",
@@ -71,8 +76,18 @@ it("the problem id collector uses Problem types for spreads and excludes action 
       "normalizer-id",
       "selector-id",
       "member-id",
+      "readonly-member-id",
+      "asserted-member-id",
+      "checked-member-id",
     ]),
   );
+  const sentence = [...ids].map((id) => `\`${id}\``).join(" ");
+  for (const id of [
+    "readonly-member-id",
+    "asserted-member-id",
+    "checked-member-id",
+  ])
+    expect(undocumented(ids, sentence.replace(`\`${id}\``, ""))).toContain(id);
 });
 
 it("lint invokes the fixed problem id inventory and propagates a scan failure", () => {

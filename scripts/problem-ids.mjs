@@ -54,17 +54,31 @@ function collect(program, files) {
   const hasProblemId = (node) =>
     problemId(node) ||
     !!ts.forEachChild(node, (child) => hasProblemId(child) || undefined);
+  const unwrapped = (node) => {
+    while (
+      ts.isParenthesizedExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isTypeAssertionExpression(node) ||
+      ts.isSatisfiesExpression(node) ||
+      ts.isNonNullExpression(node)
+    )
+      node = node.expression;
+    return node;
+  };
   const array = (node) => {
-    if (ts.isArrayLiteralExpression(node)) return node;
-    if (ts.isIdentifier(node)) {
-      const declaration = checker.getSymbolAtLocation(node)?.valueDeclaration;
+    const expression = unwrapped(node);
+    if (ts.isArrayLiteralExpression(expression)) return expression;
+    if (ts.isIdentifier(expression)) {
+      const declaration =
+        checker.getSymbolAtLocation(expression)?.valueDeclaration;
       if (
         declaration &&
         ts.isVariableDeclaration(declaration) &&
-        declaration.initializer &&
-        ts.isArrayLiteralExpression(declaration.initializer)
-      )
-        return declaration.initializer;
+        declaration.initializer
+      ) {
+        const initializer = unwrapped(declaration.initializer);
+        if (ts.isArrayLiteralExpression(initializer)) return initializer;
+      }
     }
     return undefined;
   };

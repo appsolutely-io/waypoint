@@ -5,6 +5,24 @@ import { createPlanRunner, PlanReadRefused, type RunnerPorts } from "./runner";
 import { semanticKey, type CoreIntentKind } from "./same-intent";
 import { createScope, onAbort, type Scope, type ScopeSignal } from "./scope";
 import type { OnDemand } from "./on-demand";
+import { FrameOverlay } from "./frame-overlay";
+import {
+  frameDeadline,
+  normalizeReplyConversation,
+  normalizeReplyFrame,
+  replyDecision,
+  sameReplyOwner,
+  REPLY_STALL_MS,
+  type ReplyBusy,
+  type ReplyDecisionInput,
+  type ReplyOwner,
+  type ReplyPresentation,
+} from "./reply-state";
+export type {
+  ReplyBusy,
+  ReplyDecisionInput,
+  ReplyPresentation,
+} from "./reply-state";
 import {
   conversationTail,
   observeReplyFailure,
@@ -241,10 +259,18 @@ export interface PendingSend {
   extensions?: Record<string, unknown>;
 }
 export type ReplyState =
-  "none" | "writing" | "unavailable" | "failed" | "overdue";
+  | "none"
+  | "writing"
+  | "unavailable"
+  | "failed"
+  | "overdue"
+  | "expected"
+  | "expected-overdue";
 export interface ClientSnapshot {
   protocol: string | null;
   replyState: ReplyState;
+  replyPresentation?: ReplyPresentation;
+  replyBusy?: ReplyBusy;
   conversationId: string;
   conversation: Conversation | null;
   conversationUnavailable: boolean;
@@ -660,6 +686,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     conversationScope = createScope("conversation", clientScope.signal);
   };
   let readGeneration = 0;
+  const overlays = new FrameOverlay();
+  let presentationOwner: ReplyOwner | undefined;
+  let completedTailId: string | undefined;
   // Every plan read owns a scope under the conversation scope. A newer
   // "latest" read (frame or recovery) aborts older ones, and any plan
   // publication aborts every read still pending, so a read publishes only if
@@ -728,7 +757,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       replyTimer = undefined;
     }
     const now = config.platform.clock.now();
-    const latest = state.conversation?.messages.at(-1);
+    const latest = conversationTail(state.conversation?.messages ?? []);
     const streaming =
       latest?.role === "assistant" && latest.status === "writing";
     if (!streaming) replyProgress = undefined;
@@ -737,46 +766,44 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       replyProgress.content !== latest.content
     )
       replyProgress = { id: latest.id, content: latest.content, at: now };
-    const activityAt = streaming ? replyProgress?.at : undefined;
+    const input = {
+      messages: state.conversation?.messages ?? [],
+      pending: state.pending,
+      now,
+      conversation: state.conversation,
+      overdueAt: state.conversation?.replyOverdueAt ?? undefined,
+      unavailable: failureStatus === "unavailable",
+      failed: failureStatus === "failed",
+      streamLost: state.streamUnavailable,
+      activityAt: streaming ? replyProgress?.at : undefined,
+      heldUntil: waitUntil,
+      version:
+        latest &&
+        (started.has(latest.id)
+          ? startedAt.get(latest.id)?.version
+          : versionOf(latest)),
+      generation: streaming ? startGenerations.get(latest.id) : undefined,
+      completeTailId: completedTailId,
+    };
+    let decision = replyDecision(input);
+    if (!sameReplyOwner(presentationOwner, decision.owner)) {
+      waitUntil = undefined;
+      decision = replyDecision({ ...input, heldUntil: undefined });
+    }
+    presentationOwner = decision.owner;
+    if (decision.state === "none") waitUntil = undefined;
     state = {
       ...state,
       planReadOnly: readOnly(state.plan),
-      replyState: replyRow({
-        messages: state.conversation?.messages ?? [],
-        pending: state.pending,
-        now: config.platform.clock.now(),
-        overdueAt: state.conversation?.replyOverdueAt ?? undefined,
-        unavailable: failureStatus === "unavailable",
-        failed: failureStatus === "failed",
-        streamLost: state.streamUnavailable,
-        activityAt,
-        heldUntil: waitUntil,
-      }),
+      replyState: decision.state,
+      replyPresentation: decision.presentation,
+      replyBusy: decision.busy,
     };
-    if (state.replyState === "none") waitUntil = undefined;
-    // A reply that stops arriving turns overdue on its own.
-    if (state.replyState === "writing" && activityAt !== undefined) {
-      const delay = Math.max(activityAt + REPLY_STALL_MS, waitUntil ?? 0) - now;
-      if (delay > 0)
-        replyTimer = config.platform.clock.setTimeout(() => {
-          replyTimer = undefined;
-          update({});
-        }, delay);
-    }
-    const last = state.conversation?.messages.at(-1);
-    if (state.replyState === "writing" && last?.role === "user") {
-      const delay =
-        Math.max(
-          last.createdAt + 15000,
-          state.conversation?.replyOverdueAt ?? 0,
-          waitUntil ?? 0,
-        ) - config.platform.clock.now();
-      if (delay > 0)
-        replyTimer = config.platform.clock.setTimeout(() => {
-          replyTimer = undefined;
-          update({});
-        }, delay);
-    }
+    if (decision.at !== undefined && decision.at > now)
+      replyTimer = config.platform.clock.setTimeout(() => {
+        replyTimer = undefined;
+        update({});
+      }, decision.at - now);
     for (const fn of listeners) fn();
   };
   const emit = (event: WaypointEvent) => {
@@ -1112,6 +1139,15 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         ),
       },
     });
+  const framePatch = (
+    id: string,
+    change: (message: Message) => Partial<Message>,
+  ) =>
+    patch(id, (message) => {
+      const next = change(message);
+      overlays.writeMessage(message, next, readGeneration);
+      return next;
+    });
   const setStatus = (id: string, status: Status) =>
     patch(id, () => ({ status }));
   const markAs = (id: string, status: Status, read?: Status) =>
@@ -1143,6 +1179,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   // The version of each reply that started on the stream: a message keeps
   // the previous version's number until a read shows the new one.
   const started = new Map<string, number | undefined>();
+  const startedAt = new Map<string, { at: number; version?: number }>();
   const startGenerations = new Map<string, number>();
   let nextStart = 0;
   const versionOf = (message: Message) =>
@@ -1162,15 +1199,6 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       : undefined;
   };
   const withStops = (message: Message): Message => {
-    const known = started.get(message.id);
-    // A read that shows the version written, or a later one, numbers it.
-    if (
-      started.has(message.id) &&
-      (known === undefined
-        ? message.status === "writing"
-        : (message.versionIndex ?? 1) >= known)
-    )
-      started.delete(message.id);
     const stop = stopped.get(message.id);
     return stop &&
       message.status === "writing" &&
@@ -1179,10 +1207,30 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       ? { ...message, status: "stopped", content: stop.content }
       : message;
   };
-  const withMarks = (conversation: Conversation, token: number) => ({
-    ...conversation,
-    messages: shownWithMarks(conversation, token).map(withStops),
-  });
+  const withMarks = (conversation: Conversation, token: number) => {
+    for (const message of conversation.messages) {
+      const known = startedAt.get(message.id)?.version;
+      if (
+        started.has(message.id) &&
+        token > (startedAt.get(message.id)?.at ?? -1) &&
+        (known === undefined
+          ? message.status === "writing"
+          : (message.versionIndex ?? 1) >= known)
+      ) {
+        started.delete(message.id);
+        startedAt.delete(message.id);
+      }
+    }
+    const next = overlays.apply(
+      {
+        ...conversation,
+        messages: shownWithMarks(conversation, token),
+      },
+      token,
+      state.conversation?.messages ?? [],
+    );
+    return { ...next, messages: next.messages.map(withStops) };
+  };
   const shownWithMarks = (conversation: Conversation, token: number) => {
     const before = state.conversation?.messages ?? [];
     return conversation.messages.map((message) => {
@@ -1193,8 +1241,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         if (!message.status) mark.status = undefined;
       }
       if (!mark.status) return message;
-      if (token <= mark.at)
-        return before.find((shown) => shown.id === message.id) ?? message;
+      if (token <= mark.at) {
+        const prior = before.find((shown) => shown.id === message.id);
+        return { ...message, status: prior ? prior.status : mark.status };
+      }
       mark.read = message.status;
       if (message.status && message.status !== "writing") {
         mark.status = message.status;
@@ -1232,10 +1282,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const bound = agreement;
     try {
       const raw = await config.transport.read(id, requestContext());
-      const conversation =
-        raw.replyFailure === undefined
-          ? raw
-          : { ...raw, replyFailure: normalizeReplyFailure(raw.replyFailure) };
+      const conversation = normalizeReplyConversation({
+        ...raw,
+        ...(raw.replyFailure !== undefined && {
+          replyFailure: normalizeReplyFailure(raw.replyFailure),
+        }),
+      });
       if (scope.aborted || owner?.aborted || isDisposed())
         return { kind: "superseded", conversationId: id };
       if (
@@ -1246,7 +1298,15 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             appliedRead.result.kind === "missing"))
       )
         return { kind: "superseded", conversationId: id };
-      observeReplyFailure(failureMemory, conversation);
+      const adoptedConversation = withMarks(conversation, token);
+      completedTailId =
+        conversation.replyStatus === "complete"
+          ? conversationTail(conversation.messages)?.id
+          : undefined;
+      observeReplyFailure(failureMemory, {
+        ...adoptedConversation,
+        messages: conversation.messages,
+      });
       for (const message of conversation.messages)
         if (message.clientMessageId && viewRow(message.clientMessageId))
           queued.push({ kind: "remove", id: message.clientMessageId });
@@ -1263,7 +1323,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       // throws on that snapshot.
       try {
         update({
-          conversation: withMarks(conversation, token),
+          conversation: adoptedConversation,
           conversationUnavailable: false,
           ...(["conversation-read", "conversation-unavailable"].includes(
             state.problem?.id ?? "",
@@ -1414,6 +1474,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     readFailed: boolean,
   ) => {
     if (isDisposed() || scope.aborted) return;
+    frame = normalizeReplyFrame(frame);
     if (formMode() && sensitiveFrame(frame)) {
       report({ code: "refused", id: "form-tools" });
       return;
@@ -1510,26 +1571,31 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       "messageId" in frame &&
       state.conversation?.messages.find((m) => m.id === frame.messageId);
     if (frame.type === "message.start" && frame.role === "assistant") {
+      if (
+        shown &&
+        (shown.role !== "assistant" ||
+          (frame.versionIndex !== undefined &&
+            versionOf(shown) !== undefined &&
+            frame.versionIndex < versionOf(shown)!))
+      )
+        return;
       for (const record of failureMemory.values()) record.retired = true;
+      const cleared = {
+        replyFailure: undefined,
+        replyStatus: undefined,
+        replyLabel: undefined,
+        replyExpectedId: undefined,
+      };
+      overlays.writeConversation(cleared, readGeneration);
       if (state.conversation)
-        update({
-          conversation: {
-            ...state.conversation,
-            replyFailure: undefined,
-            ...(["failed", "unavailable"].includes(
-              state.conversation.replyStatus ?? "",
-            )
-              ? { replyStatus: undefined }
-              : {}),
-          },
-        });
+        update({ conversation: { ...state.conversation, ...cleared } });
     }
     if (frame.type === "text.delta" && stopOf(frame.messageId)) return;
     if (frame.type === "text.delta") {
       // A reply that went on after its mark was dropped is written again.
       const again = mark && mark.binding === stream && !mark.status;
       if (again) markAs(frame.messageId, "writing", mark.read);
-      patch(frame.messageId, (message) => ({
+      framePatch(frame.messageId, (message) => ({
         content: message.content + frame.text,
         ...(again && { status: "writing" as const }),
       }));
@@ -1543,17 +1609,23 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       // replaced, never joined. Over a reply that ended it is the next
       // version, numbered only when this client knows the host keeps
       // versions; over one being written, the same version again.
-      const version = !shown
-        ? 1
-        : shown.status === "writing"
-          ? versionOf(shown)
-          : config.versions
-            ? Math.max(
-                shown.versionCount ?? 1,
-                started.get(frame.messageId) ?? 0,
-              ) + 1
-            : undefined;
+      const version =
+        frame.versionIndex ??
+        (!shown
+          ? 1
+          : shown.status === "writing"
+            ? versionOf(shown)
+            : config.versions
+              ? Math.max(
+                  shown.versionCount ?? 1,
+                  started.get(frame.messageId) ?? 0,
+                ) + 1
+              : undefined);
       started.set(frame.messageId, version);
+      startedAt.set(frame.messageId, {
+        at: readGeneration,
+        version: frame.versionIndex,
+      });
       startGenerations.set(frame.messageId, ++nextStart);
       const stop = stopped.get(frame.messageId);
       if (
@@ -1564,10 +1636,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       )
         stopped.delete(frame.messageId);
       markAs(frame.messageId, "writing", mark?.read);
-      patch(frame.messageId, () => ({
+      framePatch(frame.messageId, () => ({
         status: "writing",
         content: "",
         blocks: [],
+        ...(frame.versionIndex !== undefined && {
+          versionIndex: frame.versionIndex,
+        }),
       }));
     }
     if (
@@ -1587,22 +1662,38 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       setStatus(frame.messageId, frame.status);
     }
     if (frame.type === "message.start" && state.conversation && !shown) {
+      const message: Message = {
+        id: frame.messageId,
+        role: frame.role,
+        content: "",
+        blocks: [],
+        createdAt: config.platform.clock.now(),
+        ...(frame.versionIndex !== undefined && {
+          versionIndex: frame.versionIndex,
+        }),
+        ...(frame.role === "assistant" && { status: "writing" as const }),
+      };
+      overlays.writeMessage(message, message, readGeneration, true);
       update({
         conversation: {
           ...state.conversation,
-          messages: [
-            ...state.conversation.messages,
-            {
-              id: frame.messageId,
-              role: frame.role,
-              content: "",
-              blocks: [],
-              createdAt: config.platform.clock.now(),
-              ...(frame.role === "assistant" && { status: "writing" as const }),
-            },
-          ],
+          messages: [...state.conversation.messages, message],
         },
       });
+    }
+    if (
+      (frame.type === "message.start" || frame.type === "stale") &&
+      state.conversation
+    ) {
+      const deadline = frameDeadline(
+        frame,
+        state.conversation,
+        presentationOwner,
+      );
+      if (deadline) {
+        overlays.writeConversation(deadline, readGeneration);
+        update({ conversation: { ...state.conversation, ...deadline } });
+      }
     }
     if (frame.type === "stale" || frame.type === "message.end")
       void refresh(scope);
@@ -1721,6 +1812,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   const newStream = (): StreamBinding => {
     stream?.scope.abort();
     dropMarks(stream);
+    overlays.clear();
     stream = {
       scope: createScope("stream", conversationScope.signal),
       failures: 0,
@@ -2721,7 +2813,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       const ended = endedReply();
       if (
         ended ||
-        (state.replyState === "failed" && last?.role === "assistant")
+        ((state.replyState === "failed" || state.replyState === "overdue") &&
+          last?.role === "assistant")
       )
         if (config.versions) return client.regenerate((ended ?? last)!.id);
         else if (ended) return Promise.resolve();
@@ -2780,19 +2873,15 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       observers.clear();
     },
   };
-  // The reply the host ended as failed or unavailable, when the reply row
-  // says so: the last message, from the assistant.
   const endedReply = () => {
-    const last = state.conversation?.messages.at(-1);
+    const last = conversationTail(state.conversation?.messages ?? []);
     return last?.role === "assistant" &&
-      (last.status === "failed" || last.status === "unavailable") &&
-      state.replyState === last.status
+      (last.status === "failed" || last.status === "unavailable")
       ? last
       : undefined;
   };
-  // The reply being written, if any: the last message, from the assistant.
   const stoppable = () => {
-    const last = state.conversation?.messages.at(-1);
+    const last = conversationTail(state.conversation?.messages ?? []);
     return last?.role === "assistant" &&
       last.status === "writing" &&
       !["failed", "unavailable"].includes(state.replyState)
@@ -2883,6 +2972,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     livePendingIds.clear();
     failureMemory.clear();
     startGenerations.clear();
+    started.clear();
+    startedAt.clear();
+    stopped.clear();
+    overlays.clear();
+    waitUntil = undefined;
+    presentationOwner = undefined;
+    completedTailId = undefined;
+    replyProgress = undefined;
     pendingRestoration = {
       visit: pendingRestoration.visit + 1,
       ids: sameConversation ? stored.pending.map((row) => row.id) : [],
@@ -3418,64 +3515,8 @@ const PROBLEM_CODES: readonly Problem["code"][] = [
   "plan-changed",
   "agreement-expired",
 ];
-/** A reply with nothing new for this long is overdue. */
-const REPLY_STALL_MS = 15000;
-export function replyRow(input: {
-  messages: readonly Message[];
-  pending: readonly PendingSend[];
-  now: number;
-  askedAt?: number;
-  overdueAt?: number;
-  heldUntil?: number;
-  unavailable?: boolean;
-  failed?: boolean;
-  /** The stream that would carry the rest of the reply gave up. */
-  streamLost?: boolean;
-  /**
-   * When the reply being written last made progress, on the caller's clock.
-   * Without it the stall is not measured: the reply stays `writing`.
-   */
-  activityAt?: number;
-}): ReplyState {
-  const last = input.messages.at(-1);
-  // A reply streaming in is being written while it streams. What the host
-  // or the client knows ended it wins: a failed or unavailable reply, or a
-  // stream that gave up, is never shown as being written.
-  if (
-    last?.role === "assistant" &&
-    last.status === "writing" &&
-    !input.pending.some((row) => !row.failure)
-  ) {
-    if (input.unavailable || input.streamLost) return "unavailable";
-    if (input.failed) return "failed";
-    return input.activityAt !== undefined &&
-      input.now >=
-        Math.max(input.activityAt + REPLY_STALL_MS, input.heldUntil ?? 0)
-      ? "overdue"
-      : "writing";
-  }
-  // The host ended the reply without finishing it: the row says so, so the
-  // reply is never taken for a finished one.
-  if (
-    last?.role === "assistant" &&
-    (last.status === "failed" || last.status === "unavailable") &&
-    !input.pending.some((row) => !row.failure)
-  )
-    return last.status;
-  if (last?.role !== "user" && !input.pending.some((row) => !row.failure))
-    return "none";
-  if (input.pending.some((row) => !row.failure)) return "writing";
-  if (input.unavailable) return "unavailable";
-  if (input.failed) return "failed";
-  return input.now >=
-    Math.max(
-      (last?.createdAt ?? input.now) + 15000,
-      (input.askedAt ?? 0) + 15000,
-      input.overdueAt ?? 0,
-      input.heldUntil ?? 0,
-    )
-    ? "overdue"
-    : "writing";
+export function replyRow(input: ReplyDecisionInput): ReplyState {
+  return replyDecision(input).state;
 }
 export function versionWalk(message: {
   versionIndex?: number | null;

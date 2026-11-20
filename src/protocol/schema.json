@@ -1715,6 +1715,22 @@
         "replyOverdueAt": {
           "type": ["number", "null"]
         },
+        "replyOverdueFor": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "replyOverdueVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "replyExpectedId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replyLabel": {
+          "type": ["string", "null"],
+          "maxLength": 200
+        },
         "replyStatus": {
           "enum": ["expected", "unavailable", "failed", "complete"]
         },
@@ -2118,6 +2134,17 @@
         },
         "role": {
           "enum": ["user", "assistant"]
+        },
+        "replyOverdueAt": {
+          "type": ["number", "null"]
+        },
+        "replyOverdueFor": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "versionIndex": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": ["type", "protocol", "sequence", "messageId", "role"]
@@ -2347,6 +2374,17 @@
           "items": {
             "enum": ["conversation", "conversations", "plans", "flows"]
           }
+        },
+        "replyOverdueAt": {
+          "type": ["number", "null"]
+        },
+        "replyOverdueFor": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "versionIndex": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": ["type", "protocol", "sequence", "reads"]

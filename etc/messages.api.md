@@ -126,7 +126,15 @@ export const english: {
     readonly "chat.source": "Source {index}: {title}";
     readonly "reply.unavailable": "Reply unavailable";
     readonly "reply.failed": "Reply failed";
-    readonly "reply.overdue": "Reply overdue";
+    readonly "reply.overdue": "This is taking longer than expected.";
+    readonly "reply.expected": "Waiting for a reply";
+    readonly "reply.expected-overdue": "Still waiting for a reply; this is taking longer than expected.";
+    readonly "reply.waiting": "Waiting for a reply";
+    readonly "reply.writingOverdue": "The reply is still being written and is taking longer than expected.";
+    readonly "reply.waitOverdue": "No reply yet; this is taking longer than expected.";
+    readonly "chat.roleNotice": "Notice";
+    readonly "chat.reply.recoveryGroup": "Reply recovery";
+    readonly "chat.reply.hostActivityGroup": "Host activity";
     readonly "chat.loading": "Loading";
     readonly "chat.before": "Before";
     readonly "chat.after": "After";

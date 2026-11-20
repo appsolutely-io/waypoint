@@ -160,6 +160,10 @@ export type Conversation = {
   title: string;
   messages: Message[];
   replyOverdueAt?: number | null;
+  replyOverdueFor?: string | null;
+  replyOverdueVersion?: number;
+  replyExpectedId?: string;
+  replyLabel?: string | null;
   replyStatus?: 'expected' | 'unavailable' | 'failed' | 'complete';
   replyFailure?: ReplyFailure | null;
   mode?: 'form-fill';
@@ -901,6 +905,9 @@ export interface FrameMessageStart {
   sequence: number;
   messageId: string;
   role: 'user' | 'assistant';
+  replyOverdueAt?: number | null;
+  replyOverdueFor?: string | null;
+  versionIndex?: number;
 }
 export interface FrameTextDelta {
   type: 'text.delta';
@@ -963,6 +970,9 @@ export interface FrameStale {
   protocol: string;
   sequence: number;
   reads: ('conversation' | 'conversations' | 'plans' | 'flows')[];
+  replyOverdueAt?: number | null;
+  replyOverdueFor?: string | null;
+  versionIndex?: number;
 }
 export interface FrameProblem {
   type: 'problem';

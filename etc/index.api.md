@@ -401,7 +401,11 @@ export interface ClientSnapshot {
     problem: Problem | null;
     // (undocumented)
     protocol: string | null;
+    // (undocumented)
+    replyBusy?: ReplyBusy;
     replyFailures?: readonly ReplyFailureRecord[];
+    // (undocumented)
+    replyPresentation?: ReplyPresentation;
     // (undocumented)
     replyState: ReplyState;
     restored: readonly RestoredMessage[];
@@ -523,6 +527,10 @@ export type Conversation = {
     title: string;
     messages: Message[];
     replyOverdueAt?: number | null;
+    replyOverdueFor?: string | null;
+    replyOverdueVersion?: number;
+    replyExpectedId?: string;
+    replyLabel?: string | null;
     replyStatus?: 'expected' | 'unavailable' | 'failed' | 'complete';
     replyFailure?: ReplyFailure | null;
     mode?: 'form-fill';
@@ -946,11 +954,17 @@ export interface FrameMessageStart {
     // (undocumented)
     protocol: string;
     // (undocumented)
+    replyOverdueAt?: number | null;
+    // (undocumented)
+    replyOverdueFor?: string | null;
+    // (undocumented)
     role: 'user' | 'assistant';
     // (undocumented)
     sequence: number;
     // (undocumented)
     type: 'message.start';
+    // (undocumented)
+    versionIndex?: number;
 }
 
 // @public (undocumented)
@@ -1030,9 +1044,15 @@ export interface FrameStale {
     // (undocumented)
     reads: ('conversation' | 'conversations' | 'plans' | 'flows')[];
     // (undocumented)
+    replyOverdueAt?: number | null;
+    // (undocumented)
+    replyOverdueFor?: string | null;
+    // (undocumented)
     sequence: number;
     // (undocumented)
     type: 'stale';
+    // (undocumented)
+    versionIndex?: number;
 }
 
 // @public (undocumented)
@@ -1683,6 +1703,14 @@ export interface ReplyAction {
 }
 
 // @public (undocumented)
+export interface ReplyBusy {
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    overdue: boolean;
+}
+
+// @public (undocumented)
 export interface ReplyConfirm {
     // (undocumented)
     clientReplyId: string;
@@ -1696,6 +1724,38 @@ export interface ReplyConfirm {
     planId: string;
     // (undocumented)
     protocol: string;
+}
+
+// @public (undocumented)
+export interface ReplyDecisionInput {
+    // (undocumented)
+    activityAt?: number;
+    // (undocumented)
+    askedAt?: number;
+    // (undocumented)
+    completeTailId?: string;
+    // (undocumented)
+    conversation?: Conversation | null;
+    // (undocumented)
+    failed?: boolean;
+    // (undocumented)
+    generation?: number;
+    // (undocumented)
+    heldUntil?: number;
+    // (undocumented)
+    messages: readonly Message[];
+    // (undocumented)
+    now: number;
+    // (undocumented)
+    overdueAt?: number;
+    // (undocumented)
+    pending: readonly PendingSend[];
+    // (undocumented)
+    streamLost?: boolean;
+    // (undocumented)
+    unavailable?: boolean;
+    // (undocumented)
+    version?: number;
 }
 
 // @public (undocumented)
@@ -1821,6 +1881,9 @@ export interface ReplyPlanValues {
 }
 
 // @public (undocumented)
+export type ReplyPresentation = "writing" | "waiting" | "expected";
+
+// @public (undocumented)
 export interface ReplyRecoveryInput extends MessageVersionInput {
     // (undocumented)
     kind: "regenerate" | "resend";
@@ -1841,21 +1904,10 @@ export type ReplyRecoveryResult = void | {
 };
 
 // @public (undocumented)
-export function replyRow(input: {
-    messages: readonly Message[];
-    pending: readonly PendingSend[];
-    now: number;
-    askedAt?: number;
-    overdueAt?: number;
-    heldUntil?: number;
-    unavailable?: boolean;
-    failed?: boolean;
-    streamLost?: boolean;
-    activityAt?: number;
-}): ReplyState;
+export function replyRow(input: ReplyDecisionInput): ReplyState;
 
 // @public (undocumented)
-export type ReplyState = "none" | "writing" | "unavailable" | "failed" | "overdue";
+export type ReplyState = "none" | "writing" | "unavailable" | "failed" | "overdue" | "expected" | "expected-overdue";
 
 // @public
 export interface ReplyStop {

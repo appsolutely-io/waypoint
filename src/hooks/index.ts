@@ -65,3 +65,5 @@ export type {
 export type { ScopeSignal } from "../core/scope";
 export type * from "../core/runner";
 export type * from "../core/form-fill";
+
+export type { HostBusyStopControl, ReplyRowView } from "../react/problem-view";

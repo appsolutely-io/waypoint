@@ -110,9 +110,12 @@ import { lazyChunk, useChunk } from "./chunks";
 import {
   pendingProblem,
   visibleProblem,
+  replyRowView,
+  type HostBusyStopControl,
   problemAction,
   problemView,
 } from "./problem-view";
+import { conversationTail } from "../core/reply-recovery";
 // The stock renderer's chunk, shared by every message: loaded once on first
 // use, and tried again after a failure when a message body next asks or a
 // Retry is pressed.
@@ -156,7 +159,11 @@ const LazyConfirmation = lazy(() => import("./confirmation-view"));
 const blocksChunk = lazyChunk(() => import("./blocks"));
 // The controls of the reply being written, loaded when one is first shown.
 const replyControlsChunk = lazyChunk(() => import("./reply-controls"));
-function ReplyControls(props: { client: WaypointClient; row: ReplyState }) {
+function ReplyControls(props: {
+  client: WaypointClient;
+  row: ReplyState;
+  expectedReplyStop?: HostBusyStopControl;
+}) {
   const load = useChunk(replyControlsChunk);
   useEffect(() => replyControlsChunk.request(), []);
   return load.status === "ready" ? (
@@ -400,6 +407,7 @@ export interface WaypointProviderProps {
     problem: Problem,
     context?: { answeredElsewhere: boolean },
   ) => { text: string; action?: ReactNode };
+  expectedReplyStop?: HostBusyStopControl;
   replyFailureText?: (failure: ReplyFailure) => {
     text: string;
     action?: ReactNode;
@@ -2392,18 +2400,24 @@ function ChatBody({
   const row = state.replyState;
   // The reply being written, while the reply row says so: whatever ended it
   // (a failure, a lost stream) ends its busy state too.
-  const last = messages.at(-1);
+  const last = conversationTail(messages);
   const writingId =
-    row === "writing" && last?.status === "writing" ? last.id : undefined;
+    (row === "writing" || row === "overdue") &&
+    last?.role === "assistant" &&
+    last.status === "writing"
+      ? last.id
+      : undefined;
   // The host ended the reply itself: the reply says so, and the message
   // region announces it, so the row's live region stays quiet.
   const endedInReply =
     last?.role === "assistant" &&
-    (last.status === "failed" || last.status === "unavailable") &&
-    row === last.status;
+    (last.status === "failed" || last.status === "unavailable");
   // Held while a modal drawer makes the row inert; said once it is live.
   const replyRow = useRef<HTMLDivElement>(null);
   const heldRow = useHeldWhileInert(row, replyRow);
+  const rowView = replyRowView(heldRow, {
+    presentation: state.replyPresentation,
+  });
   const respond = (block: Block, messageId: string) => (reply: CardAnswer) => {
     const pressed = deepActiveElement(document);
     const id = cardReplyId(state.conversationId, messageId, block.id, reply);
@@ -2962,7 +2976,11 @@ function ChatBody({
             </Part>
             <Part name="replyRow" slots={slots}>
               <div ref={replyRow} role="status" data-reply-state={row}>
-                {heldRow === "none" || endedInReply || activeFailure ? null : (
+                {heldRow === "none" ||
+                heldRow === "expected" ||
+                heldRow === "expected-overdue" ||
+                endedInReply ||
+                activeFailure ? null : (
                   <p
                     // A reply being written shows it in its bubble: the row
                     // says it once, to assistive technology only.
@@ -2972,7 +2990,7 @@ function ChatBody({
                         : undefined
                     }
                   >
-                    {t(`reply.${heldRow}`)}
+                    {rowView.key ? t(rowView.key) : null}
                   </p>
                 )}
               </div>
@@ -2980,7 +2998,11 @@ function ChatBody({
                 <ReplyFailureText failure={unanchoredFailure} announce />
               ) : null}
               {row !== "none" || state.toolSteps.length ? (
-                <ReplyControls client={client} row={row} />
+                <ReplyControls
+                  client={client}
+                  row={row}
+                  expectedReplyStop={provider.expectedReplyStop}
+                />
               ) : null}
             </Part>
             {narrow ? planPanel : null}

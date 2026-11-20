@@ -33,7 +33,6 @@ it("the injected clock advances a quiet reply to overdue", async () => {
             createdAt: 0,
           },
         ],
-        replyStatus: "expected",
         replyOverdueAt: 20000,
       }),
     },

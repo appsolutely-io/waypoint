@@ -499,7 +499,11 @@ export interface ClientSnapshot {
     problem: Problem | null;
     // (undocumented)
     protocol: string | null;
+    // (undocumented)
+    replyBusy?: ReplyBusy;
     replyFailures?: readonly ReplyFailureRecord[];
+    // (undocumented)
+    replyPresentation?: ReplyPresentation;
     // (undocumented)
     replyState: ReplyState;
     restored: readonly RestoredMessage[];
@@ -605,6 +609,10 @@ export type Conversation = {
     title: string;
     messages: Message[];
     replyOverdueAt?: number | null;
+    replyOverdueFor?: string | null;
+    replyOverdueVersion?: number;
+    replyExpectedId?: string;
+    replyLabel?: string | null;
     replyStatus?: 'expected' | 'unavailable' | 'failed' | 'complete';
     replyFailure?: ReplyFailure | null;
     mode?: 'form-fill';
@@ -839,7 +847,15 @@ export const english: {
     readonly "chat.source": "Source {index}: {title}";
     readonly "reply.unavailable": "Reply unavailable";
     readonly "reply.failed": "Reply failed";
-    readonly "reply.overdue": "Reply overdue";
+    readonly "reply.overdue": "This is taking longer than expected.";
+    readonly "reply.expected": "Waiting for a reply";
+    readonly "reply.expected-overdue": "Still waiting for a reply; this is taking longer than expected.";
+    readonly "reply.waiting": "Waiting for a reply";
+    readonly "reply.writingOverdue": "The reply is still being written and is taking longer than expected.";
+    readonly "reply.waitOverdue": "No reply yet; this is taking longer than expected.";
+    readonly "chat.roleNotice": "Notice";
+    readonly "chat.reply.recoveryGroup": "Reply recovery";
+    readonly "chat.reply.hostActivityGroup": "Host activity";
     readonly "chat.loading": "Loading";
     readonly "chat.before": "Before";
     readonly "chat.after": "After";
@@ -1231,11 +1247,17 @@ export interface FrameMessageStart {
     // (undocumented)
     protocol: string;
     // (undocumented)
+    replyOverdueAt?: number | null;
+    // (undocumented)
+    replyOverdueFor?: string | null;
+    // (undocumented)
     role: 'user' | 'assistant';
     // (undocumented)
     sequence: number;
     // (undocumented)
     type: 'message.start';
+    // (undocumented)
+    versionIndex?: number;
 }
 
 // @public (undocumented)
@@ -1315,9 +1337,15 @@ export interface FrameStale {
     // (undocumented)
     reads: ('conversation' | 'conversations' | 'plans' | 'flows')[];
     // (undocumented)
+    replyOverdueAt?: number | null;
+    // (undocumented)
+    replyOverdueFor?: string | null;
+    // (undocumented)
     sequence: number;
     // (undocumented)
     type: 'stale';
+    // (undocumented)
+    versionIndex?: number;
 }
 
 // @public (undocumented)
@@ -1344,6 +1372,18 @@ export interface FrameToolCall {
     sequence: number;
     // (undocumented)
     type: 'tool.call';
+}
+
+// @public (undocumented)
+export interface HostBusyStopControl {
+    // (undocumented)
+    busy?: boolean;
+    // (undocumented)
+    disabled?: boolean;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    onPress(): MaybePromise<void>;
 }
 
 // @public
@@ -2303,6 +2343,14 @@ export interface ReplyAction {
 }
 
 // @public (undocumented)
+export interface ReplyBusy {
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    overdue: boolean;
+}
+
+// @public (undocumented)
 export type ReplyCatalogue = Readonly<Record<ReplyMessageKey, string>>;
 
 // @public (undocumented)
@@ -2319,6 +2367,38 @@ export interface ReplyConfirm {
     planId: string;
     // (undocumented)
     protocol: string;
+}
+
+// @public (undocumented)
+export interface ReplyDecisionInput {
+    // (undocumented)
+    activityAt?: number;
+    // (undocumented)
+    askedAt?: number;
+    // (undocumented)
+    completeTailId?: string;
+    // (undocumented)
+    conversation?: Conversation | null;
+    // (undocumented)
+    failed?: boolean;
+    // (undocumented)
+    generation?: number;
+    // (undocumented)
+    heldUntil?: number;
+    // (undocumented)
+    messages: readonly Message[];
+    // (undocumented)
+    now: number;
+    // (undocumented)
+    overdueAt?: number;
+    // (undocumented)
+    pending: readonly PendingSend[];
+    // (undocumented)
+    streamLost?: boolean;
+    // (undocumented)
+    unavailable?: boolean;
+    // (undocumented)
+    version?: number;
 }
 
 // @public (undocumented)
@@ -2447,6 +2527,9 @@ export interface ReplyPlanValues {
 }
 
 // @public (undocumented)
+export type ReplyPresentation = "writing" | "waiting" | "expected";
+
+// @public (undocumented)
 export interface ReplyRecoveryInput extends MessageVersionInput {
     // (undocumented)
     kind: "regenerate" | "resend";
@@ -2467,21 +2550,48 @@ export type ReplyRecoveryResult = void | {
 };
 
 // @public (undocumented)
-export function replyRow(input: {
-    messages: readonly Message[];
-    pending: readonly PendingSend[];
-    now: number;
-    askedAt?: number;
-    overdueAt?: number;
-    heldUntil?: number;
-    unavailable?: boolean;
-    failed?: boolean;
-    streamLost?: boolean;
-    activityAt?: number;
-}): ReplyState;
+export function replyRow(input: ReplyDecisionInput): ReplyState;
 
 // @public (undocumented)
-export type ReplyState = "none" | "writing" | "unavailable" | "failed" | "overdue";
+export interface ReplyRowAction {
+    // (undocumented)
+    id: "keepWaiting" | "retry" | "stop" | "hostStop";
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    labelKey: MessageKey;
+}
+
+// @public (undocumented)
+export interface ReplyRowView {
+    // (undocumented)
+    actions: ReplyRowAction[];
+    // (undocumented)
+    busy?: {
+        kind: "expected" | "expected-overdue";
+        key: MessageKey;
+        label?: string;
+        stop?: HostBusyStopControl;
+        actions: ReplyRowAction[];
+    };
+    // (undocumented)
+    key?: MessageKey;
+}
+
+// @public (undocumented)
+export function replyRowView(state: ReplyState, options?: {
+    canStop?: boolean;
+    canRetry?: boolean;
+    canRegenerate?: boolean;
+    recovery?: "regenerate" | "resend" | "none";
+    presentation?: ReplyPresentation;
+    busy?: ReplyBusy;
+    replyLabel?: string | null;
+    expectedReplyStop?: HostBusyStopControl;
+}): ReplyRowView;
+
+// @public (undocumented)
+export type ReplyState = "none" | "writing" | "unavailable" | "failed" | "overdue" | "expected" | "expected-overdue";
 
 // @public
 export interface ReplyStop {
@@ -2995,6 +3105,8 @@ export interface WaypointProviderProps {
     colorScheme?: "light" | "dark";
     // (undocumented)
     dir?: "ltr" | "rtl";
+    // (undocumented)
+    expectedReplyStop?: HostBusyStopControl;
     // (undocumented)
     extraUrlSchemes?: readonly string[];
     // (undocumented)

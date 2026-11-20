@@ -110,7 +110,17 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.source": "Source {index}: {title}",
   "reply.unavailable": "Reply unavailable",
   "reply.failed": "Reply failed",
-  "reply.overdue": "Reply overdue",
+  "reply.overdue": "This is taking longer than expected.",
+  "reply.expected": "Waiting for a reply",
+  "reply.expected-overdue":
+    "Still waiting for a reply; this is taking longer than expected.",
+  "reply.waiting": "Waiting for a reply",
+  "reply.writingOverdue":
+    "The reply is still being written and is taking longer than expected.",
+  "reply.waitOverdue": "No reply yet; this is taking longer than expected.",
+  "chat.roleNotice": "Notice",
+  "chat.reply.recoveryGroup": "Reply recovery",
+  "chat.reply.hostActivityGroup": "Host activity",
   "chat.loading": "Loading",
   "chat.before": "Before",
   "chat.after": "After",

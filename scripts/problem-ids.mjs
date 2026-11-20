@@ -68,9 +68,14 @@ function collect(program, files) {
   const array = (node) => {
     const expression = unwrapped(node);
     if (ts.isArrayLiteralExpression(expression)) return expression;
-    if (ts.isIdentifier(expression)) {
-      const declaration =
-        checker.getSymbolAtLocation(expression)?.valueDeclaration;
+    if (
+      ts.isIdentifier(expression) ||
+      ts.isPropertyAccessExpression(expression)
+    ) {
+      let symbol = checker.getSymbolAtLocation(expression);
+      if (symbol && symbol.flags & ts.SymbolFlags.Alias)
+        symbol = checker.getAliasedSymbol(symbol);
+      const declaration = symbol?.valueDeclaration;
       if (
         declaration &&
         ts.isVariableDeclaration(declaration) &&

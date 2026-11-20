@@ -18,8 +18,11 @@ const generated = resolve("src/protocol/generated.ts");
 it("the problem id collector uses Problem types for spreads and excludes action ids", () => {
   const file = resolve("src/hooks/problem-id-fixture.ts");
   const helper = resolve("src/react/problem-id-helper.ts");
+  const barrel = resolve("src/react/problem-id-barrel.ts");
   const text = `import type { Problem } from ${JSON.stringify(generated)};
-    import { fixedId, importedProblem, asProblem as normalize } from ${JSON.stringify(helper)};
+    import { fixedId, importedProblem, importedIds, asProblem as normalize } from ${JSON.stringify(helper)};
+    import * as helpers from ${JSON.stringify(helper)};
+    import { reexportIds } from ${JSON.stringify(barrel)};
     const base: Problem = { code: "refused", id: "base-id" };
     const spread: Problem = { ...base, id: "spread-id" };
     const imported: Problem = { ...base, id: fixedId };
@@ -38,6 +41,9 @@ it("the problem id collector uses Problem types for spreads and excludes action 
     ["member-id"].includes(base.id);
     const readonlyIds: readonly string[] = ["readonly-member-id"] as const;
     readonlyIds.includes(base.id);
+    importedIds.includes(base.id);
+    helpers.namespaceIds.includes(base.id);
+    reexportIds.includes(base.id);
     (["asserted-member-id"] as readonly string[]).includes(base.id);
     ((["checked-member-id"] satisfies readonly string[])).includes(base.id);
   `;
@@ -50,6 +56,9 @@ it("the problem id collector uses Problem types for spreads and excludes action 
       helper,
       `import type { Problem } from ${JSON.stringify(generated)};
       export const fixedId = "imported-id";
+      export const importedIds: readonly string[] = ["imported-member-id"] as const;
+      export const namespaceIds: readonly string[] = ["namespace-member-id"] as const;
+      export const reexportIds: readonly string[] = ["reexport-member-id"] as const;
       export function importedProblem(): Problem {
         return { code: "refused", id: "helper-id" };
       }
@@ -59,9 +68,17 @@ it("the problem id collector uses Problem types for spreads and excludes action 
     `,
     ],
   ]);
+  fixtures.set(
+    barrel,
+    `export { reexportIds } from ${JSON.stringify(helper)};`,
+  );
   host.readFile = (name) => fixtures.get(name) ?? read(name);
   host.fileExists = (name) => fixtures.has(name) || exists(name);
-  const program = ts.createProgram([file, helper, generated], options, host);
+  const program = ts.createProgram(
+    [file, helper, barrel, generated],
+    options,
+    host,
+  );
   const ids = collect(program, [file, helper]);
   expect(ids).toEqual(
     new Set([
@@ -77,6 +94,9 @@ it("the problem id collector uses Problem types for spreads and excludes action 
       "selector-id",
       "member-id",
       "readonly-member-id",
+      "imported-member-id",
+      "namespace-member-id",
+      "reexport-member-id",
       "asserted-member-id",
       "checked-member-id",
     ]),
@@ -84,6 +104,9 @@ it("the problem id collector uses Problem types for spreads and excludes action 
   const sentence = [...ids].map((id) => `\`${id}\``).join(" ");
   for (const id of [
     "readonly-member-id",
+    "imported-member-id",
+    "namespace-member-id",
+    "reexport-member-id",
     "asserted-member-id",
     "checked-member-id",
   ])

@@ -11,6 +11,10 @@
 - `markdownImages.cacheKey`, an optional string or number, lets equivalent inline `allow` callbacks reuse the outline's search and text caches. Change the key when image permissions change; without a key, replacing the callback still refreshes the caches. Image URL permissions are unchanged.
 - Invalid outline-search language tags explicitly use the locale-independent root (`"und"`), including when the environment defaults to Turkish.
 
+### Changed
+
+- Core gzip budgets rise to 20,600 B (eager core) and 27,100 B (core with lazy recovery) for reply recovery and frame reconciliation shipped to core consumers; measured caps also rise for lazy client actions, lazy conformance runners, React, hooks, English/Simplified Chinese messages, lazy reply controls, lazy message actions and testing. Optional failure observation and paged history remain outside the eager core.
+
 ### Added
 
 - An independent `lazy conversation pages` bundle budget measures optional paged history separately from core and testing while preserving output coverage and recovery-payload guards.

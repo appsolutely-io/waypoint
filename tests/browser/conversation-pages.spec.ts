@@ -12,6 +12,8 @@ for (const skin of ["neutral", "antd"])
           { waitUntil: "domcontentloaded" },
         );
         await expect(page.locator("article[data-message-id]")).toHaveCount(5);
+        await expect(page.locator(".waypoint")).toHaveAttribute("dir", dir);
+        await expect(page.locator(".waypoint")).toHaveCSS("direction", dir);
         const tail = page.locator('article[data-message-id="m10"]');
         await expect(tail).toHaveAttribute("aria-posinset", "10");
         await expect(tail).toHaveAttribute("aria-setsize", "10");

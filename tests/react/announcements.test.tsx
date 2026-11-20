@@ -171,7 +171,7 @@ describe.each(skins)("announcements (%s)", (_, skin) => {
       document.querySelector('[data-part="replyRow"] [role="status"]')!;
     const element = row();
     await waitFor(() =>
-      expect(element.textContent).toBe(english["reply.writing"]),
+      expect(element.textContent).toBe(english["reply.waiting"]),
     );
     await h.set("a", [user("u1")], "failed");
     expect(row()).toBe(element);
@@ -274,7 +274,7 @@ describe.each(skins)("announcements (%s)", (_, skin) => {
         '[data-part="replyRow"] [role="status"]',
       )!;
       await waitFor(() =>
-        expect(row.textContent).toBe(english["reply.writing"]),
+        expect(row.textContent).toBe(english["reply.waiting"]),
       );
       const said: string[] = [];
       new MutationObserver(() => {

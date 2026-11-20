@@ -851,7 +851,7 @@ describe("every part boundary on the chat", () => {
       "failure",
       "id",
     ]);
-    expect(Object.keys(last.pending.failure as object)).toEqual(["code"]);
+    expect(Object.keys(last.pending.failure as object)).toEqual(["code", "id"]);
     client.dispose();
   });
 });

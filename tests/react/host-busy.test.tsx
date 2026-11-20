@@ -11,15 +11,17 @@ import {
 import userEvent from "@testing-library/user-event";
 import { WaypointChat } from "../../src/react";
 import { replyRowView } from "../../src/hooks";
+import { ANNOUNCEMENT_BATCH_MS } from "../../src/react/announcements";
 import { english, simplifiedChinese } from "../../src/react/i18n";
 import en from "../../src/messages/en";
 import zh from "../../src/messages/zh-Hans";
 import {
   createWaypointClient,
   type WaypointClient,
+  type TransportEvent,
 } from "../../src/core/client";
 import type { Conversation, Message } from "../../src/protocol/generated";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 const clients: WaypointClient[] = [];
 afterEach(() => {
   cleanup();
@@ -41,7 +43,10 @@ const writer: Message = {
   status: "writing",
   versionIndex: 1,
 };
-async function host(fields: Record<string, unknown> = {}) {
+async function host(
+  fields: Record<string, unknown> = {},
+  capabilities: string[] = ["reply-stop"],
+) {
   let current = {
     protocol: "1.0",
     id: "conversation-a",
@@ -68,7 +73,7 @@ async function host(fields: Record<string, unknown> = {}) {
       read: async () => current,
       negotiate: async () => ({
         protocol: "1.0",
-        capabilities: ["reply-stop"],
+        capabilities,
       }),
     },
   });
@@ -376,3 +381,330 @@ it("all reply and notice UI keys exist in both shipped locales", () => {
     ] as const)
       expect((catalogue as Record<string, unknown>)[key!]).toBe(expected);
 });
+
+it.each(["en", "zh-CN"])(
+  "rendered overdue copy and controls distinguish writer user and expected (%s)",
+  async (locale) => {
+    const chinese = locale === "zh-CN";
+    const rows = [
+      {
+        owner: "a",
+        messages: [user, writer],
+        expected: false,
+        text: chinese
+          ? "仍在回复，等待时间比预期更长。"
+          : "The reply is still being written and is taking longer than expected.",
+        actions: chinese
+          ? ["停止", "重新生成", "继续等待"]
+          : ["Stop", "Regenerate", "Keep waiting"],
+      },
+      {
+        owner: "u",
+        messages: [user],
+        expected: false,
+        text: chinese
+          ? "尚未收到回复，等待时间比预期更长。"
+          : "No reply yet; this is taking longer than expected.",
+        actions: chinese ? ["继续等待", "重试"] : ["Keep waiting", "Retry"],
+      },
+      {
+        owner: "episode",
+        messages: [user],
+        expected: true,
+        text: chinese
+          ? "仍在等待回复，等待时间比预期更长。"
+          : "Still waiting for a reply; this is taking longer than expected.",
+        actions: chinese ? ["继续等待"] : ["Keep waiting"],
+      },
+    ];
+    for (const row of rows) {
+      const h = await host({
+        messages: row.messages,
+        replyStatus: row.expected ? "expected" : undefined,
+        replyExpectedId: row.expected ? "episode" : undefined,
+        replyOverdueFor: row.owner,
+        replyOverdueVersion: 1,
+        replyOverdueAt: 50,
+      });
+      const view = render(<WaypointChat client={h.client} locale={locale} />);
+      if (!row.expected) await screen.findByText(row.text);
+      const group = await screen.findByRole("group", {
+        name: row.expected
+          ? chinese
+            ? "后台活动"
+            : "Host activity"
+          : chinese
+            ? "回复恢复操作"
+            : "Reply recovery",
+      });
+      if (row.expected)
+        expect(group.querySelector("[data-host-busy]")?.textContent).toBe(
+          `Discussing ${row.text}`,
+        );
+      await waitFor(() =>
+        expect(
+          within(group)
+            .getAllByRole("button")
+            .map((button) => button.textContent)
+            .sort(),
+        ).toEqual([...row.actions].sort()),
+      );
+      h.client.dispose();
+      view.unmount();
+    }
+  },
+);
+
+it("busy labels and trailing notices do not repeat a failed assistant announcement", async () => {
+  const h = await host({ messages: [user, writer], replyStatus: undefined });
+  render(
+    <WaypointChat
+      client={h.client}
+      replyFailureText={() => ({ text: "Host failure" })}
+    />,
+  );
+  await screen.findByRole("group", { name: "Reply recovery" });
+  vi.useFakeTimers();
+  const region = document.querySelector<HTMLElement>("[data-announcements]")!;
+  const mutations: MutationRecord[] = [];
+  const observer = new MutationObserver((records) =>
+    mutations.push(...records),
+  );
+  observer.observe(region, {
+    childList: true,
+    characterData: true,
+    subtree: true,
+  });
+  try {
+    await h.set({
+      messages: [user, { ...writer, status: "failed" }],
+      replyStatus: "expected",
+      replyFailure: {
+        id: "failure",
+        forMessageId: "a",
+        reason: { code: "availability" },
+        recovery: { kind: "regenerate", messageId: "a" },
+      },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ANNOUNCEMENT_BATCH_MS + 32);
+    });
+    expect(region.textContent).toBe("Host failure");
+    expect(mutations.length).toBeGreaterThan(0);
+    mutations.length = 0;
+    await h.set({
+      replyLabel: "Checking",
+      messages: [
+        user,
+        { ...writer, status: "failed" },
+        {
+          id: "notice",
+          role: "notice",
+          content: "Still checking",
+          blocks: [],
+          createdAt: 2,
+        },
+      ],
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ANNOUNCEMENT_BATCH_MS + 32);
+    });
+    expect(region.textContent).toBe("Host failure");
+    expect(mutations).toEqual([]);
+    expect(
+      screen.getByRole("group", { name: "Host activity" }).textContent,
+    ).toContain("Checking");
+    expect(
+      screen.getByRole("group", { name: "Reply recovery" }).textContent,
+    ).toContain("Regenerate");
+  } finally {
+    observer.disconnect();
+    vi.useRealTimers();
+  }
+});
+
+it("an adopted older read cannot render blocks cleared by a restarted reply", async () => {
+  const base = config();
+  let listener: (event: TransportEvent) => void = () => {};
+  const held: { gate?: Promise<void> } = {};
+  let release!: () => void;
+  const old = {
+    ...writer,
+    blocks: [
+      {
+        id: "old-block",
+        type: "unknown",
+        fallback: "Old block text",
+        body: {},
+      },
+    ],
+  };
+  let current: Conversation = {
+    protocol: "1.0",
+    id: "conversation-a",
+    title: "Chat",
+    messages: [user, old],
+  };
+  const client = createWaypointClient({
+    ...base,
+    transport: {
+      ...base.transport,
+      read: async () => {
+        const value = structuredClone(current);
+        if (held.gate) await held.gate;
+        return value;
+      },
+      subscribe: (_id, next) => {
+        listener = next;
+        return () => {};
+      },
+    },
+  });
+  clients.push(client);
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  await screen.findByText("Old block text");
+  current = { ...current, messages: [user, { ...old, versionCount: 7 }] };
+  held.gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let read!: ReturnType<WaypointClient["refresh"]>;
+  await act(async () => {
+    read = client.refresh();
+    await flush();
+    listener({
+      type: "frame",
+      frame: {
+        protocol: "1.0",
+        sequence: 1,
+        type: "message.start",
+        messageId: "a",
+        role: "assistant",
+        versionIndex: 2,
+      },
+    });
+    listener({
+      type: "frame",
+      frame: {
+        protocol: "1.0",
+        sequence: 2,
+        type: "text.delta",
+        messageId: "a",
+        text: "New answer",
+      },
+    });
+    await flush();
+    release();
+    expect((await read).kind).toBe("loaded");
+  });
+  expect(client.getSnapshot().conversation?.messages.at(-1)).toMatchObject({
+    blocks: [],
+    content: "New answer",
+    versionIndex: 2,
+    versionCount: 7,
+  });
+  expect(screen.queryByText("Old block text")).toBeNull();
+  await screen.findByText("New answer");
+});
+
+it.each([
+  [false, false],
+  [false, true],
+  [true, false],
+  [true, true],
+])(
+  "reply Stop and host Stop remain independently gated (reply %s, host %s)",
+  async (replyStop, hostStop) => {
+    const h = await host(
+      { messages: [user, writer] },
+      replyStop ? ["reply-stop"] : [],
+    );
+    const stop = vi.fn(async () => {});
+    render(
+      <WaypointChat
+        client={h.client}
+        expectedReplyStop={
+          hostStop ? { label: "Stop discussion", onPress: stop } : undefined
+        }
+      />,
+    );
+    const recovery = await screen.findByRole("group", {
+      name: "Reply recovery",
+    });
+    const activity = screen.getByRole("group", { name: "Host activity" });
+    expect(
+      within(recovery)
+        .queryAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(replyStop ? ["Stop"] : []);
+    expect(
+      within(activity)
+        .queryAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(hostStop ? ["Stop discussion"] : []);
+    if (hostStop) {
+      await userEvent.click(
+        within(activity).getByRole("button", { name: "Stop discussion" }),
+      );
+      expect(stop).toHaveBeenCalledOnce();
+      expect(h.send).not.toHaveBeenCalled();
+    }
+    if (replyStop) {
+      await userEvent.click(
+        within(recovery).getByRole("button", { name: "Stop" }),
+      );
+      await waitFor(() => expect(h.send).toHaveBeenCalledOnce());
+    } else {
+      await h.client.stopReply();
+      expect(h.send).not.toHaveBeenCalled();
+    }
+    expect(h.recover).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["failed", "unavailable"] as const)(
+  "expected then %s shows failure before the host busy row",
+  async (status) => {
+    const h = await host({ messages: [user, writer] });
+    render(
+      <WaypointChat
+        client={h.client}
+        replyFailureText={() => ({ text: "Host failure" })}
+        expectedReplyStop={{
+          label: "Stop discussion",
+          onPress: async () => {},
+        }}
+      />,
+    );
+    await screen.findByRole("group", { name: "Host activity" });
+    await h.set({
+      messages: [user, { ...writer, status }],
+      replyFailure: {
+        id: "failure",
+        forMessageId: "a",
+        reason: { code: "availability" },
+        recovery: { kind: "regenerate", messageId: "a" },
+      },
+    });
+    const recovery = await screen.findByRole("group", {
+      name: "Reply recovery",
+    });
+    const activity = screen.getByRole("group", { name: "Host activity" });
+    expect(
+      recovery.compareDocumentPosition(activity) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      within(recovery).getByRole("button", { name: "Regenerate" }),
+    ).toBeTruthy();
+    expect(within(recovery).queryByRole("button", { name: "Stop" })).toBeNull();
+    expect(
+      within(activity).getByRole("button", { name: "Stop discussion" }),
+    ).toBeTruthy();
+    expect(activity.textContent).toContain("Discussing");
+    expect(clientArticle().getAttribute("aria-busy")).not.toBe("true");
+    function clientArticle(): HTMLElement {
+      return screen.getByRole("article", { name: "Assistant" });
+    }
+  },
+);

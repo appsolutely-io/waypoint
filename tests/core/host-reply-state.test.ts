@@ -115,6 +115,9 @@ function harness(fields: Partial<HostConversation> = {}, paged = false) {
         frame: { protocol: "1.0", sequence: ++sequence, ...value } as Frame,
       });
     },
+    status(status: "open" | "reconnecting") {
+      listener({ type: "status", status });
+    },
     hold() {
       let release!: () => void;
       held = new Promise<void>((resolve) => {
@@ -820,4 +823,155 @@ it("overdue Regenerate calls versions for the active writer", async () => {
   await h.client.ready;
   await h.client.retryReply();
   expect(h.regenerate).toHaveBeenCalledOnce();
+});
+
+it.each(["user", "writer", "expected"] as const)(
+  "two tabs with confirmed tails and settled sends resolve the same deadline owner (%s)",
+  async (owner) => {
+    const fields: Partial<HostConversation> = {
+      messages: owner === "writer" ? [user, writer] : [user],
+      replyOverdueFor:
+        owner === "writer" ? "a" : owner === "user" ? "u" : "episode",
+      replyOverdueVersion: owner === "expected" ? undefined : 1,
+      replyStatus: owner === "expected" ? "expected" : undefined,
+      replyExpectedId: owner === "expected" ? "episode" : undefined,
+      replyOverdueAt: 3000,
+    };
+    const first = harness(fields);
+    const second = harness(fields);
+    await Promise.all([first.client.ready, second.client.ready]);
+    expect(first.snapshot().pending).toEqual([]);
+    expect(second.snapshot().pending).toEqual([]);
+    expect(first.snapshot().replyState).toBe(second.snapshot().replyState);
+    await first.manual.advance(2500);
+    await second.manual.advance(2500);
+    const overdue = owner === "expected" ? "expected-overdue" : "overdue";
+    expect(first.snapshot().replyState).toBe(overdue);
+    expect(second.snapshot().replyState).toBe(overdue);
+    const reloaded = harness(fields);
+    await reloaded.client.ready;
+    await reloaded.manual.advance(2500);
+    expect(reloaded.snapshot().replyState).toBe(overdue);
+    expect(reloaded.snapshot().conversation?.replyOverdueAt).toBe(3000);
+  },
+);
+
+it("an older read does not restore the previous version's blocks under a restarted reply", async () => {
+  const old = {
+    ...writer,
+    blocks: [
+      { id: "old-block", type: "unknown", fallback: "Old answer", body: {} },
+    ],
+  };
+  const h = harness({ messages: [user, old] });
+  await h.client.ready;
+  h.set({ messages: [user, { ...old, versionCount: 7 }] });
+  const release = h.hold();
+  const read = h.client.refresh();
+  await flush();
+  h.frame({
+    type: "message.start",
+    messageId: "a",
+    role: "assistant",
+    versionIndex: 2,
+  });
+  h.frame({ type: "text.delta", messageId: "a", text: "New answer" });
+  await flush();
+  release();
+  expect((await read).kind).toBe("loaded");
+  expect(h.snapshot().conversation?.messages.at(-1)).toMatchObject({
+    content: "New answer",
+    blocks: [],
+    versionIndex: 2,
+    versionCount: 7,
+    status: "writing",
+  });
+});
+
+it.each(["end", "stale", "open", "reconnecting"] as const)(
+  "end stale and reconnect keep their existing refresh paths (%s)",
+  async (event) => {
+    const h = harness({ messages: [user, writer] });
+    await h.client.ready;
+    const release = h.hold();
+    const previous = h.client.refresh();
+    await flush();
+    const before = h.read.mock.calls.length;
+    if (event === "end") h.frame({ type: "message.end", messageId: "a" });
+    else if (event === "stale") h.frame({ type: "stale", reads: [] });
+    else h.status(event);
+    await flush();
+    expect(h.read.mock.calls.length).toBe(before + 1);
+    release();
+    await previous;
+  },
+);
+
+it("a reconnect read superseding another preserves newer frame overlays", async () => {
+  const h = harness({ messages: [user, writer] });
+  await h.client.ready;
+  const releaseFirst = h.hold();
+  const first = h.client.refresh();
+  await flush();
+  const releaseSecond = h.hold();
+  const before = h.read.mock.calls.length;
+  h.status("reconnecting");
+  await flush();
+  expect(h.read.mock.calls.length).toBe(before + 1);
+  h.frame({ type: "text.delta", messageId: "a", text: " newer" });
+  await flush();
+  releaseFirst();
+  await flush();
+  expect(h.snapshot().conversation?.messages.at(-1)?.content).toBe(
+    "Partial newer",
+  );
+  releaseSecond();
+  expect((await first).kind).toBe("loaded");
+  expect(h.snapshot().conversation?.messages.at(-1)?.content).toBe(
+    "Partial newer",
+  );
+});
+
+it("a host-completed turn ending in a notice does not wait for a reply", async () => {
+  const h = harness({
+    replyStatus: "complete",
+    messages: [
+      user,
+      {
+        id: "notice",
+        role: "notice",
+        content: "Request accepted",
+        blocks: [],
+        createdAt: 2,
+      },
+    ],
+  });
+  await h.client.ready;
+  await h.manual.advance(60000);
+  expect(h.snapshot().replyState).toBe("none");
+  expect(h.manual.pending()).toBe(0);
+});
+it("expected with only notices shows the busy row", async () => {
+  const h = harness({
+    replyStatus: "expected",
+    replyLabel: "Discussing",
+    messages: [
+      {
+        id: "notice",
+        role: "notice",
+        content: "Request accepted",
+        blocks: [],
+        createdAt: 2,
+      },
+    ],
+  });
+  await h.client.ready;
+  await h.manual.advance(60000);
+  expect(h.snapshot().replyState).toBe("expected");
+  expect(h.snapshot().replyBusy).toEqual({
+    label: "Discussing",
+    overdue: false,
+  });
+  expect(h.client.canStopReply()).toBe(false);
+  expect(h.manual.pending()).toBe(0);
 });

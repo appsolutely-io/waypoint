@@ -1,6 +1,7 @@
 import { runFormFillConformance } from "./form-fill";
 import { runPlanConformance } from "./plans";
 import { namesAppliedAnswer } from "./card-answer";
+import { authenticateSession, authFailure } from "./auth";
 import type { Conversation, Problem } from "../protocol/generated";
 import { SUPPORTED_PROTOCOLS } from "../protocol/index";
 import type { ConformanceConfig, ConformanceResult, HttpResult } from "./index";
@@ -29,24 +30,11 @@ export async function runConformance(
   const enabled = (capability: string, peer: Peer) =>
     offered.includes(capability) && peer.capabilities.includes(capability);
 
-  const session = await config.request("/__conformance/session", {
-    method: "POST",
-  });
-  if (session.status !== 200)
-    return {
-      passed: false,
-      failures: ["test session unavailable"],
-      scenarios: [],
-      skipped: Object.values(CAPABILITY_SCENARIOS).flat(),
-    };
-  const credentials = session.body as { session: string; csrf: string };
-  const headers = {
-    "Content-Type": "application/json",
-    Cookie: `waypoint=${credentials.session}`,
-    "X-CSRF-Token": credentials.csrf,
-  };
+  const session = await authenticateSession(config.request, config);
+  if (!session) return authFailure();
+  const { request, headers } = session;
   const post = (path: string, value: unknown) =>
-    config.request(path, {
+    request(path, {
       method: "POST",
       headers,
       body: JSON.stringify({ protocol: "1.0", ...(value as object) }),
@@ -80,11 +68,20 @@ export async function runConformance(
     peer.protocol === "1.1" &&
     enabled(CONFORMANCE_CAPABILITIES.forms, peer)
   ) {
-    const forms = await runFormFillConformance(config.request);
+    const forms = await runFormFillConformance(config.request, config);
     failures.push(...forms.failures);
     scenarios.push(...forms.scenarios);
   } else skipped.push(...CAPABILITY_SCENARIOS[CONFORMANCE_CAPABILITIES.forms]);
-  const created = await post("/conversations", { title: "Fixture" });
+  const created = await post("/conversations", { title: "Fixture" }).catch(
+    () => undefined,
+  );
+  if (!created)
+    return {
+      passed: false,
+      failures: [...failures, "conversation creation"],
+      scenarios,
+      skipped,
+    };
   const id = (created.body as { id: string }).id;
   await check("optimistic replay", async () => {
     const value = { clientMessageId: "replay-a", content: "Request" };
@@ -143,7 +140,7 @@ export async function runConformance(
       clientMessageId: "blocks-a",
       content: "Request",
     });
-    const read = await config.request(`/conversations/${id}`, { headers });
+    const read = await request(`/conversations/${id}`, { headers });
     const conversation = read.body as Conversation;
     return types.every((type) =>
       conversation.messages.some((message) =>
@@ -161,8 +158,8 @@ export async function runConformance(
       clientMessageId: "drop-a",
       content: "Request",
     });
-    await config.request(`/conversations/${id}/stream`, { headers });
-    const read = await config.request(`/conversations/${id}`, { headers });
+    await request(`/conversations/${id}/stream`, { headers });
+    const read = await request(`/conversations/${id}`, { headers });
     return (read.body as Conversation).messages.some(
       (message) => message.content === "Authoritative after drop",
     );
@@ -216,7 +213,7 @@ export async function runConformance(
     // The same id with another body, and another answer under a new id.
     const changed = await answer("card-answer-a", "decline");
     const other = await answer("card-answer-b", "decline");
-    const read = await config.request(`/conversations/${id}`, { headers });
+    const read = await request(`/conversations/${id}`, { headers });
     const card = (read.body as Conversation).messages
       .flatMap((message) => message.blocks)
       .find((block) => block.id === "card-answer");
@@ -246,10 +243,10 @@ export async function runConformance(
     if (bound.status !== 200 || typeof answer.agreementId !== "string")
       return false;
     const unknown = { ...headers, "Waypoint-Agreement": "conformance-unknown" };
-    const read = await config.request(`/conversations/${id}`, {
+    const read = await request(`/conversations/${id}`, {
       headers: unknown,
     });
-    const refused = await config.request(`/conversations/${id}/messages`, {
+    const refused = await request(`/conversations/${id}/messages`, {
       method: "POST",
       headers: unknown,
       body: JSON.stringify({
@@ -258,8 +255,8 @@ export async function runConformance(
         content: "Request",
       }),
     });
-    const after = await config.request(`/conversations/${id}`, { headers });
-    const valid = await config.request(`/conversations/${id}`, {
+    const after = await request(`/conversations/${id}`, { headers });
+    const valid = await request(`/conversations/${id}`, {
       headers: { ...headers, "Waypoint-Agreement": answer.agreementId },
     });
     return (
@@ -288,7 +285,7 @@ export async function runConformance(
     // compare.
     if (!a.agreementId || !b.agreementId || a.protocol === b.protocol)
       return true;
-    const read = await config.request(`/conversations/${id}`, {
+    const read = await request(`/conversations/${id}`, {
       headers: { ...headers, "Waypoint-Agreement": a.agreementId },
     });
     return (
@@ -321,7 +318,7 @@ export async function runConformance(
       const read = async (agreementId = stopAgreement) =>
         (
           (
-            await config.request(`/conversations/${id}`, {
+            await request(`/conversations/${id}`, {
               headers: as(agreementId),
             })
           ).body as Conversation
@@ -398,7 +395,7 @@ export async function runConformance(
   else
     skipped.push(...CAPABILITY_SCENARIOS[CONFORMANCE_CAPABILITIES.replyStop]);
   if (enabled(CONFORMANCE_CAPABILITIES.plans, peer)) {
-    const plans = await runPlanConformance(config.request);
+    const plans = await runPlanConformance(config.request, config);
     failures.push(...plans.failures);
     scenarios.push(...plans.scenarios);
   } else skipped.push(...CAPABILITY_SCENARIOS[CONFORMANCE_CAPABILITIES.plans]);

@@ -494,10 +494,18 @@ export const CONFORMANCE_UNAVAILABLE: {
 };
 
 // @public (undocumented)
+export interface ConformanceAuthOptions {
+    // (undocumented)
+    authenticate?(session: unknown): Record<string, string> | Promise<Record<string, string>>;
+    // (undocumented)
+    headers?: Record<string, string>;
+}
+
+// @public (undocumented)
 export type ConformanceBlock = Block;
 
 // @public (undocumented)
-export interface ConformanceConfig {
+export interface ConformanceConfig extends ConformanceAuthOptions {
     // (undocumented)
     baseUrl: string;
     // (undocumented)
@@ -1976,7 +1984,7 @@ export interface RunFlow {
 }
 
 // @public (undocumented)
-export function runFormFillConformance(request: HttpRequest): Promise<ConformanceResult>;
+export function runFormFillConformance(request: HttpRequest, options?: ConformanceAuthOptions): Promise<ConformanceResult>;
 
 // @public (undocumented)
 export interface RunnerPorts {
@@ -2000,7 +2008,7 @@ export interface RunnerPorts {
 }
 
 // @public (undocumented)
-export function runPlanConformance(request: HttpRequest): Promise<ConformanceResult>;
+export function runPlanConformance(request: HttpRequest, options?: ConformanceAuthOptions): Promise<ConformanceResult>;
 
 // @public (undocumented)
 export interface ScopeSignal {

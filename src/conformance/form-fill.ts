@@ -1,18 +1,20 @@
-import type { HttpRequest, ConformanceResult } from "./index";
+import type {
+  HttpRequest,
+  ConformanceResult,
+  ConformanceAuthOptions,
+} from "./index";
+import { authenticateSession, authFailure } from "./auth";
 import type { Conversation, BlockFormFill } from "../protocol/generated";
 import { FORM_SCENARIOS } from "./scenarios";
 export async function runFormFillConformance(
-  request: HttpRequest,
+  rawRequest: HttpRequest,
+  options?: ConformanceAuthOptions,
 ): Promise<ConformanceResult> {
   const failures: string[] = [],
     scenarios: string[] = [];
-  const session = await request("/__conformance/session", { method: "POST" });
-  const credentials = session.body as { session: string; csrf: string };
-  const headers = {
-    "Content-Type": "application/json",
-    Cookie: `waypoint=${credentials.session}`,
-    "X-CSRF-Token": credentials.csrf,
-  };
+  const session = await authenticateSession(rawRequest, options);
+  if (!session) return authFailure();
+  const { request, headers } = session;
   const post = (path: string, value: unknown) =>
     request(path, {
       method: "POST",

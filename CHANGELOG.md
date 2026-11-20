@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.0-next.0 - 2026-11-21
+
+A pre-release, published under the `next` dist-tag.
 
 ### Fixed
 

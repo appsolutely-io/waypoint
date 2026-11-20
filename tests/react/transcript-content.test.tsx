@@ -460,6 +460,7 @@ describe.each(skins)("widgets without a renderer (%s)", (_, skin) => {
 
 describe("names and catalogue texts", () => {
   it("CK-L2 the arrow between before and after values is decorative, read as 'changes to'", async () => {
+    await import("../../src/react/blocks");
     const base = config();
     const client = createWaypointClient(base);
     await client.ready;

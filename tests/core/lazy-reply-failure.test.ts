@@ -121,6 +121,52 @@ it("an observer import rejection keeps the previous conversation and reports its
   expect(client.getSnapshot().conversation?.replyStatus).toBeUndefined();
   expect(client.getSnapshot().problem?.id).toBe("conversation-read");
 });
+async function recoverChunk(): Promise<void> {
+  vi.doMock("../../src/core/on-demand", async () =>
+    vi.importActual<typeof import("../../src/core/on-demand")>(
+      "../../src/core/on-demand",
+    ),
+  );
+  const recovered = await import("../../src/core/on-demand");
+  expect(typeof recovered.observeReplyFailure).toBe("function");
+}
+it("a later refresh retries an observer import after the module recovers", async () => {
+  const base = config();
+  chunk.fail = true;
+  const client = await load({
+    transport: { ...base.transport, read: async () => refused() },
+    replies: { recover: async () => {} },
+  });
+  await client.ready;
+  expect(client.getSnapshot().conversation).toBeNull();
+  expect(client.getSnapshot().problem?.id).toBe("conversation-read");
+  await recoverChunk();
+  expect(await client.refresh()).toMatchObject({ kind: "loaded" });
+  expect(client.getSnapshot().replyFailures).toMatchObject([
+    { active: true, failure: { id: "episode" } },
+  ]);
+  expect(client.canRetryReply()).toBe(true);
+});
+it("a later action retries a rejected shared module after it recovers", async () => {
+  const list = vi.fn(() => []);
+  const client = await load({
+    tabs: ["recent"],
+    flowSource: {
+      list,
+      setFavourite: () => {},
+      run: async () => ({ conversationId: "conversation-a" }),
+    },
+  });
+  await client.ready;
+  chunk.fail = true;
+  await client.loadFlows();
+  expect(client.getSnapshot().problem?.id).toBe("on-demand-load");
+  expect(list).not.toHaveBeenCalled();
+  await recoverChunk();
+  await client.loadFlows();
+  expect(list).toHaveBeenCalledExactlyOnceWith("recent");
+  expect(client.getSnapshot().flows).toEqual({ recent: [] });
+});
 it.each(["switch", "dispose"] as const)(
   "%s cancels a read waiting for the observer",
   async (operation) => {

@@ -2433,7 +2433,16 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   // Actions that wait for readiness first and are not needed for the
   // first render load with their own chunk on first use.
   let actionModule: Promise<typeof import("./on-demand")> | undefined;
-  const loadActionModule = () => (actionModule ??= import("./on-demand"));
+  const loadActionModule = (): Promise<typeof import("./on-demand")> => {
+    if (!actionModule) {
+      const attempt = import("./on-demand");
+      actionModule = attempt;
+      void attempt.catch(() => {
+        if (actionModule === attempt) actionModule = undefined;
+      });
+    }
+    return actionModule;
+  };
   let onDemand: Promise<OnDemand> | undefined;
   let actionCode: OnDemand | undefined;
   const later = <T = void>(use: (actions: OnDemand) => Promise<T>) =>

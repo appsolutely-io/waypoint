@@ -167,9 +167,17 @@ function ReplyControls(props: {
   row: ReplyState;
   expectedReplyStop?: HostBusyStopControl;
 }) {
+  const active =
+    props.row !== "none" || props.client.getSnapshot().toolSteps.length > 0;
+  const [requested, setRequested] = useState(active);
   const load = useChunk(replyControlsChunk);
-  useEffect(() => replyControlsChunk.request(), []);
-  return load.status === "ready" ? (
+  useEffect(() => {
+    if (active) {
+      setRequested(true);
+      replyControlsChunk.request();
+    }
+  }, [active]);
+  return requested && load.status === "ready" ? (
     <load.module.ReplyControls {...props} />
   ) : null;
 }
@@ -3105,13 +3113,11 @@ function ChatBody({
               {unanchoredFailure ? (
                 <ReplyFailureText failure={unanchoredFailure} announce />
               ) : null}
-              {row !== "none" || state.toolSteps.length ? (
-                <ReplyControls
-                  client={client}
-                  row={row}
-                  expectedReplyStop={provider.expectedReplyStop}
-                />
-              ) : null}
+              <ReplyControls
+                client={client}
+                row={row}
+                expectedReplyStop={provider.expectedReplyStop}
+              />
             </Part>
             {narrow ? planPanel : null}
             {actionsAfterPlan ? (

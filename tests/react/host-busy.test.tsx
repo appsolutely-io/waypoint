@@ -708,3 +708,74 @@ it.each(["failed", "unavailable"] as const)(
     }
   },
 );
+
+it.each(["stop", "regenerate"] as const)(
+  "completion retains the reply recovery anchor after %s disappears",
+  async (action) => {
+    const h = await host({
+      messages: [
+        user,
+        { ...writer, status: action === "stop" ? "writing" : "failed" },
+      ],
+      replyStatus: action === "stop" ? undefined : "failed",
+      replyFailure:
+        action === "stop"
+          ? undefined
+          : {
+              id: "failure",
+              forMessageId: "a",
+              recovery: { kind: "regenerate", messageId: "a" },
+            },
+    });
+    render(<WaypointChat client={h.client} />);
+    const group = await screen.findByRole("group", { name: "Reply recovery" });
+    within(group)
+      .getByRole("button", {
+        name: action === "stop" ? "Stop" : "Regenerate",
+      })
+      .focus();
+    await h.set({
+      messages: [user, { ...writer, status: "completed" }],
+      replyStatus: "complete",
+      replyFailure: null,
+    });
+    expect(group.isConnected).toBe(true);
+    expect(document.activeElement).toBe(group);
+    expect(within(group).queryAllByRole("button")).toHaveLength(0);
+  },
+);
+it.each(["stop", "regenerate"] as const)(
+  "completion does not reclaim composer focus after %s disappears",
+  async (action) => {
+    const h = await host({
+      messages: [
+        user,
+        { ...writer, status: action === "stop" ? "writing" : "failed" },
+      ],
+      replyStatus: action === "stop" ? undefined : "failed",
+      replyFailure:
+        action === "stop"
+          ? undefined
+          : {
+              id: "failure",
+              forMessageId: "a",
+              recovery: { kind: "regenerate", messageId: "a" },
+            },
+    });
+    render(<WaypointChat client={h.client} />);
+    const group = await screen.findByRole("group", { name: "Reply recovery" });
+    within(group)
+      .getByRole("button", {
+        name: action === "stop" ? "Stop" : "Regenerate",
+      })
+      .focus();
+    const composer = screen.getByRole("textbox");
+    composer.focus();
+    await h.set({
+      messages: [user, { ...writer, status: "completed" }],
+      replyStatus: "complete",
+      replyFailure: null,
+    });
+    expect(document.activeElement).toBe(composer);
+  },
+);

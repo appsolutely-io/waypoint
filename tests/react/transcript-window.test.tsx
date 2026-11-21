@@ -5,7 +5,7 @@
 // and a link reach any message, the message holding focus stays mounted,
 // and every mounted message says its place among all of them.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useRef } from "react";
+import { useContext, useRef, type ReactElement } from "react";
 // Chunk loading has its own tests; these cases exercise the real renderer's layout.
 import "../../src/react/markdown";
 import { useTranscriptPosition } from "../../src/react/transcript";
@@ -18,6 +18,7 @@ import type { Conversation, Message } from "../../src/protocol/generated";
 import {
   OVERSCAN,
   WINDOW_FROM,
+  TranscriptWindowThreshold,
   segmentsOf,
   windowRange,
 } from "../../src/react/windowing";
@@ -101,6 +102,14 @@ afterEach(() => {
     vi.useRealTimers();
     history.replaceState(null, "", location.pathname);
   }
+});
+
+it("the window threshold defaults to the production boundary", () => {
+  function ThresholdValue(): ReactElement {
+    return <output>{useContext(TranscriptWindowThreshold)}</output>;
+  }
+  render(<ThresholdValue />);
+  expect(screen.getByRole("status").textContent).toBe(String(WINDOW_FROM));
 });
 
 it("the controlled layout follows nested rows, spacers and live changes", () => {

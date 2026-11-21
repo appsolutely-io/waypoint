@@ -2,7 +2,14 @@
 // view are mounted, with one spacer standing for each run of messages that
 // is not. Rows have their own heights: each mounted row is measured, and a
 // row never measured counts as the average of those that were.
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 /**
  * From this many messages the transcript mounts only a window of them.
@@ -10,6 +17,7 @@ import { useLayoutEffect, useRef, useState, type RefObject } from "react";
  * any of them; past it, the outline's filter does.
  */
 export const WINDOW_FROM = 500;
+export const TranscriptWindowThreshold = createContext<number>(WINDOW_FROM);
 /** How far beyond the box, in CSS pixels, rows stay mounted. */
 export const OVERSCAN = 1200;
 // A row's height before any row was measured.
@@ -126,7 +134,8 @@ export function useTranscriptWindow(
   // the position can keep it where it was.
   anchorId?: string,
 ): TranscriptWindow {
-  const windowed = ids.length >= WINDOW_FROM;
+  const threshold = useContext(TranscriptWindowThreshold);
+  const windowed = ids.length >= threshold;
   // Rows are measured and the box read at every length, so the render
   // that first mounts only a window already knows where the reader is.
   const measured = useRef(new Map<string, number>()).current;

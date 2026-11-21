@@ -372,6 +372,7 @@ describe("controlled layout membership", () => {
   });
 });
 
+const NAVIGATION_THRESHOLD: number = 24;
 const many = (count: number) =>
   Array.from(
     { length: count },
@@ -399,16 +400,28 @@ const mounted = () =>
     row.getAttribute("data-message-id"),
   );
 
-async function renderChat(client: TestClient) {
+async function renderChat(
+  client: TestClient,
+  threshold?: number,
+): Promise<void> {
   clients.add(client);
   await client.ready;
-  render(<WaypointChat client={client} />);
+  const view: ReactElement = <WaypointChat client={client} />;
+  render(
+    threshold === undefined ? (
+      view
+    ) : (
+      <TranscriptWindowThreshold.Provider value={threshold}>
+        {view}
+      </TranscriptWindowThreshold.Provider>
+    ),
+  );
   await act(async () => {
     await vi.dynamicImportSettled();
   });
 }
 
-async function chat(count: number) {
+async function chat(count: number, threshold?: number): Promise<TestClient> {
   const base = config();
   const client = createWaypointClient({
     ...base,
@@ -424,7 +437,7 @@ async function chat(count: number) {
         }) as Conversation,
     },
   });
-  await renderChat(client);
+  await renderChat(client, threshold);
   expect(mounted()).toContain(`m${count}`);
   expect(document.querySelector(".wp-markdown")).not.toBeNull();
   deliverScrollTask();
@@ -497,7 +510,7 @@ it("scrolled up, the window follows; Back to latest returns to the end, pinned",
 });
 
 it("the outline reaches a message the window has not mounted, and focuses it", async () => {
-  const client = await chat(WINDOW_FROM);
+  const client = await chat(NAVIGATION_THRESHOLD, NAVIGATION_THRESHOLD);
   expect(document.querySelector('[data-message-id="m3"]')).toBeNull();
   expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
   act(() => {
@@ -534,7 +547,7 @@ it("the message holding focus stays mounted while the box scrolls away", async (
 });
 
 it("a link to a message's anchor mounts it and shows it", async () => {
-  const client = await chat(WINDOW_FROM);
+  const client = await chat(NAVIGATION_THRESHOLD, NAVIGATION_THRESHOLD);
   expect(document.querySelector('[data-message-id="m5"]')).toBeNull();
   expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
   // The anchor the outline links m5 by.

@@ -55,6 +55,32 @@ export interface Geometry {
   restore(): void;
 }
 
+class LayoutHeights extends Map<string, number> {
+  constructor(private readonly invalidate: () => void) {
+    super();
+  }
+  override set(key: string, value: number): this {
+    super.set(key, value);
+    this.invalidate();
+    return this;
+  }
+  override delete(key: string): boolean {
+    const deleted = super.delete(key);
+    if (deleted) this.invalidate();
+    return deleted;
+  }
+  override clear(): void {
+    if (!this.size) return;
+    super.clear();
+    this.invalidate();
+  }
+}
+
+interface Layout {
+  total: number;
+  positions: Map<Element, { top: number; height: number }>;
+}
+
 const BOX = "wp-transcript";
 const GAP = "[data-transcript-gap]";
 const ROWS = `article, ${GAP}`;
@@ -68,45 +94,44 @@ export function installGeometry({
 } = {}): Geometry {
   const tops = new WeakMap<Element, number>();
   const isBox = (element: Element) => element.classList.contains(BOX);
-  let content = new WeakMap<Element, Element[]>();
+  let layouts = new WeakMap<Element, Layout>();
   const observed = new WeakSet<Element>();
   let restored = false;
   const invalidate = () => {
-    content = new WeakMap();
+    layouts = new WeakMap();
   };
   const mutations = new MutationObserver(invalidate);
-  // Native layout reads share membership until DOM mutations invalidate it.
-  const rows = (box: Element): Element[] => {
-    if (restored) return [...box.querySelectorAll(ROWS)];
-    if (!observed.has(box)) {
-      mutations.observe(box, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-      });
-      observed.add(box);
-    }
-    if (mutations.takeRecords().length > 0) invalidate();
-    const cached = content.get(box);
-    if (cached) return cached;
-    const found = [...box.querySelectorAll(ROWS)];
-    content.set(box, found);
-    return found;
-  };
   const height = (row: Element) =>
     row.matches(GAP)
       ? parseFloat((row as HTMLElement).style.blockSize) || 0
       : (geometry.heights.get(rowKey(row)) ?? defaultHeight);
-  const scrollHeight = (
-    box: Element,
-    content: readonly Element[] = rows(box),
-  ) =>
-    Math.max(
-      geometry.clientHeight,
-      content.reduce((sum, row) => sum + height(row), 0),
-    );
-  const max = (box: Element, content?: readonly Element[]) =>
-    Math.max(0, scrollHeight(box, content) - geometry.clientHeight);
+  const layoutOf = (box: Element): Layout => {
+    if (!restored) {
+      if (!observed.has(box)) {
+        mutations.observe(box, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+        });
+        observed.add(box);
+      }
+      if (mutations.takeRecords().length > 0) invalidate();
+      const cached = layouts.get(box);
+      if (cached) return cached;
+    }
+    const layout: Layout = { total: 0, positions: new Map() };
+    for (const row of box.querySelectorAll(ROWS)) {
+      const size = height(row);
+      layout.positions.set(row, { top: layout.total, height: size });
+      layout.total += size;
+    }
+    if (!restored) layouts.set(box, layout);
+    return layout;
+  };
+  const scrollHeight = (box: Element, layout: Layout = layoutOf(box)) =>
+    Math.max(geometry.clientHeight, layout.total);
+  const max = (box: Element, layout?: Layout) =>
+    Math.max(0, scrollHeight(box, layout) - geometry.clientHeight);
   const fire = (box: Element) =>
     setTimeout(() => box.dispatchEvent(new Event("scroll")), 0);
   const top = (box: Element) => tops.get(box) ?? 0;
@@ -116,8 +141,8 @@ export function installGeometry({
     tops.set(box, clamped);
     fire(box);
   };
-  const clamp = (box: Element, content?: readonly Element[]) => {
-    const end = max(box, content);
+  const clamp = (box: Element, layout?: Layout) => {
+    const end = max(box, layout);
     if (top(box) > end) {
       tops.set(box, end);
       fire(box);
@@ -196,14 +221,13 @@ export function installGeometry({
         return DOMRect.fromRect({ y: 0, height: geometry.clientHeight });
       const box = this.closest(`.${BOX}`);
       if (box && this.matches(ROWS)) {
-        const content = rows(box);
-        clamp(box, content);
-        let y = -top(box);
-        for (const row of content) {
-          if (row === this) break;
-          y += height(row);
-        }
-        return DOMRect.fromRect({ y, height: height(this) });
+        const layout = layoutOf(box);
+        clamp(box, layout);
+        const position = layout.positions.get(this)!;
+        return DOMRect.fromRect({
+          y: position.top - top(box),
+          height: position.height,
+        });
       }
       return (base.rect?.value as (this: Element) => DOMRect).call(this);
     },
@@ -211,7 +235,7 @@ export function installGeometry({
   const box = () => document.querySelector<HTMLElement>(`.${BOX}`)!;
   const geometry: Geometry = {
     box,
-    heights: new Map(),
+    heights: new LayoutHeights(invalidate),
     clientHeight,
     behaviors: [],
     top: () => box().scrollTop,

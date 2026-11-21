@@ -5,6 +5,8 @@
 // and a link reach any message, the message holding focus stays mounted,
 // and every mounted message says its place among all of them.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useRef } from "react";
+import { useTranscriptPosition } from "../../src/react/transcript";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { WaypointChat } from "../../src/react/index";
 import { english } from "../../src/react/i18n";
@@ -103,6 +105,76 @@ it("the controlled layout follows nested rows, spacers and live changes", () => 
 });
 
 describe("controlled layout membership", () => {
+  it("shares height and position reads across an unchanged layout", () => {
+    const count = 100;
+    render(
+      <div className="wp-transcript">
+        {Array.from({ length: count }, (_, index) => (
+          <article key={index} data-message-id={String(index)} />
+        ))}
+      </div>,
+    );
+    const box = geometry.box();
+    const reads = vi.spyOn(geometry.heights, "get");
+    try {
+      for (let pass = 0; pass < 2; pass++)
+        [...box.children].forEach((row, index) => {
+          expect(Math.abs(row.getBoundingClientRect().top - index * 100)).toBe(
+            0,
+          );
+          expect(row.getBoundingClientRect().height).toBe(100);
+        });
+      expect(reads.mock.calls.length).toBeLessThanOrEqual(count * 2);
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
+  function PinnedLayout() {
+    const box = useRef<HTMLDivElement>(null);
+    const content = useRef<HTMLDivElement>(null);
+    useTranscriptPosition(box, content, "layout", 2, null);
+    return (
+      <div className="wp-transcript" ref={box}>
+        <div ref={content}>
+          <article data-message-id="a" />
+          <div data-transcript-gap="" style={{ blockSize: 17 }} />
+          <article data-message-id="b" />
+        </div>
+      </div>
+    );
+  }
+
+  it("the product reads changed row and spacer heights before mutation delivery", () => {
+    geometry.clientHeight = 30;
+    render(<PinnedLayout />);
+    const box = geometry.box();
+    expect(box.scrollTop).toBe(187);
+    geometry.heights.set("a", 40);
+    geometry.layout();
+    expect(box.scrollTop).toBe(127);
+    const spacer = box.querySelector<HTMLElement>("[data-transcript-gap]")!;
+    spacer.style.blockSize = "23px";
+    geometry.layout();
+    expect(box.scrollTop).toBe(133);
+    expect(box.scrollHeight).toBe(163);
+  });
+
+  it("the product reads a changed viewport against cached row heights", () => {
+    geometry.clientHeight = 30;
+    render(<PinnedLayout />);
+    const box = geometry.box();
+    expect(box.scrollTop).toBe(187);
+    geometry.clientHeight = 50;
+    geometry.layout();
+    expect(box.clientHeight).toBe(50);
+    expect(box.scrollTop).toBe(167);
+    geometry.clientHeight = 300;
+    geometry.layout();
+    expect(box.scrollTop).toBe(0);
+    expect(box.scrollHeight).toBe(300);
+  });
+
   it.each([false, true])(
     "reuses unchanged rows, including empty: %s",
     (populated) => {

@@ -6,6 +6,8 @@
 // and every mounted message says its place among all of them.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRef } from "react";
+// Chunk loading has its own tests; these cases exercise the real renderer's layout.
+import "../../src/react/markdown";
 import { useTranscriptPosition } from "../../src/react/transcript";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { WaypointChat } from "../../src/react/index";
@@ -438,9 +440,6 @@ it("a scroll changes the window only after its task and frame are delivered", as
 });
 
 it("below the threshold, every message is mounted, with no spacer", async () => {
-  const warmup = await chat(1);
-  cleanup();
-  warmup.dispose();
   const client = await chat(WINDOW_FROM - 1);
   expect(mounted()).toHaveLength(WINDOW_FROM - 1);
   expect(document.querySelector("[data-transcript-gap]")).toBeNull();

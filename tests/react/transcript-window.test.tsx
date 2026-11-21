@@ -488,7 +488,9 @@ it("scrolled up, the window follows; Back to latest returns to the end, pinned",
 });
 
 it("the outline reaches a message the window has not mounted, and focuses it", async () => {
-  const client = await chat(1000);
+  const client = await chat(WINDOW_FROM);
+  expect(document.querySelector('[data-message-id="m3"]')).toBeNull();
+  expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
   act(() => {
     screen.getByRole("button", { name: english["chat.outline"] }).click();
   });
@@ -523,7 +525,9 @@ it("the message holding focus stays mounted while the box scrolls away", async (
 });
 
 it("a link to a message's anchor mounts it and shows it", async () => {
-  const client = await chat(1000);
+  const client = await chat(WINDOW_FROM);
+  expect(document.querySelector('[data-message-id="m5"]')).toBeNull();
+  expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
   // The anchor the outline links m5 by.
   act(() => {
     screen.getByRole("button", { name: english["chat.outline"] }).click();

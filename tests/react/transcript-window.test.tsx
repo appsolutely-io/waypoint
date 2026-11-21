@@ -18,7 +18,7 @@ import type { Conversation, Message } from "../../src/protocol/generated";
 import {
   OVERSCAN,
   WINDOW_FROM,
-  TranscriptWindowThreshold,
+  TranscriptWindowThresholdContext,
   segmentsOf,
   windowRange,
 } from "../../src/react/windowing";
@@ -79,7 +79,8 @@ beforeEach(() => {
     ],
   });
   let nextIdle = 0;
-  // Outline navigation does not consume the filter's idle search index.
+  // Hold every idle callback in this file: outline indexing and markdown preload.
+  // These layout cases import the renderer up front.
   vi.stubGlobal("requestIdleCallback", (callback: IdleRequestCallback) => {
     idle.set(++nextIdle, callback);
     return nextIdle;
@@ -106,7 +107,7 @@ afterEach(() => {
 
 it("the window threshold defaults to the production boundary", () => {
   function ThresholdValue(): ReactElement {
-    return <output>{useContext(TranscriptWindowThreshold)}</output>;
+    return <output>{useContext(TranscriptWindowThresholdContext)}</output>;
   }
   render(<ThresholdValue />);
   expect(screen.getByRole("status").textContent).toBe(String(WINDOW_FROM));
@@ -159,9 +160,7 @@ describe("controlled layout membership", () => {
     try {
       for (let pass = 0; pass < 2; pass++)
         [...box.children].forEach((row, index) => {
-          expect(Math.abs(row.getBoundingClientRect().top - index * 100)).toBe(
-            0,
-          );
+          expect(row.getBoundingClientRect().top).toBe(index * 100);
           expect(row.getBoundingClientRect().height).toBe(100);
         });
       expect(reads.mock.calls.length).toBeLessThanOrEqual(count * 2);
@@ -372,7 +371,7 @@ describe("controlled layout membership", () => {
   });
 });
 
-const NAVIGATION_THRESHOLD: number = 24;
+const NAVIGATION_THRESHOLD = 24;
 const many = (count: number) =>
   Array.from(
     { length: count },
@@ -411,9 +410,9 @@ async function renderChat(
     threshold === undefined ? (
       view
     ) : (
-      <TranscriptWindowThreshold.Provider value={threshold}>
+      <TranscriptWindowThresholdContext.Provider value={threshold}>
         {view}
-      </TranscriptWindowThreshold.Provider>
+      </TranscriptWindowThresholdContext.Provider>
     ),
   );
   await act(async () => {

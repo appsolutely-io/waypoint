@@ -17,7 +17,9 @@ import {
  * any of them; past it, the outline's filter does.
  */
 export const WINDOW_FROM = 500;
-export const TranscriptWindowThreshold = createContext<number>(WINDOW_FROM);
+/** Tests narrow one tree; production never provides it; no public entry exports it. */
+export const TranscriptWindowThresholdContext =
+  createContext<number>(WINDOW_FROM);
 /** How far beyond the box, in CSS pixels, rows stay mounted. */
 export const OVERSCAN = 1200;
 // A row's height before any row was measured.
@@ -134,7 +136,7 @@ export function useTranscriptWindow(
   // the position can keep it where it was.
   anchorId?: string,
 ): TranscriptWindow {
-  const threshold = useContext(TranscriptWindowThreshold);
+  const threshold = useContext(TranscriptWindowThresholdContext);
   const windowed = ids.length >= threshold;
   // Rows are measured and the box read at every length, so the render
   // that first mounts only a window already knows where the reader is.

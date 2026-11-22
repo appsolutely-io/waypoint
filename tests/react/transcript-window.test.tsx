@@ -5,7 +5,11 @@
 // and a link reach any message, the message holding focus stays mounted,
 // and every mounted message says its place among all of them.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { useContext, useRef, type ReactElement } from "react";
+// Chunk loading has its own tests; these cases exercise the real renderer's layout.
+import "../../src/react/markdown";
+import { useTranscriptPosition } from "../../src/react/transcript";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { WaypointChat } from "../../src/react/index";
 import { english } from "../../src/react/i18n";
 import { createWaypointClient } from "../../src/core/client";
@@ -14,6 +18,7 @@ import type { Conversation, Message } from "../../src/protocol/generated";
 import {
   OVERSCAN,
   WINDOW_FROM,
+  TranscriptWindowThresholdContext,
   segmentsOf,
   windowRange,
 } from "../../src/react/windowing";
@@ -56,18 +61,56 @@ describe("the window's rows", () => {
   });
 });
 
+type TestClient = ReturnType<typeof createWaypointClient>;
+const clients = new Set<TestClient>();
+const idle = new Map<number, IdleRequestCallback>();
 let geometry: Geometry;
 let restoreObserver: () => void;
 beforeEach(() => {
   parses.length = 0;
+  vi.useFakeTimers({
+    toFake: [
+      "performance",
+      "setTimeout",
+      "clearTimeout",
+      ...(typeof requestAnimationFrame === "function"
+        ? (["requestAnimationFrame", "cancelAnimationFrame"] as const)
+        : []),
+    ],
+  });
+  let nextIdle = 0;
+  // Hold every idle callback in this file: outline indexing and markdown preload.
+  // These layout cases import the renderer up front.
+  vi.stubGlobal("requestIdleCallback", (callback: IdleRequestCallback) => {
+    idle.set(++nextIdle, callback);
+    return nextIdle;
+  });
+  vi.stubGlobal("cancelIdleCallback", (handle: number) => idle.delete(handle));
   restoreObserver = installResizeObserver();
   geometry = installGeometry({ clientHeight: 300, defaultHeight: 100 });
 });
 afterEach(() => {
-  cleanup();
-  geometry.restore();
-  restoreObserver();
-  history.replaceState(null, "", location.pathname);
+  try {
+    cleanup();
+    for (const client of clients) client.dispose();
+  } finally {
+    clients.clear();
+    idle.clear();
+    vi.clearAllTimers();
+    geometry.restore();
+    restoreObserver();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    history.replaceState(null, "", location.pathname);
+  }
+});
+
+it("the window threshold defaults to the production boundary", () => {
+  function ThresholdValue(): ReactElement {
+    return <output>{useContext(TranscriptWindowThresholdContext)}</output>;
+  }
+  render(<ThresholdValue />);
+  expect(screen.getByRole("status").textContent).toBe(String(WINDOW_FROM));
 });
 
 it("the controlled layout follows nested rows, spacers and live changes", () => {
@@ -103,6 +146,74 @@ it("the controlled layout follows nested rows, spacers and live changes", () => 
 });
 
 describe("controlled layout membership", () => {
+  it("shares height and position reads across an unchanged layout", () => {
+    const count = 100;
+    render(
+      <div className="wp-transcript">
+        {Array.from({ length: count }, (_, index) => (
+          <article key={index} data-message-id={String(index)} />
+        ))}
+      </div>,
+    );
+    const box = geometry.box();
+    const reads = vi.spyOn(geometry.heights, "get");
+    try {
+      for (let pass = 0; pass < 2; pass++)
+        [...box.children].forEach((row, index) => {
+          expect(row.getBoundingClientRect().top).toBe(index * 100);
+          expect(row.getBoundingClientRect().height).toBe(100);
+        });
+      expect(reads.mock.calls.length).toBeLessThanOrEqual(count * 2);
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
+  function PinnedLayout() {
+    const box = useRef<HTMLDivElement>(null);
+    const content = useRef<HTMLDivElement>(null);
+    useTranscriptPosition(box, content, "layout", 2, null);
+    return (
+      <div className="wp-transcript" ref={box}>
+        <div ref={content}>
+          <article data-message-id="a" />
+          <div data-transcript-gap="" style={{ blockSize: 17 }} />
+          <article data-message-id="b" />
+        </div>
+      </div>
+    );
+  }
+
+  it("the product reads changed row and spacer heights before mutation delivery", () => {
+    geometry.clientHeight = 30;
+    render(<PinnedLayout />);
+    const box = geometry.box();
+    expect(box.scrollTop).toBe(187);
+    geometry.heights.set("a", 40);
+    geometry.layout();
+    expect(box.scrollTop).toBe(127);
+    const spacer = box.querySelector<HTMLElement>("[data-transcript-gap]")!;
+    spacer.style.blockSize = "23px";
+    geometry.layout();
+    expect(box.scrollTop).toBe(133);
+    expect(box.scrollHeight).toBe(163);
+  });
+
+  it("the product reads a changed viewport against cached row heights", () => {
+    geometry.clientHeight = 30;
+    render(<PinnedLayout />);
+    const box = geometry.box();
+    expect(box.scrollTop).toBe(187);
+    geometry.clientHeight = 50;
+    geometry.layout();
+    expect(box.clientHeight).toBe(50);
+    expect(box.scrollTop).toBe(167);
+    geometry.clientHeight = 300;
+    geometry.layout();
+    expect(box.scrollTop).toBe(0);
+    expect(box.scrollHeight).toBe(300);
+  });
+
   it.each([false, true])(
     "reuses unchanged rows, including empty: %s",
     (populated) => {
@@ -260,6 +371,7 @@ describe("controlled layout membership", () => {
   });
 });
 
+const NAVIGATION_THRESHOLD = 24;
 const many = (count: number) =>
   Array.from(
     { length: count },
@@ -273,16 +385,42 @@ const many = (count: number) =>
         status: "completed",
       }) as Message,
   );
-const settle = (ms = 30) =>
-  act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, ms));
+const deliverScrollTask = () =>
+  act(() => {
+    vi.advanceTimersByTime(0);
   });
+const readWindowFrame = () =>
+  act(() => {
+    vi.advanceTimersToNextFrame();
+  });
+const measureLayout = () => act(() => geometry.layout());
 const mounted = () =>
   [...document.querySelectorAll("article[data-message-id]")].map((row) =>
     row.getAttribute("data-message-id"),
   );
 
-async function chat(count: number) {
+async function renderChat(
+  client: TestClient,
+  threshold?: number,
+): Promise<void> {
+  clients.add(client);
+  await client.ready;
+  const view: ReactElement = <WaypointChat client={client} />;
+  render(
+    threshold === undefined ? (
+      view
+    ) : (
+      <TranscriptWindowThresholdContext.Provider value={threshold}>
+        {view}
+      </TranscriptWindowThresholdContext.Provider>
+    ),
+  );
+  await act(async () => {
+    await vi.dynamicImportSettled();
+  });
+}
+
+async function chat(count: number, threshold?: number): Promise<TestClient> {
   const base = config();
   const client = createWaypointClient({
     ...base,
@@ -298,26 +436,31 @@ async function chat(count: number) {
         }) as Conversation,
     },
   });
-  await client.ready;
-  render(<WaypointChat client={client} />);
-  // Below the threshold every message renders at once, which takes a while.
-  await waitFor(() => expect(mounted()).toContain(`m${count}`), {
-    timeout: 60_000,
-  });
-  await waitFor(
-    () => expect(document.querySelector(".wp-markdown")).not.toBeNull(),
-    { timeout: 60_000 },
-  );
-  await settle();
-  geometry.layout();
-  await settle();
+  await renderChat(client, threshold);
+  expect(mounted()).toContain(`m${count}`);
+  expect(document.querySelector(".wp-markdown")).not.toBeNull();
+  deliverScrollTask();
+  readWindowFrame();
+  measureLayout();
+  deliverScrollTask();
+  readWindowFrame();
   return client;
 }
 
+it("a scroll changes the window only after its task and frame are delivered", async () => {
+  const client = await chat(1000);
+  const before = mounted();
+  geometry.user("wheel", -50_000);
+  expect(mounted()).toEqual(before);
+  deliverScrollTask();
+  expect(mounted()).toEqual(before);
+  readWindowFrame();
+  expect(mounted()).toContain("m498");
+  expect(mounted()).not.toContain("m1000");
+  client.dispose();
+});
+
 it("below the threshold, every message is mounted, with no spacer", async () => {
-  const warmup = await chat(1);
-  cleanup();
-  warmup.dispose();
   const client = await chat(WINDOW_FROM - 1);
   expect(mounted()).toHaveLength(WINDOW_FROM - 1);
   expect(document.querySelector("[data-transcript-gap]")).toBeNull();
@@ -344,19 +487,21 @@ it("scrolled up, the window follows; Back to latest returns to the end, pinned",
   const client = await chat(1000);
   geometry.user("wheel", -50_000);
   const top = 100 * 1000 - 300 - 50_000;
-  await waitFor(() =>
-    expect(mounted()).toContain(`m${Math.floor(top / 100) + 1}`),
-  );
+  deliverScrollTask();
+  readWindowFrame();
+  expect(mounted()).toContain(`m${Math.floor(top / 100) + 1}`);
   const middle = mounted();
   expect(middle).not.toContain("m1000");
   expect(middle.length).toBeLessThan(40);
   expect(middle).toContain(`m${Math.floor(top / 100) + 1}`);
-  await act(async () => {
+  act(() => {
     screen.getByText(english["chat.latest"]).click();
   });
-  await settle();
-  geometry.layout();
-  await settle();
+  deliverScrollTask();
+  readWindowFrame();
+  measureLayout();
+  deliverScrollTask();
+  readWindowFrame();
   expect(mounted().at(-1)).toBe("m1000");
   expect(geometry.end()).toBe(0);
   expect(screen.queryByText(english["chat.latest"])).toBeNull();
@@ -364,17 +509,20 @@ it("scrolled up, the window follows; Back to latest returns to the end, pinned",
 });
 
 it("the outline reaches a message the window has not mounted, and focuses it", async () => {
-  const client = await chat(1000);
-  await act(async () => {
+  const client = await chat(NAVIGATION_THRESHOLD, NAVIGATION_THRESHOLD);
+  expect(document.querySelector('[data-message-id="m3"]')).toBeNull();
+  expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
+  act(() => {
     screen.getByRole("button", { name: english["chat.outline"] }).click();
   });
   const link = document.querySelector<HTMLElement>('[data-outline-link="m3"]')!;
   // A pointer press on a link focuses it in Chromium and Firefox.
   link.focus();
-  await act(async () => {
+  act(() => {
     link.click();
   });
-  await settle();
+  deliverScrollTask();
+  readWindowFrame();
   const target = document.querySelector('[data-message-id="m3"]');
   expect(target).not.toBeNull();
   expect(document.activeElement).toBe(target);
@@ -387,29 +535,33 @@ it("the message holding focus stays mounted while the box scrolls away", async (
   const focused = document.querySelector<HTMLElement>(
     '[data-message-id="m999"]',
   )!;
-  await act(async () => {
+  act(() => {
     focused.focus();
   });
-  await settle();
+  deliverScrollTask();
+  readWindowFrame();
   expect(document.activeElement).toBe(focused);
   expect(OVERSCAN).toBeGreaterThan(0);
   client.dispose();
 });
 
 it("a link to a message's anchor mounts it and shows it", async () => {
-  const client = await chat(1000);
+  const client = await chat(NAVIGATION_THRESHOLD, NAVIGATION_THRESHOLD);
+  expect(document.querySelector('[data-message-id="m5"]')).toBeNull();
+  expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
   // The anchor the outline links m5 by.
-  await act(async () => {
+  act(() => {
     screen.getByRole("button", { name: english["chat.outline"] }).click();
   });
   const href = document
     .querySelector('[data-outline-link="m5"]')!
     .getAttribute("href")!;
-  await act(async () => {
+  act(() => {
     location.hash = href;
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   });
-  await settle();
+  deliverScrollTask();
+  readWindowFrame();
   expect(mounted()).toContain("m5");
   expect(geometry.top()).toBe(400);
   client.dispose();
@@ -420,12 +572,15 @@ it("a message mounted again keeps its parse", async () => {
   const parsed = () => parses.filter((text) => text === "Message 1000").length;
   expect(parsed()).toBe(1);
   geometry.user("wheel", -60_000);
-  await waitFor(() => expect(mounted()).not.toContain("m1000"));
+  deliverScrollTask();
+  readWindowFrame();
+  expect(mounted()).not.toContain("m1000");
   expect(mounted()).toContain("m398");
-  await act(async () => {
+  act(() => {
     screen.getByText(english["chat.latest"]).click();
   });
-  await settle();
+  deliverScrollTask();
+  readWindowFrame();
   expect(mounted()).toContain("m1000");
   expect(parsed()).toBe(1);
   client.dispose();
@@ -457,24 +612,24 @@ it("a message that crosses the threshold while scrolled up keeps the message rea
       },
     },
   });
-  await client.ready;
-  render(<WaypointChat client={client} />);
-  await waitFor(() => expect(mounted()).toContain(`m${WINDOW_FROM - 1}`), {
-    timeout: 60_000,
-  });
-  await settle();
-  geometry.layout();
-  await settle();
+  await renderChat(client);
+  expect(mounted()).toContain(`m${WINDOW_FROM - 1}`);
+  deliverScrollTask();
+  readWindowFrame();
+  measureLayout();
+  deliverScrollTask();
+  readWindowFrame();
   expect(document.querySelector("[data-transcript-gap]")).toBeNull();
   // The reader scrolls up to message 60, with 10 px of it above the box.
   const read = () =>
     document.querySelector('[data-message-id="m60"]')?.getBoundingClientRect()
       .top;
   geometry.user("wheel", read()! + 10);
-  await settle();
+  deliverScrollTask();
+  readWindowFrame();
   const before = read();
   expect(before).toBe(-10);
-  await act(async () => {
+  act(() => {
     listener!({
       type: "frame",
       frame: {
@@ -486,9 +641,11 @@ it("a message that crosses the threshold while scrolled up keeps the message rea
       },
     } as TransportEvent);
   });
-  await settle();
-  geometry.layout();
-  await settle();
+  deliverScrollTask();
+  readWindowFrame();
+  measureLayout();
+  deliverScrollTask();
+  readWindowFrame();
   // Windowed now, with the message read where it was.
   expect(document.querySelector("[data-transcript-gap]")).not.toBeNull();
   expect(read()).toBe(before);
@@ -499,7 +656,7 @@ it("a message that crosses the threshold while scrolled up keeps the message rea
 // the keys of the Authoring Practices' feed pattern
 // (https://www.w3.org/WAI/ARIA/apg/patterns/feed/).
 const key = (target: Element, init: KeyboardEventInit) =>
-  act(async () => {
+  act(() => {
     target.dispatchEvent(
       new KeyboardEvent("keydown", { bubbles: true, ...init }),
     );
@@ -527,14 +684,16 @@ it("Page Up moves to the previous message, mounting it first", async () => {
     `[data-message-id="${first}"]`,
   )!;
   article.focus();
-  await key(article, { key: "PageUp" });
-  await settle();
+  key(article, { key: "PageUp" });
+  deliverScrollTask();
+  readWindowFrame();
   const previous = `m${at - 1}`;
   expect(document.activeElement?.getAttribute("data-message-id")).toBe(
     previous,
   );
-  await key(document.activeElement!, { key: "PageDown" });
-  await settle();
+  key(document.activeElement!, { key: "PageDown" });
+  deliverScrollTask();
+  readWindowFrame();
   expect(document.activeElement?.getAttribute("data-message-id")).toBe(first);
   client.dispose();
 });
@@ -545,12 +704,12 @@ it("Control+Home and Control+End leave the feed", async () => {
     '[data-message-id="m2"]',
   )!;
   article.focus();
-  await key(article, { key: "Home", ctrlKey: true });
+  key(article, { key: "Home", ctrlKey: true });
   expect(document.activeElement).toBe(
     screen.getByRole("button", { name: english["chat.outline"] }),
   );
   article.focus();
-  await key(article, { key: "End", ctrlKey: true });
+  key(article, { key: "End", ctrlKey: true });
   const feed = document.querySelector('[role="feed"]')!;
   expect(document.activeElement).not.toBe(article);
   expect(feed.contains(document.activeElement)).toBe(false);
@@ -563,6 +722,10 @@ it("Control+Home and Control+End leave the feed", async () => {
 
 it("Page Down and Page Up reach a message still being sent", async () => {
   const base = config();
+  let started!: () => void;
+  const sending = new Promise<void>((resolve) => {
+    started = resolve;
+  });
   const client = createWaypointClient({
     ...base,
     conversationId: "a",
@@ -571,16 +734,18 @@ it("Page Down and Page Up reach a message still being sent", async () => {
       read: async (id) =>
         ({ protocol: "1.0", id, title: id, messages: many(2) }) as Conversation,
       // A send that never ends keeps its message pending.
-      send: () => new Promise(() => {}),
+      send: () => {
+        started();
+        return new Promise(() => {});
+      },
     },
   });
-  await client.ready;
-  render(<WaypointChat client={client} />);
-  await waitFor(() => expect(mounted()).toContain("m2"));
+  await renderChat(client);
+  expect(mounted()).toContain("m2");
   await act(async () => {
     await client.setDraft("First");
     void client.send();
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await sending;
   });
   const pending = [
     ...document.querySelectorAll<HTMLElement>('article[data-role="pending"]'),
@@ -588,13 +753,14 @@ it("Page Down and Page Up reach a message still being sent", async () => {
   expect(pending).toHaveLength(1);
   const last = document.querySelector<HTMLElement>('[data-message-id="m2"]')!;
   last.focus();
-  await key(last, { key: "PageDown" });
+  key(last, { key: "PageDown" });
   expect(document.activeElement).toBe(pending[0]);
   // Nothing follows the last one.
-  await key(pending[0]!, { key: "PageDown" });
+  key(pending[0]!, { key: "PageDown" });
   expect(document.activeElement).toBe(pending[0]);
-  await key(pending[0]!, { key: "PageUp" });
-  await settle();
+  key(pending[0]!, { key: "PageUp" });
+  deliverScrollTask();
+  readWindowFrame();
   expect(document.activeElement).toBe(last);
   client.dispose();
 });
@@ -607,7 +773,7 @@ it("a field inside a message keeps its own Page Down", async () => {
   const field = document.createElement("textarea");
   article.append(field);
   field.focus();
-  await key(field, { key: "PageDown" });
+  key(field, { key: "PageDown" });
   expect(document.activeElement).toBe(field);
   field.remove();
   client.dispose();

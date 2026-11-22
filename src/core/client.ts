@@ -7,6 +7,14 @@ import { semanticKey, type CoreIntentKind } from "./same-intent";
 import { createScope, onAbort, type Scope, type ScopeSignal } from "./scope";
 import type { OnDemand } from "./on-demand";
 import { FrameOverlay } from "./frame-overlay";
+import {
+  normalizeSteps,
+  ReplySteps,
+  replyStep,
+  stepEnvelope,
+  upsertStep,
+} from "./reply-steps";
+import { supportsFormFill } from "../protocol/version";
 import type { ConversationPages, PageCandidate } from "./conversation-pages";
 import {
   frameDeadline,
@@ -323,7 +331,7 @@ export interface ClientSnapshot {
   /** Queued messages whose withdrawal is waiting for its commit. */
   withdrawing: readonly string[];
   /**
-   * The reads the host asked for since the user's last message, in order,
+   * Host-run work and client reads since the user's last message, in order,
    * each running, done or failed.
    */
   toolSteps: readonly ToolStep[];
@@ -341,10 +349,10 @@ export interface ClientSnapshot {
    */
   planReadOnly?: boolean;
 }
-/** A read the host asked for while writing a reply, as the user sees it. */
+/** Work performed for a reply, as the user sees it. */
 export interface ToolStep {
   id: string;
-  /** The host's plain words for it (`ToolCall.label`), when it gave any. */
+  /** The host's plain words for the step, when it gave any. */
   label?: string;
   status: "running" | "done" | "failed";
 }
@@ -641,7 +649,7 @@ function negotiatedCapabilities(
       (value) =>
         answer.capabilities.includes(value) &&
         offered.includes(value) &&
-        (value !== "form-fill" || answer.protocol === "1.1"),
+        (value !== "form-fill" || supportsFormFill(answer.protocol)),
     ),
   );
 }
@@ -776,9 +784,37 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   const readOnly = (plan: PlanRecord | null | undefined) =>
     !!plan?.recovery && (!protectedPlan(plan) || staleControl.has(plan.id));
   const failureMemory = new Map<string, RetainedReplyFailure>();
+  const replySteps = new ReplySteps();
   const update = (patch: Partial<ClientSnapshot>) => {
     if (isDisposed()) return;
+    if (patch.conversation) {
+      const shown = new Set(state.conversation?.messages);
+      patch = {
+        ...patch,
+        conversation: {
+          ...patch.conversation,
+          messages: patch.conversation.messages.map((message) => {
+            if (shown.has(message) || message.steps === undefined)
+              return message;
+            const { steps, ...rest } = message;
+            return {
+              ...rest,
+              ...(message.role === "assistant" &&
+                patch.conversation!.protocol === "1.2" &&
+                steps !== undefined && { steps: normalizeSteps(steps) }),
+            };
+          }),
+        },
+      };
+    }
     state = { ...state, ...patch };
+    state = {
+      ...state,
+      toolSteps: replySteps.display(
+        state.conversation?.messages ?? [],
+        state.history?.outline,
+      ),
+    };
     state = { ...state, replyFailures: replyFailures(failureMemory, state) };
     const activeFailure = state.replyFailures?.find(
       (failure) => failure.active,
@@ -1683,27 +1719,36 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       formMode()
     )
       config.formSession?.receive(frame.block.body);
+    if (frame.type === "step") {
+      const step = replyStep(frame.step);
+      const tail = conversationTail(state.conversation?.messages ?? []);
+      if (
+        step &&
+        tail?.id === frame.messageId &&
+        tail.role === "assistant" &&
+        tail.status === "writing" &&
+        !stopOf(tail.id)
+      )
+        framePatch(tail.id, (message) => ({
+          steps: upsertStep(message.steps ?? [], step),
+        }));
+      return;
+    }
     if (frame.type === "tool.call" || frame.type === "planning-read") {
       if (!keptFrames.has(frame)) retryKeptReads(readFailed);
       const conversationId = state.conversationId;
       const call = frame.type === "tool.call" ? frame.call : undefined;
+      const turn = replySteps.generation;
       // A step keeps its place: it is added once, then its status changes.
       const step = (status: ToolStep["status"]) => {
-        if (!call || !current()) return;
+        if (!call || !current() || turn !== replySteps.generation) return;
         const next = {
           id: call.id,
           ...(call.label && { label: call.label }),
           status,
         };
-        const at = state.toolSteps.findIndex((shown) => shown.id === call.id);
-        update({
-          toolSteps:
-            at < 0
-              ? [...state.toolSteps, next]
-              : state.toolSteps.map((shown, index) =>
-                  index === at ? next : shown,
-                ),
-        });
+        replySteps.set(next);
+        update({});
       };
       const current = () =>
         !isDisposed() &&
@@ -1838,6 +1883,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         status: "writing",
         content: "",
         blocks: [],
+        steps: [],
         ...(frame.versionIndex !== undefined && {
           versionIndex: frame.versionIndex,
         }),
@@ -1964,6 +2010,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           return;
         }
         const frame = event.frame;
+        if (
+          frame.type === "step" &&
+          (!stepEnvelope(frame) ||
+            frame.protocol !== state.protocol ||
+            state.protocol !== "1.2")
+        )
+          return;
         if (frame.sequence <= sequence) return;
         sequence = frame.sequence;
         if (frame.protocol !== state.protocol) {
@@ -2685,7 +2738,11 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         }
         return;
       }
-      update({ sending: true, toolSteps: [] });
+      replySteps.begin(
+        state.conversation?.messages ?? [],
+        state.history?.outline,
+      );
+      update({ sending: true });
       try {
         const extensions: Record<string, unknown> = {};
         const hints: string[] = [];
@@ -2703,6 +2760,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         update({ hints });
         if (held || scope.aborted || state.conversationUnavailable) return;
         const id = config.platform.ids();
+        replySteps.bind(id);
         let outgoing: Reply = {
           kind: "message",
           protocol: state.protocol!,
@@ -3113,6 +3171,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         config.platform.clock.clearTimeout(replyTimer);
       clientScope.abort();
       failureMemory.clear();
+      replySteps.clear();
       actionCode?.dispose();
       close();
       listeners.clear();
@@ -3162,7 +3221,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     if (
       reply.kind === "form-fill" &&
       (!formMode() ||
-        state.protocol !== "1.1" ||
+        !supportsFormFill(state.protocol) ||
         !state.capabilities.includes("form-fill"))
     )
       return notSent;
@@ -3217,6 +3276,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const sameConversation = id === state.conversationId;
     livePendingIds.clear();
     failureMemory.clear();
+    replySteps.clear();
     startGenerations.clear();
     started.clear();
     startedAt.clear();

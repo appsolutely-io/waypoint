@@ -65,82 +65,85 @@ it("shows invalid draft guidance without truncation and offers replace/cancel on
   expect(input.value).toBe("Replacement");
   c.dispose();
 });
-it("sends text and reference strings, uploads pasted images only through the private adapter", async () => {
-  const cfg = config();
-  const send = vi.fn(async () => ({ id: "reply" }));
-  cfg.transport.send = send;
-  cfg.transport.negotiate = async () => ({
-    protocol: "1.1",
-    capabilities: ["form-fill"],
-  });
-  cfg.transport.read = async () => ({
-    protocol: "1.1",
-    id: "conversation-a",
-    title: "Form",
-    messages: [],
-    mode: "form-fill",
-    subject: {
-      key: "draft-a",
-      resource: "items",
-      label: "Item",
-      route: "/items/new",
-      state: "pending",
-    },
-  });
-  const c = createWaypointClient(cfg);
-  await c.ready;
-  const s = createFormSession({
-    fields: [{ name: "title", label: "Title", tier: "low", value: "" }],
-    ids: () => "request",
-  });
-  const upload = vi.fn(async () => "private-reference");
-  render(
-    <WaypointProvider client={c}>
-      <FormFillPopup
-        session={s}
-        open
-        onClose={() => {}}
-        attachments={{ upload, remove: async () => {} }}
-      />
-    </WaypointProvider>,
-  );
-  await waitFor(() =>
-    expect(
-      screen
-        .getByRole("button", { name: "Generate draft" })
-        .getAttribute("aria-disabled"),
-    ).toBeNull(),
-  );
-  fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
-    target: { value: "Make a title" },
-  });
-  fireEvent.change(screen.getByRole("textbox", { name: "Reference links" }), {
-    target: { value: "https://example.test/reference" },
-  });
-  fireEvent.paste(screen.getByRole("textbox", { name: "Message" }), {
-    clipboardData: {
-      files: [new File(["image"], "pasted.png", { type: "image/png" })],
-    },
-  });
-  await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
-  await waitFor(() =>
-    expect(
-      (
-        screen.getByRole("button", {
-          name: "Generate draft",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(false),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Generate draft" }));
-  await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
-  expect(send.mock.calls[0]).toBeDefined();
-  expect(JSON.stringify(send.mock.calls)).toContain("private-reference");
-  expect(JSON.stringify(send.mock.calls)).toContain(
-    "https://example.test/reference",
-  );
-  c.dispose();
-});
+it.each(["1.1", "1.2"])(
+  "sends text and reference strings, uploads pasted images only through the private adapter (%s)",
+  async (protocol) => {
+    const cfg = config();
+    const send = vi.fn(async () => ({ id: "reply" }));
+    cfg.transport.send = send;
+    cfg.transport.negotiate = async () => ({
+      protocol,
+      capabilities: ["form-fill"],
+    });
+    cfg.transport.read = async () => ({
+      protocol,
+      id: "conversation-a",
+      title: "Form",
+      messages: [],
+      mode: "form-fill",
+      subject: {
+        key: "draft-a",
+        resource: "items",
+        label: "Item",
+        route: "/items/new",
+        state: "pending",
+      },
+    });
+    const c = createWaypointClient(cfg);
+    await c.ready;
+    const s = createFormSession({
+      fields: [{ name: "title", label: "Title", tier: "low", value: "" }],
+      ids: () => "request",
+    });
+    const upload = vi.fn(async () => "private-reference");
+    render(
+      <WaypointProvider client={c}>
+        <FormFillPopup
+          session={s}
+          open
+          onClose={() => {}}
+          attachments={{ upload, remove: async () => {} }}
+        />
+      </WaypointProvider>,
+    );
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole("button", { name: "Generate draft" })
+          .getAttribute("aria-disabled"),
+      ).toBeNull(),
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+      target: { value: "Make a title" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Reference links" }), {
+      target: { value: "https://example.test/reference" },
+    });
+    fireEvent.paste(screen.getByRole("textbox", { name: "Message" }), {
+      clipboardData: {
+        files: [new File(["image"], "pasted.png", { type: "image/png" })],
+      },
+    });
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Generate draft",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Generate draft" }));
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect(send.mock.calls[0]).toBeDefined();
+    expect(JSON.stringify(send.mock.calls)).toContain("private-reference");
+    expect(JSON.stringify(send.mock.calls)).toContain(
+      "https://example.test/reference",
+    );
+    c.dispose();
+  },
+);
 it("renders a form.fill block with each validation result and nonblocking guidance", async () => {
   const { Widget } = await import("../../src/react/ui");
   const c = createWaypointClient(config());

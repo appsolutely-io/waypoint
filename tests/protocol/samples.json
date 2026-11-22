@@ -1,4 +1,16 @@
 {
+  "ReplyStep": {
+    "id": "host-read",
+    "label": "Reading orders",
+    "status": "running"
+  },
+  "FrameStep": {
+    "type": "step",
+    "protocol": "1.2",
+    "sequence": 1,
+    "messageId": "assistant-message",
+    "step": { "id": "host-read", "status": "done" }
+  },
   "MessageSender": {
     "id": "reviewer",
     "name": "Reviewer",

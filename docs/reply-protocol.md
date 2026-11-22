@@ -128,7 +128,7 @@ Outbox failures loaded by hydrate for the current visit display silently. `snaps
 
 ## Host problem detail
 
-A `Problem` MAY carry `host: { code, qualifier? }` or `host: null`. Each string MUST be nonempty and at most 128 Unicode characters. These are safe host-defined enumerated values, not raw provider text; the closed `Problem.code` alone determines behavior. The host maps detail through `problemText`, for example `problem.host?.code === "availability"` with qualifier `temporary` or `permanent`. Malformed detail is omitted; no detail keeps legacy behavior.
+A `Problem` MAY carry `host: { code, qualifier? }` or `host: null`. Each string MUST be nonempty and at most 128 Unicode characters. A host MUST NOT put anything in `Problem.host` that the user may not see: every reader can receive it through `problemText` and the failed-send part data. These are safe host-defined enumerated values, not raw provider text; the closed `Problem.code` alone determines behavior. The host maps detail through `problemText`, for example `problem.host?.code === "availability"` with qualifier `temporary` or `permanent`. Malformed detail is omitted; no detail keeps legacy behavior.
 
 A request refusal keeps the client's local request id, independently of any host id. Each refusal and `failedSendControls` part receives its own detached host detail. Standalone stream problems preserve their host id, including an intentional override of a failed row, except that an id colliding with a currently sending row (`failure: null`) receives a fresh client id once at frame application. That replacement never reconnects to the send after it settles. Normal successful-send clearing and failed-send replacement of the global problem remain unchanged.
 

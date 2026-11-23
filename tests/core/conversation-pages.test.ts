@@ -599,7 +599,7 @@ it("rejects a page whose message carries an attachment the protocol does not all
     { name: "broken.txt", mediaType: "text/plain", size: 5 },
   ] as Message["attachments"];
   h.readPage.mockImplementationOnce(async () =>
-    page([{ ...message("middle"), attachments: untrusted }]),
+    page([{ ...message("old"), attachments: untrusted }]),
   );
   expect(await client.loadMessage("old")).toBe(false);
   expect(client.getSnapshot().history?.failed).toBe(true);
@@ -619,7 +619,7 @@ it("rejects a page whose message carries more attachments than the protocol allo
     size: 5,
   }));
   h.readPage.mockImplementationOnce(async () =>
-    page([{ ...message("middle"), attachments: many }]),
+    page([{ ...message("old"), attachments: many }]),
   );
   expect(await client.loadMessage("old")).toBe(false);
   expect(client.getSnapshot().history?.failed).toBe(true);

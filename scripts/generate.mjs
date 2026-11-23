@@ -3,6 +3,11 @@ import { compile } from "json-schema-to-typescript";
 import { openEnums } from "./open-enums.mjs";
 const schema = JSON.parse(await readFile("src/protocol/schema.json", "utf8"));
 openEnums(schema);
+// An array whose maxItems is at or below the generator's threshold becomes a
+// fixed tuple union, which a host building one dynamically cannot assign.
+// The attachments' wire limit (20) sits above this on purpose, so their type
+// stays a plain array while schema.json still declares the limit.
+const TUPLE_LIMIT = 19;
 const all = {
   ...schema,
   oneOf: Object.keys(schema.$defs).map((name) => ({ $ref: `#/$defs/${name}` })),
@@ -10,6 +15,7 @@ const all = {
 const types = await compile(all, "Protocol", {
   bannerComment: "/* Generated from schema.json. */",
   additionalProperties: false,
+  maxItems: TUPLE_LIMIT,
   style: { singleQuote: true },
   unreachableDefinitions: true,
 });

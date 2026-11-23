@@ -587,3 +587,42 @@ it("a changed history revision replaces its predecessor cursor boundary", async 
   ).toEqual(["old", "Edited", "latest"]);
   client.dispose();
 });
+
+it("rejects a page whose message carries an attachment the protocol does not allow", async () => {
+  const h = setup();
+  const client = createWaypointClient(h.cfg);
+  await client.ready;
+  const before = client.getSnapshot().conversation;
+  // The host's page is untrusted: one entry is malformed.
+  const untrusted = [
+    { id: "file-1", name: "notes.txt", mediaType: "text/plain", size: 5 },
+    { name: "broken.txt", mediaType: "text/plain", size: 5 },
+  ] as Message["attachments"];
+  h.readPage.mockImplementationOnce(async () =>
+    page([{ ...message("middle"), attachments: untrusted }]),
+  );
+  expect(await client.loadMessage("old")).toBe(false);
+  expect(client.getSnapshot().history?.failed).toBe(true);
+  expect(client.getSnapshot().conversation).toBe(before);
+  client.dispose();
+});
+
+it("rejects a page whose message carries more attachments than the protocol allows", async () => {
+  const h = setup();
+  const client = createWaypointClient(h.cfg);
+  await client.ready;
+  const before = client.getSnapshot().conversation;
+  const many = Array.from({ length: 21 }, (_, at) => ({
+    id: `file-${at}`,
+    name: `notes-${at}.txt`,
+    mediaType: "text/plain",
+    size: 5,
+  }));
+  h.readPage.mockImplementationOnce(async () =>
+    page([{ ...message("middle"), attachments: many }]),
+  );
+  expect(await client.loadMessage("old")).toBe(false);
+  expect(client.getSnapshot().history?.failed).toBe(true);
+  expect(client.getSnapshot().conversation).toBe(before);
+  client.dispose();
+});

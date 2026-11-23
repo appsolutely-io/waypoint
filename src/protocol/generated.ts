@@ -788,9 +788,9 @@ export interface Message {
    */
   sources?: Source[];
   /**
-   * The files the message carries, as the host stored them. Optional.
+   * The files the message carries, as the host stored them. At most 20. Optional.
    *
-   * @maxItems 50
+   * @maxItems 20
    */
   attachments?: MessageAttachment[];
 }
@@ -826,9 +826,9 @@ export interface ReplyMessage {
   content: string;
   clientMessageId: string;
   /**
-   * The files the message carries, as the host stored them. Optional.
+   * The files the message carries, as the host stored them. At most 20. Optional.
    *
-   * @maxItems 50
+   * @maxItems 20
    */
   attachments?: MessageAttachment[];
 }

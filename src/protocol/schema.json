@@ -1653,9 +1653,9 @@
           }
         },
         "attachments": {
-          "description": "The files the message carries, as the host stored them. Optional.",
+          "description": "The files the message carries, as the host stored them. At most 20. Optional.",
           "type": "array",
-          "maxItems": 50,
+          "maxItems": 20,
           "items": {
             "$ref": "#/$defs/MessageAttachment"
           }
@@ -1667,8 +1667,12 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1 },
-        "name": { "type": "string", "minLength": 1 },
-        "mediaType": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
         "size": { "type": "integer", "minimum": 0 },
         "url": { "type": "string", "minLength": 1 }
       },
@@ -1816,9 +1820,9 @@
           "minLength": 1
         },
         "attachments": {
-          "description": "The files the message carries, as the host stored them. Optional.",
+          "description": "The files the message carries, as the host stored them. At most 20. Optional.",
           "type": "array",
-          "maxItems": 50,
+          "maxItems": 20,
           "items": {
             "$ref": "#/$defs/MessageAttachment"
           }

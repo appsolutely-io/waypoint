@@ -2,10 +2,27 @@ import { it, expect } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 import schema from "../../src/protocol/schema.json";
 import samples from "./samples.json";
+import { supportsReplySteps } from "../../src/protocol/version";
 
 const ajv = new Ajv2020({ strict: false });
 ajv.addSchema(schema);
 const call = ajv.getSchema("https://waypoint.example/schema#/$defs/ToolCall")!;
+
+it.each<[string | null, boolean]>([
+  ["1.2", true],
+  ["1.3", true],
+  ["1.10", true],
+  ["1.0", false],
+  ["1.1", false],
+  ["2.0", false],
+  ["1.02", false],
+  ["1.2.0", false],
+  ["1.2\n", false],
+  ["", false],
+  [null, false],
+])("recognizes compatible reply-step protocol %s", (protocol, expected) => {
+  expect(supportsReplySteps(protocol)).toBe(expected);
+});
 
 it("validates host step statuses, Unicode labels and additive fields", () => {
   const valid = ajv.getSchema(

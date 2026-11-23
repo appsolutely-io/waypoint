@@ -14,7 +14,7 @@ import {
   stepEnvelope,
   upsertStep,
 } from "./reply-steps";
-import { supportsFormFill } from "../protocol/version";
+import { supportsFormFill, supportsReplySteps } from "../protocol/version";
 import type { ConversationPages, PageCandidate } from "./conversation-pages";
 import {
   frameDeadline,
@@ -800,7 +800,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             return {
               ...rest,
               ...(message.role === "assistant" &&
-                patch.conversation!.protocol === "1.2" &&
+                supportsReplySteps(patch.conversation!.protocol) &&
                 steps !== undefined && { steps: normalizeSteps(steps) }),
             };
           }),
@@ -2014,7 +2014,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           frame.type === "step" &&
           (!stepEnvelope(frame) ||
             frame.protocol !== state.protocol ||
-            state.protocol !== "1.2")
+            !supportsReplySteps(state.protocol))
         )
           return;
         if (frame.sequence <= sequence) return;
@@ -2820,6 +2820,11 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       )
         return;
       if (!viewRow(id)) return;
+      replySteps.begin(
+        state.conversation?.messages ?? [],
+        state.history?.outline,
+        id,
+      );
       emit({ type: "send", conversationId: state.conversationId, replyId: id });
       await dispatch(id);
     },
@@ -3225,6 +3230,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         !state.capabilities.includes("form-fill"))
     )
       return notSent;
+    if (reply.kind === "message") {
+      replySteps.begin(
+        state.conversation?.messages ?? [],
+        state.history?.outline,
+        reply.clientMessageId,
+      );
+      update({});
+    }
     emit({
       type: "reply",
       conversationId,

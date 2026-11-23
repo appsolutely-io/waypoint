@@ -2,6 +2,7 @@
 // named in the host's words, until the user's next message.
 import { it, expect, vi } from "vitest";
 import {
+  createMemoryStorage,
   createWaypointClient,
   type ClientConfig,
   type TransportEvent,
@@ -291,6 +292,131 @@ it("keeps a new send's running tool when its user message is confirmed by a read
   );
   client.dispose();
 });
+
+it.each([
+  ["outbox", false, false],
+  ["outbox", true, false],
+  ["reply", false, false],
+  ["reply", true, false],
+  ["reply", false, true],
+  ["replyOutcome", false, true],
+] as const)(
+  "keeps a restored message's tool through %s retry confirmation and completion (%s, replay %s)",
+  async (path, repeatRetry, replayConfirmed) => {
+    const storage = createMemoryStorage();
+    const original = await hostChat(undefined, { storage });
+    original.send.mockRejectedValueOnce({ code: "refused" });
+    await original.client.setDraft("Restored question");
+    await original.client.send();
+    const id = original.client.getSnapshot().pending[0]!.id;
+    original.client.dispose();
+
+    let release!: (value: unknown) => void;
+    const request = vi.fn(() => new Promise((resolve) => (release = resolve)));
+    const { client, frame, send, replace } = await hostChat(undefined, {
+      storage,
+      reads: { manifest: [samples.ManifestEntry as ManifestEntry], request },
+    });
+    expect(client.getSnapshot().pending[0]).toMatchObject({
+      id,
+      failure: { code: "refused" },
+    });
+    const running = [{ id: "retried-tool", status: "running" }];
+    send.mockImplementationOnce(async () => {
+      frame({
+        type: "tool.call",
+        call: { ...samples.ToolCall, id: "retried-tool" },
+      });
+      await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+      if (repeatRetry) throw { code: "retryable" };
+      return { id: "sent" };
+    });
+    const before = client.getSnapshot().conversation!;
+    const confirmed: Conversation = {
+      ...before,
+      messages: [
+        ...before.messages,
+        {
+          id: "retried-user",
+          clientMessageId: id,
+          role: "user",
+          content: "Restored question",
+          blocks: [],
+          createdAt: 2,
+        },
+        {
+          id: "retried-reply",
+          role: "assistant",
+          content: "",
+          status: "writing",
+          blocks: [],
+          createdAt: 3,
+        },
+      ],
+    };
+    const retry = () => {
+      if (path === "outbox") return client.retry(id);
+      const message = {
+        kind: "message",
+        clientReplyId: id,
+        clientMessageId: id,
+        content: "Restored question",
+      } as const;
+      return path === "reply"
+        ? client.reply(message)
+        : client.replyOutcome(message);
+    };
+    if (!repeatRetry) replace(confirmed);
+    await retry();
+    if (repeatRetry) {
+      expect(client.getSnapshot().toolSteps).toEqual(running);
+      send.mockImplementationOnce(async () => {
+        expect(client.getSnapshot().toolSteps).toEqual(running);
+        return { id: "sent" };
+      });
+      replace(confirmed);
+      await retry();
+    }
+    expect(client.getSnapshot().conversation?.messages.at(-2)?.id).toBe(
+      "retried-user",
+    );
+    expect(client.getSnapshot().toolSteps).toEqual(running);
+    if (replayConfirmed) {
+      await retry();
+      expect(client.getSnapshot().toolSteps).toEqual(running);
+      expect(request).toHaveBeenCalledOnce();
+    }
+    release({ title: "A" });
+    await vi.waitFor(() =>
+      expect(client.getSnapshot().toolSteps).toEqual([
+        { id: "retried-tool", status: "done" },
+      ]),
+    );
+    client.dispose();
+  },
+);
+
+it.each(["1.3", "1.10"])(
+  "keeps steps read under a newer compatible protocol (%s)",
+  async (protocol) => {
+    const { client, replace } = await hostChat();
+    const before = client.getSnapshot().conversation!;
+    replace({
+      ...before,
+      protocol,
+      messages: before.messages.map((message) =>
+        message.id === "a"
+          ? { ...message, steps: [{ id: "compatible", status: "done" }] }
+          : message,
+      ),
+    });
+    await client.refresh();
+    expect(client.getSnapshot().toolSteps).toEqual([
+      { id: "compatible", status: "done" },
+    ]);
+    client.dispose();
+  },
+);
 
 it("preserves frame steps across an older read and lets a later read replace them", async () => {
   const { client, frame, step, read, replace } = await hostChat();

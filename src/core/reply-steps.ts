@@ -77,12 +77,14 @@ export class ReplySteps {
   begin(
     messages: readonly Message[],
     outline: readonly OutlineMessage[] = [],
+    clientMessageId?: string,
   ): void {
+    if (clientMessageId && clientMessageId === this.clientMessageId) return;
     this.excluded = new Set(
       [...outline, ...messages].map((message) => message.id),
     );
     this.awaitingUser = true;
-    this.clientMessageId = undefined;
+    this.clientMessageId = clientMessageId;
     this.reset();
   }
   bind(clientMessageId: string): void {
@@ -118,9 +120,11 @@ export class ReplySteps {
           confirmed.clientMessageId === this.clientMessageId);
       this.user = user;
       this.awaitingUser = false;
-      this.clientMessageId = undefined;
       this.excluded.clear();
-      if (!sameSend) this.reset();
+      if (!sameSend) {
+        this.clientMessageId = confirmed?.clientMessageId;
+        this.reset();
+      }
     }
     const current = new Set(index.slice(start).map((entry) => entry.id));
     let steps = [...this.local];

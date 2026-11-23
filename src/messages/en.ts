@@ -31,7 +31,9 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.sending": "Sending",
   "chat.pendingSending": "Sending…",
   "chat.pendingUploading": "Uploading…",
-  "chat.attachmentFailed": "The site could not store {names}.",
+  "chat.attachmentFailed": "The site could not upload {names}.",
+  "chat.formFilesRemoved":
+    "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",
@@ -389,6 +391,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
     "Something changed since this plan was made. Review the current values.",
   "chat.problem.agreement":
     "The connection could not be renewed. Retry to check the current status.",
+  "chat.problem.attachmentsLost":
+    "The attached files are no longer here; pick them again to send them.",
   "chat.problem.inDoubt":
     "We couldn't confirm what happened. Check the current status before trying again.",
   "chat.problem.replaced": "A newer version replaced this. Refresh to see it.",

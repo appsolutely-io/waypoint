@@ -1784,9 +1784,11 @@ const MessageRow = memo(function MessageRow({
             {attachmentsOf(message.attachments, true).map((file, index) => (
               <li key={`${file.id ?? file.name}-${index}`}>
                 {isSafeUrl(file.url, extraUrlSchemes) ? (
-                  <a href={file.url}>{file.name}</a>
+                  <a className="wp-attachment-name" href={file.url}>
+                    {file.name}
+                  </a>
                 ) : (
-                  <span>{file.name}</span>
+                  <span className="wp-attachment-name">{file.name}</span>
                 )}
               </li>
             ))}
@@ -1866,19 +1868,35 @@ function ChatBody({
   const [files, setFiles] = useState<readonly AttachmentUpload[]>([]);
   // The picker forgets what it said when the composer sends.
   const [sent, setSent] = useState(0);
+  // Files dropped because the conversation turned out to take a form are
+  // said, not silently lost.
+  const [formDropped, setFormDropped] = useState(false);
   // The files belong to the conversation they were picked in.
   useEffect(() => {
     setFiles([]);
+    setFormDropped(false);
   }, [state.conversationId]);
-  // The message goes with the files the user picked. The queued message
-  // keeps them, so the composer forgets them at once: they go with this
-  // message, not with the next one.
+  // The message goes with the files the user picked. They leave with the
+  // message that queued them; a message that never queued keeps them with
+  // the draft it kept.
   const send = () => {
     if (!state.draft.trim() || state.sending) return;
+    if (state.conversation?.mode === "form-fill") {
+      if (files.length) {
+        setFiles([]);
+        setFormDropped(true);
+      }
+      void client.send();
+      return;
+    }
     const chosen = files;
-    setFiles([]);
-    setSent((count) => count + 1);
-    void client.send(chosen);
+    void client.send(chosen).then((queued) => {
+      if (!queued) return;
+      // Only the files this message took leave: ones picked while it was
+      // on its way stay for the next message.
+      setFiles((current) => current.filter((kept) => !chosen.includes(kept)));
+      setSent((count) => count + 1);
+    });
   };
   const transcript = useRef<HTMLDivElement>(null);
   const transcriptContent = useRef<HTMLDivElement>(null);
@@ -3047,10 +3065,18 @@ function ChatBody({
                         const uploading = (pending.attachments ?? []).some(
                           (file) => !file.id,
                         );
-                        const unstored = (pending.attachments ?? [])
-                          .filter((file) => !file.id)
-                          .map((file) => file.name)
-                          .join(", ");
+                        // The store met these files: a failure that never
+                        // reached them does not name them.
+                        const unstored =
+                          pending.failure &&
+                          (pending.failure.code === "refused" ||
+                            pending.failure.code === "rate-limited")
+                            ? new Intl.ListFormat(provider.lang).format(
+                                (pending.attachments ?? [])
+                                  .filter((file) => !file.id)
+                                  .map((file) => file.name),
+                              )
+                            : "";
                         const rowText = rowProblem
                           ? (provider.problemText?.(rowProblem, {
                               answeredElsewhere:
@@ -3084,7 +3110,9 @@ function ChatBody({
                                     <li
                                       key={`${file.id ?? file.name}-${index}`}
                                     >
-                                      <span>{file.name}</span>
+                                      <span className="wp-attachment-name">
+                                        {file.name}
+                                      </span>
                                     </li>
                                   ))}
                                 </ul>
@@ -3108,7 +3136,7 @@ function ChatBody({
                                     : "chat.pendingSending",
                               )}
                             </p>
-                            {pending.failure && unstored ? (
+                            {unstored ? (
                               <p>
                                 {t("chat.attachmentFailed", {
                                   names: unstored,
@@ -3411,6 +3439,10 @@ function ChatBody({
                   disabled={state.conversationUnavailable}
                   reset={sent}
                 />
+              ) : formDropped ? (
+                <p role="status" className="wp-composer-status">
+                  {t("chat.formFilesRemoved")}
+                </p>
               ) : null}
               <T
                 inputRef={field}

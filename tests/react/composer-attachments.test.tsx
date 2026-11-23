@@ -195,7 +195,7 @@ it("shows a failed upload on the message, not below the composer", async () => {
   const pending = await screen.findByRole("article", { name: "You" });
   await waitFor(() => expect(pending.textContent).toContain("Not sent"));
   expect(pending.textContent).toContain("report.txt");
-  expect(pending.textContent).toContain("could not store");
+  expect(pending.textContent).toContain("could not upload");
   // The refusal belongs to the message, so it is not said below the
   // composer as well.
   const alert = document.querySelector('[role="alert"]')!;
@@ -323,10 +323,10 @@ it("sends the picked files with that message only", async () => {
     target: { files: [file("notes.txt", "later")] },
   });
   await waitFor(() => expect(screen.getByText("notes.txt")).toBeTruthy());
-  expect(
-    document.querySelector(".wp-composer-files")?.textContent ?? "",
-  ).not.toContain("report.txt");
   release();
+  // The message takes only the files it was given; the late one stays.
+  await waitFor(() => expect(screen.queryByText("report.txt")).toBeNull());
+  expect(screen.getByText("notes.txt")).toBeTruthy();
   client.dispose();
 });
 
@@ -427,5 +427,230 @@ it("offers no attachments in a form-fill conversation", async () => {
   render(<WaypointChat client={client} />);
   await screen.findByRole("textbox", { name: "Message" });
   expect(screen.queryByRole("button", { name: "Attach files" })).toBeNull();
+  client.dispose();
+});
+
+it("keeps the files when the message was held back", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: port(),
+    contributions: [{ id: "hold", evaluate: async () => ({ hold: "hold" }) }],
+    transport: {
+      ...base.transport,
+      send: async () => ({ id: "stored" }),
+    },
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() => expect(screen.getByText("report.txt")).toBeTruthy());
+  fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+    target: { value: "Here is the report" },
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  });
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement)
+        .value,
+    ).toBe("Here is the report"),
+  );
+  expect(screen.getByText("report.txt")).toBeTruthy();
+  client.dispose();
+});
+
+it("removes the files with a word when the conversation takes a form", async () => {
+  let formFill = false;
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: port(),
+    formSession: {
+      begin: () => ({ requestId: "form-1", fields: [] }),
+      getSnapshot: () => ({ fields: [] }),
+      cancel: () => {},
+      dispose: () => {},
+      // The form session's own contract is not under test here.
+    } as never,
+    transport: {
+      ...base.transport,
+      read: async () => ({
+        protocol: "1.0",
+        id: "conversation-a",
+        title: "Chat",
+        ...(formFill ? { mode: "form-fill" } : {}),
+        messages: [],
+      }),
+    },
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() => expect(screen.getByText("report.txt")).toBeTruthy());
+  formFill = true;
+  await act(async () => {
+    await client.refresh();
+  });
+  expect(screen.queryByRole("button", { name: "Attach files" })).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+    target: { value: "Fill this" },
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  });
+  await waitFor(() => expect(screen.getByText(/takes a form/)).toBeTruthy());
+  expect(screen.queryByText("report.txt")).toBeNull();
+  client.dispose();
+});
+
+it("drops files whose read settled after their message left", async () => {
+  const base = config();
+  const uploads: string[] = [];
+  const client = createWaypointClient({
+    ...base,
+    attachments: {
+      upload: async (data, context) => {
+        uploads.push(context.fileName);
+        return { id: "file-1" };
+      },
+    },
+    transport: {
+      ...base.transport,
+      send: async () => ({ id: "stored" }),
+    },
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+    target: { value: "Here is the report" },
+  });
+  // The send leaves before the file's read settles.
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  });
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement)
+        .value,
+    ).toBe(""),
+  );
+  await waitFor(() => expect(uploads).toHaveLength(0));
+  expect(screen.queryByText("report.txt")).toBeNull();
+  client.dispose();
+});
+
+it("carries the attachments in the bubble's part data", async () => {
+  const seen: { message?: unknown; pending?: unknown }[] = [];
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: {
+      upload: async (data, context) => {
+        await gate;
+        return { id: `file-${context.fileName}` };
+      },
+    },
+    transport: {
+      ...base.transport,
+      read: async () => ({
+        protocol: "1.0",
+        id: "conversation-a",
+        title: "Chat",
+        messages: [
+          {
+            id: "m1",
+            role: "assistant",
+            content: "Here is the report",
+            blocks: [],
+            createdAt: 100,
+            attachments: [
+              {
+                id: "file-1",
+                name: "notes.txt",
+                mediaType: "text/plain",
+                size: 5,
+              },
+            ],
+          },
+        ],
+      }),
+      send: async () => ({ id: "stored" }),
+    },
+  });
+  await client.ready;
+  render(
+    <WaypointChat
+      client={client}
+      parts={{
+        bubble: (props) => {
+          seen.push(props.data as { message?: unknown; pending?: unknown });
+          return props.children;
+        },
+      }}
+    />,
+  );
+  await screen.findByText("Here is the report");
+  const message = seen.find(
+    (entry) => (entry as { message?: { id?: string } }).message?.id === "m1",
+  ) as { message?: { attachments?: unknown[] } };
+  expect(message.message?.attachments).toEqual([
+    { id: "file-1", name: "notes.txt", mediaType: "text/plain", size: 5 },
+  ]);
+  fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+    target: { value: "Thanks" },
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  });
+  fireEvent.change(
+    document.querySelector<HTMLInputElement>('input[type="file"]')!,
+    { target: { files: [file("report.txt", "hello")] } },
+  );
+  await waitFor(() => expect(screen.getByText("report.txt")).toBeTruthy());
+  fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+    target: { value: "Thanks" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await waitFor(() => {
+    const pending = seen.find((entry) => {
+      const files = (entry as { pending?: { attachments?: unknown[] } }).pending
+        ?.attachments;
+      return Array.isArray(files) && files.length > 0;
+    }) as { pending?: { attachments?: unknown[] } };
+    expect(pending.pending?.attachments).toEqual([
+      { name: "report.txt", mediaType: "text/plain", size: 5 },
+    ]);
+  });
+  release();
+  client.dispose();
+});
+
+it("says the too-many refusal once for a pick that overflows", async () => {
+  const client = createWaypointClient({
+    ...config(),
+    attachments: port(),
+  });
+  await client.ready;
+  const { input, status } = await chatWith(client);
+  const many = Array.from({ length: 21 }, (_, at) =>
+    file(`report-${at}.txt`, "x"),
+  );
+  fireEvent.change(input, { target: { files: many } });
+  await waitFor(() => expect(status()).toContain("at most"));
+  expect(status().match(/at most/g)).toHaveLength(1);
+  expect(document.querySelectorAll(".wp-composer-files > li")).toHaveLength(20);
   client.dispose();
 });

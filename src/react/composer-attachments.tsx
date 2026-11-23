@@ -69,7 +69,11 @@ export function ComposerAttachments({
   const [revision, setRevision] = useState(0);
   // The host's policy is fixed for this client: the port it was given.
   const policy = client.getSnapshot().attachmentPolicy;
-  // The picker forgets what it said when the composer sends.
+  // The picker forgets what it said when the composer sends. The count is
+  // read through a ref, so a pick that is still reading sees a send that
+  // happened while it read.
+  const sentCount = useRef(reset);
+  sentCount.current = reset;
   useEffect(() => {
     setStatus("");
   }, [reset]);
@@ -93,10 +97,27 @@ export function ComposerAttachments({
     setStatus(text);
     setRevision((count) => count + 1);
   };
+  // Each picked file keeps one key of its own, so removing one does not
+  // move the rest.
+  const picked = useRef(new WeakMap<AttachmentUpload, number>());
+  const next = useRef(0);
+  const keyOf = (file: AttachmentUpload) => {
+    const known = picked.current.get(file);
+    if (known !== undefined) return known;
+    const id = ++next.current;
+    picked.current.set(file, id);
+    return id;
+  };
   const pick = async (chosen: readonly File[]) => {
+    // Files that settle after their message left, or after the
+    // conversation changed, belong to neither: they are dropped.
+    const conversation = client.getSnapshot().conversationId;
+    const sentWhenReset = sentCount.current;
     if (chosen.length) say(t("composer.reading"));
     const taken: AttachmentUpload[] = [];
     const refused: string[] = [];
+    let full = false;
+    const room = MAX_ATTACHMENTS - files.length;
     for (const file of chosen) {
       const mediaType = file.type || "application/octet-stream";
       if (!acceptsMediaType(policy?.accept, mediaType)) {
@@ -117,8 +138,8 @@ export function ComposerAttachments({
         );
         continue;
       }
-      if (files.length + taken.length >= MAX_ATTACHMENTS) {
-        refused.push(t("composer.tooMany", { max: String(MAX_ATTACHMENTS) }));
+      if (taken.length >= room) {
+        full = true;
         continue;
       }
       let data: Uint8Array;
@@ -130,12 +151,19 @@ export function ComposerAttachments({
       }
       taken.push({ name: file.name, mediaType, data });
     }
-    if (taken.length)
-      onFiles((current) => [...current, ...taken].map((file) => ({ ...file })));
-    const words = [
-      ...refused,
-      ...taken.map((file) => t("composer.added", { name: file.name })),
-    ].join(" ");
+    if (full)
+      refused.push(t("composer.tooMany", { max: String(MAX_ATTACHMENTS) }));
+    const late =
+      sentCount.current !== sentWhenReset ||
+      client.getSnapshot().conversationId !== conversation;
+    if (taken.length && !late)
+      onFiles((current) => [...current, ...taken].slice(0, MAX_ATTACHMENTS));
+    const words = late
+      ? refused.join(" ")
+      : [
+          ...refused,
+          ...taken.map((file) => t("composer.added", { name: file.name })),
+        ].join(" ");
     if (words) say(words);
   };
   return (
@@ -168,8 +196,8 @@ export function ComposerAttachments({
         }}
         className="wp-attachments wp-composer-files"
       >
-        {files.map((file, index) => (
-          <li key={`${file.name}-${index}`}>
+        {files.map((file) => (
+          <li key={keyOf(file)}>
             <span className="wp-attachment-name">{file.name}</span>
             <span>{size(file.data.byteLength)}</span>
             <B

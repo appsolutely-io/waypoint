@@ -357,9 +357,10 @@
   min-inline-size: 0;
   overflow-wrap: anywhere;
 }
-/* The picker says nothing until it has something to say. */
+/* The picker's status keeps its place in the accessibility tree while it
+   says nothing; only its margins go, so the first words are not dropped. */
 .waypoint .wp-composer-status:empty {
-  display: none;
+  margin-block: 0;
 }
 /* A fill's suggestion for an edited field reads as one aside: a small
    label over its value, its validation under it, its answers in a row. */

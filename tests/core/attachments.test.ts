@@ -21,6 +21,7 @@ function harness(
     port?: AttachmentPort | null;
     storage?: StoragePort;
     send?: TransportPort["send"];
+    read?: TransportPort["read"];
   } = {},
 ) {
   const base = config();
@@ -41,6 +42,7 @@ function harness(
     ...(options.storage ? { storage: options.storage } : {}),
     transport: {
       ...base.transport,
+      ...(options.read ? { read: options.read } : {}),
       send:
         options.send ??
         (async (reply) => {
@@ -213,4 +215,216 @@ it("keeps the references of a restored row and does not store them again", async
   expect(second.stored).toHaveLength(0);
   expect((sent.at(-1) as ReplyMessage).attachments).toEqual(references);
   second.client.dispose();
+});
+
+it("keeps each stored file on the row, so a retry sends only what is missing", async () => {
+  const sent: Reply[] = [];
+  const uploaded: string[] = [];
+  let failed = false;
+  const { client } = harness({
+    send: async (reply) => {
+      sent.push(reply as Reply);
+      return { id: "stored" };
+    },
+    port: {
+      upload: async (data, context) => {
+        if (context.fileName === "second.txt" && !failed) {
+          failed = true;
+          throw new Error("no storage");
+        }
+        uploaded.push(context.fileName);
+        return { id: `file-${context.fileName}` };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Two files");
+  await client.send([file("first.txt", "one"), file("second.txt", "two")]);
+  expect(uploaded).toEqual(["first.txt"]);
+  const pending = client.getSnapshot().pending[0];
+  expect(pending?.attachments?.map((each) => each.id ?? null)).toEqual([
+    "file-first.txt",
+    null,
+  ]);
+  expect(pending?.failure?.code).toBe("refused");
+  await client.retry(pending!.id);
+  expect(uploaded).toEqual(["first.txt", "second.txt"]);
+  expect((sent.at(-1) as ReplyMessage).attachments).toEqual([
+    {
+      id: "file-first.txt",
+      name: "first.txt",
+      mediaType: "text/plain",
+      size: 3,
+    },
+    {
+      id: "file-second.txt",
+      name: "second.txt",
+      mediaType: "text/plain",
+      size: 3,
+    },
+  ]);
+  client.dispose();
+});
+
+it("tells the host which file of the message it stores", async () => {
+  const { client, stored } = harness();
+  await client.ready;
+  await client.setDraft("Two files");
+  await client.send([file("first.txt", "one"), file("second.txt", "two")]);
+  expect(stored.map((each) => each.context.index)).toEqual([0, 1]);
+  client.dispose();
+});
+
+it("does not queue a message whose conversation changed while its files were being read", async () => {
+  const sent: Reply[] = [];
+  const { client } = harness({
+    send: async (reply) => {
+      sent.push(reply as Reply);
+      return { id: "stored" };
+    },
+    read: async (id) => ({
+      protocol: "1.0",
+      id,
+      title: "Chat",
+      messages: [],
+    }),
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  const sending = client.send([file("report.txt", "hello")]);
+  await client.switchConversation("conversation-b");
+  await sending;
+  expect(sent).toHaveLength(0);
+  client.dispose();
+});
+
+it("does not send a message whose conversation changed while the files were uploading", async () => {
+  const sent: Reply[] = [];
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started: () => void = () => {};
+  const uploading = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const { client } = harness({
+    send: async (reply) => {
+      sent.push(reply as Reply);
+      return { id: "stored" };
+    },
+    read: async (id) => ({
+      protocol: "1.0",
+      id,
+      title: "Chat",
+      messages: [],
+    }),
+    port: {
+      upload: async () => {
+        started();
+        await gate;
+        return { id: "file-1" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  const sending = client.send([file("report.txt", "hello")]);
+  await uploading;
+  const switched = client.switchConversation("conversation-b");
+  release();
+  await sending;
+  await switched;
+  expect(sent).toHaveLength(0);
+  client.dispose();
+});
+
+it("refuses a file the host stored without an id", async () => {
+  const { client, sent } = harness({
+    port: {
+      upload: async () => ({ id: "" }),
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  expect(sent).toHaveLength(0);
+  expect(client.getSnapshot().pending[0]?.failure?.code).toBe("refused");
+  client.dispose();
+});
+
+it("keeps the host's own problem when the store refuses a file", async () => {
+  const { client, sent } = harness({
+    port: {
+      upload: async () => {
+        throw { code: "rate-limited", retryAfter: 30 };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  expect(sent).toHaveLength(0);
+  const failure = client.getSnapshot().pending[0]?.failure;
+  expect(failure?.code).toBe("rate-limited");
+  expect(failure?.retryAfter).toBe(30);
+  client.dispose();
+});
+
+it("takes a file whose media type the host takes as a wildcard", async () => {
+  const { client, stored } = harness({
+    port: {
+      upload: async (data, context) => {
+        stored.push({ data, context });
+        return { id: "file-1" };
+      },
+      accept: ["image/*"],
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([
+    { name: "shot.png", mediaType: "image/png", data: new Uint8Array([1]) },
+  ]);
+  expect(stored).toHaveLength(1);
+  expect(client.getSnapshot().pending).toHaveLength(0);
+  client.dispose();
+});
+
+it("drops a restored row's malformed attachment", async () => {
+  const record = JSON.stringify({
+    revision: 1,
+    draft: "",
+    pending: [
+      {
+        id: "m1",
+        content: "Here is the report",
+        failure: null,
+        open: [],
+        attachments: [
+          {
+            id: "file-1",
+            name: "report.txt",
+            mediaType: "text/plain",
+            size: 5,
+          },
+          { name: "broken.txt", mediaType: "text/plain", size: -1 },
+          { name: "unstaged.txt", mediaType: "text/plain", size: 5 },
+        ],
+      },
+    ],
+  });
+  const storage: StoragePort = {
+    get: () => record,
+    set: () => {},
+    remove: () => {},
+  };
+  const { client } = harness({ storage });
+  await client.ready;
+  await flush();
+  expect(client.getSnapshot().pending[0]?.attachments).toEqual([
+    { id: "file-1", name: "report.txt", mediaType: "text/plain", size: 5 },
+    { name: "unstaged.txt", mediaType: "text/plain", size: 5 },
+  ]);
+  client.dispose();
 });

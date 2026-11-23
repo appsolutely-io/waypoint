@@ -57,6 +57,7 @@ import type {
   Flow,
   Conversation,
   ConversationPage,
+  MessageAttachment,
   OutlineMessage,
   Frame,
   Message,
@@ -68,6 +69,7 @@ import type {
   ManifestEntry,
   ToolCall,
 } from "../protocol/generated";
+import { attachmentWellFormed } from "./attachment-shape";
 export type {
   IntentAlert,
   IntentFailure,
@@ -281,17 +283,14 @@ export interface AttachmentUpload {
   /** The file's bytes. */
   data: Uint8Array;
 }
-/** A file a message carries, as the host stored it. */
-export interface PendingAttachment {
+/**
+ * A file a message carries, as the host stored it. The host's id is
+ * absent until the host has stored the file.
+ */
+export type PendingAttachment = Omit<MessageAttachment, "id" | "url"> & {
   /** The host's id for the stored file; absent until it is stored. */
   id?: string;
-  /** The name the file goes by. */
-  name: string;
-  /** The file's media type. */
-  mediaType: string;
-  /** The file's size in bytes. */
-  size: number;
-}
+};
 export interface PendingSend {
   id: string;
   content: string;
@@ -677,6 +676,11 @@ function negotiatedCapabilities(
     ),
   );
 }
+/**
+ * The upload chunk, once a client has loaded it. The bytes a message's
+ * files hold are released when the row that carries them goes away.
+ */
+let uploadChunk: typeof import("./attachment-upload") | undefined;
 export function createWaypointClient(config: ClientConfig): WaypointClient {
   const tabIds = new Set<string>();
   for (const tab of config.tabs ?? DEFAULT_FLOW_TABS) {
@@ -1023,11 +1027,16 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       .filter(isPending)
       .map((row) => {
         const open = (row as Partial<OutboxRow>).open;
+        const files = (row as Partial<OutboxRow>).attachments;
         return {
           ...row,
           open: Array.isArray(open)
             ? open.filter((a): a is string => typeof a === "string")
             : [],
+          // A restored row keeps only the files the protocol allows.
+          attachments: Array.isArray(files)
+            ? files.filter((file) => attachmentWellFormed(file, false))
+            : undefined,
         };
       }),
     restored: (Array.isArray(value?.restored) ? value.restored : []).filter(
@@ -1085,6 +1094,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
   };
   const record = (operation: Operation) => {
     if (operation.kind === "add") livePendingIds.add(operation.row.id);
+    // The bytes a message's files hold are released when the row that
+    // carries them goes away.
+    if (
+      operation.kind === "remove" ||
+      operation.kind === "withdraw" ||
+      operation.kind === "discard"
+    )
+      uploadChunk?.unstage(operation.id);
     queued.push(operation);
     derive();
   };
@@ -2210,9 +2227,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       // The files the message carries are stored before it is sent: a store
       // that fails fails the message itself, not the conversation.
       const stored = row.attachments?.length
-        ? await (
-            await import("./attachment-upload")
-          ).upload(
+        ? await (uploadChunk ??= await import("./attachment-upload")).upload(
             row.attachments,
             config.attachments,
             conversationId,
@@ -2221,6 +2236,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             persist,
           )
         : undefined;
+      // A conversation that changed while the files were uploading does
+      // not get the message: it belongs to the conversation before.
+      if (isDisposed() || scope.aborted) return;
       await config.transport.send(
         {
           kind: "message",
@@ -2788,6 +2806,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         const staged = attachments?.length
           ? await (await import("./attachment-upload")).stage(id, attachments)
           : undefined;
+        // A conversation that changed while the files were being read does
+        // not get the message: it belongs to the conversation before.
+        if (scope.aborted) return;
         record({
           kind: "add",
           row: {
@@ -3852,6 +3873,8 @@ export interface AttachmentPort {
       conversationId: string;
       /** The message the file belongs to; the same on every attempt. */
       clientMessageId: string;
+      /** The file's place in the message, counting from zero. */
+      index: number;
       fileName: string;
       contentType: string;
     },

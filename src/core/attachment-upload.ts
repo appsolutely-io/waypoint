@@ -6,6 +6,7 @@ import type {
   PendingAttachment,
 } from "./client";
 import type { MessageAttachment } from "../protocol/generated";
+import { acceptsFile, attachmentWellFormed } from "./attachment-shape";
 
 /** The files a message will carry, until the host has stored them. */
 const staged = new Map<string, readonly AttachmentUpload[]>();
@@ -26,27 +27,9 @@ export function stage(
   }));
 }
 
-/** Whether the host takes this file. */
-function accepted(file: AttachmentUpload, port: AttachmentPort): boolean {
-  const accept = port.accept;
-  return (
-    (accept === undefined || accept.includes(file.mediaType)) &&
-    (port.maxBytes === undefined || file.data.byteLength <= port.maxBytes)
-  );
-}
-
-/** Whether a row's attachment is one the host can be told about. */
-function wellFormed(attachment: PendingAttachment): boolean {
-  return (
-    typeof attachment.name === "string" &&
-    attachment.name.length > 0 &&
-    typeof attachment.mediaType === "string" &&
-    attachment.mediaType.length > 0 &&
-    Number.isSafeInteger(attachment.size) &&
-    attachment.size >= 0 &&
-    (attachment.id === undefined ||
-      (typeof attachment.id === "string" && attachment.id.length > 0))
-  );
+/** Releases the bytes a message's files held. */
+export function unstage(id: string): void {
+  staged.delete(id);
 }
 
 /** The outbox change that keeps a message's stored references on its row. */
@@ -58,9 +41,11 @@ type AttachOperation = {
 
 /**
  * Stores the files a message carries and keeps the references the host gave
- * on the row that carries them. A file the host refuses, a file it cannot
- * store and a row whose files are gone fail the message with the refusal it
- * met.
+ * on the row that carries them. Each file is kept on the row as soon as the
+ * host has it, so a message whose second file fails keeps the first and a
+ * retry uploads only what is missing. A file the host refuses, a file it
+ * cannot store and a row whose files are gone fail the message with the
+ * refusal it met.
  */
 export async function upload(
   attachments: readonly PendingAttachment[],
@@ -74,7 +59,8 @@ export async function upload(
   const files = staged.get(clientMessageId) ?? [];
   const stored: MessageAttachment[] = [];
   for (const [index, attachment] of attachments.entries()) {
-    if (!wellFormed(attachment)) throw { code: "refused", id: clientMessageId };
+    if (!attachmentWellFormed(attachment, false))
+      throw { code: "refused", id: clientMessageId };
     // A file the host already stored keeps its reference: the same
     // message may be sent twice.
     if (attachment.id) {
@@ -87,30 +73,46 @@ export async function upload(
       continue;
     }
     const file = files[index];
-    if (!file || !accepted(file, port))
+    if (
+      !file ||
+      !acceptsFile(
+        port.accept,
+        port.maxBytes,
+        file.mediaType,
+        file.data.byteLength,
+      )
+    )
       throw { code: "refused", id: clientMessageId };
     let id: string;
     try {
-      ({ id } = await port.upload(file.data, {
+      const result: { id?: unknown } = await port.upload(file.data, {
         conversationId,
         clientMessageId,
+        index,
         fileName: file.name,
         contentType: file.mediaType,
-      }));
-    } catch {
-      throw { code: "refused", id: clientMessageId };
+      });
+      id = typeof result.id === "string" ? result.id : "";
+    } catch (error) {
+      // A host's own problem travels as it is; anything else is a refusal.
+      throw typeof (error as { code?: unknown } | null)?.code === "string"
+        ? error
+        : { code: "refused", id: clientMessageId };
     }
+    if (!id) throw { code: "refused", id: clientMessageId };
     stored.push({
       id,
       name: file.name,
       mediaType: file.mediaType,
       size: file.data.byteLength,
     });
+    record({
+      kind: "attach",
+      id: clientMessageId,
+      attachments: attachments.map((entry, at) => stored[at] ?? entry),
+    });
+    await persist();
   }
   staged.delete(clientMessageId);
-  // The row keeps the references, so a message that is sent twice carries
-  // the same ones.
-  record({ kind: "attach", id: clientMessageId, attachments: stored });
-  await persist();
   return stored;
 }

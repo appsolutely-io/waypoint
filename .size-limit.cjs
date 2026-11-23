@@ -6,8 +6,8 @@ const budgets = [
   {
     name: "core with lazy recovery",
     path: "dist/index.js",
-    // Reachable reply recovery and frame reconciliation remain covered by the deduplicated aggregate guard.
-    // This budget also counts the attachments' lazy upload chunk and the reply steps a host runs, beside the eager pieces both changes add.
+    // Reachable reply recovery and frame reconciliation remain covered by the deduplicated aggregate guard, which also counts the
+    // attachments' lazy upload chunk and the reply steps a host runs.
     // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
     limit: "27.7 KB",
     gzip: true,
@@ -26,9 +26,9 @@ const budgets = [
   {
     name: "core",
     path: "dist/index.js",
-    // Synchronous reply state, recovery eligibility, frame reconciliation and cancellation ownership belong to every core consumer.
-    // The composer attachments add the row's references, the upload at send time, the pick-time policy, the shape rule a restored row is
-    // validated with, the guards around the upload and the release of the staged bytes; the host-run steps change adds its own share.
+    // Synchronous reply state, recovery eligibility, frame reconciliation, cancellation ownership, the host-run reply steps and the
+    // composer attachments — the row's references, the upload at send time, the pick-time policy, the shape rule a restored row is
+    // validated with, the guards around the upload and the release of the staged bytes — belong to every core consumer.
     // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
     limit: "21 KB",
     gzip: true,

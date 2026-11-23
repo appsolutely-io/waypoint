@@ -132,3 +132,21 @@ describe("recovery views from a newer host", () => {
     expect(phase("readback")).toBe(true);
   });
 });
+
+it("binds the attachment limits to the schema", async () => {
+  const schema = (await import("../../src/protocol/schema.json")).default;
+  const { MAX_ATTACHMENTS, MAX_NAME_LENGTH, MAX_MEDIA_TYPE_LENGTH } =
+    await import("../../src/core/attachment-shape");
+  expect(schema.$defs.Message.properties.attachments.maxItems).toBe(
+    MAX_ATTACHMENTS,
+  );
+  expect(schema.$defs.ReplyMessage.properties.attachments.maxItems).toBe(
+    MAX_ATTACHMENTS,
+  );
+  expect(schema.$defs.MessageAttachment.properties.name.maxLength).toBe(
+    MAX_NAME_LENGTH,
+  );
+  expect(schema.$defs.MessageAttachment.properties.mediaType.maxLength).toBe(
+    MAX_MEDIA_TYPE_LENGTH,
+  );
+});

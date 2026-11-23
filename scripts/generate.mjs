@@ -5,9 +5,14 @@ const schema = JSON.parse(await readFile("src/protocol/schema.json", "utf8"));
 openEnums(schema);
 // An array whose maxItems is at or below the generator's threshold becomes a
 // fixed tuple union, which a host building one dynamically cannot assign.
-// The attachments' wire limit (20) sits above this on purpose, so their type
+// The attachments' wire limit sits one above this on purpose, so their type
 // stays a plain array while schema.json still declares the limit.
-const TUPLE_LIMIT = 19;
+const { tsImport } = await import("tsx/esm/api");
+const { MAX_ATTACHMENTS } = await tsImport(
+  "../src/core/attachment-shape.ts",
+  import.meta.url,
+);
+const TUPLE_LIMIT = MAX_ATTACHMENTS - 1;
 const all = {
   ...schema,
   oneOf: Object.keys(schema.$defs).map((name) => ({ $ref: `#/$defs/${name}` })),
@@ -30,7 +35,6 @@ if (process.argv.includes("--check")) {
 // message actions, as one frozen object per language, generated from the
 // catalogues the web chat loads, so a host imports only its own language. Form-fill text is not included: the
 // renderer-neutral hooks return no form keys.
-const { tsImport } = await import("tsx/esm/api");
 const { format } = await import("prettier");
 const load = (path) => tsImport(path, import.meta.url);
 const [core, recovery, confirmation, block, problem, reply, composer] =

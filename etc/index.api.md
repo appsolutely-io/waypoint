@@ -14,6 +14,7 @@ export interface AttachmentPort {
     upload(data: Uint8Array, context: {
         conversationId: string;
         clientMessageId: string;
+        index: number;
         fileName: string;
         contentType: string;
     }): MaybePromise<{
@@ -1551,12 +1552,9 @@ export interface PatchFlow {
 }
 
 // @public
-export interface PendingAttachment {
+export type PendingAttachment = Omit<MessageAttachment, "id" | "url"> & {
     id?: string;
-    mediaType: string;
-    name: string;
-    size: number;
-}
+};
 
 // @public (undocumented)
 export interface PendingSend {

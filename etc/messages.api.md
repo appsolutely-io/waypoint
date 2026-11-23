@@ -17,7 +17,7 @@ export type Catalogue = Readonly<Partial<Record<MessageKey, string>>>;
 export type ComposerCatalogue = Readonly<Record<ComposerMessageKey, string>>;
 
 // @public (undocumented)
-export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.fileSize" | "composer.added" | "composer.removed" | "composer.refusedType" | "composer.refusedSize";
+export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany";
 
 // @public (undocumented)
 export type ConfirmationCatalogue = Readonly<Record<ConfirmationMessageKey, string>>;
@@ -58,6 +58,8 @@ export const english: {
     readonly "chat.send": "Send";
     readonly "chat.sending": "Sending";
     readonly "chat.pendingSending": "Sending…";
+    readonly "chat.pendingUploading": "Uploading…";
+    readonly "chat.attachmentFailed": "The site could not store {names}.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";
     readonly "chat.arrival": "New reply";

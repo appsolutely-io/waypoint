@@ -65,6 +65,7 @@ export interface AttachmentPort {
     upload(data: Uint8Array, context: {
         conversationId: string;
         clientMessageId: string;
+        index: number;
         fileName: string;
         contentType: string;
     }): MaybePromise<{
@@ -570,7 +571,7 @@ export interface ComposerContribution {
 }
 
 // @public (undocumented)
-export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.fileSize" | "composer.added" | "composer.removed" | "composer.refusedType" | "composer.refusedSize";
+export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany";
 
 // @public (undocumented)
 export type ConfirmationCatalogue = Readonly<Record<ConfirmationMessageKey, string>>;
@@ -856,6 +857,8 @@ export const english: {
     readonly "chat.send": "Send";
     readonly "chat.sending": "Sending";
     readonly "chat.pendingSending": "Sending…";
+    readonly "chat.pendingUploading": "Uploading…";
+    readonly "chat.attachmentFailed": "The site could not store {names}.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";
     readonly "chat.arrival": "New reply";
@@ -1915,18 +1918,7 @@ export interface OutlineMessage {
 }
 
 // @public
-export interface PartAttachment {
-    // (undocumented)
-    id?: string;
-    // (undocumented)
-    mediaType: string;
-    // (undocumented)
-    name: string;
-    // (undocumented)
-    size: number;
-    // (undocumented)
-    url?: string;
-}
+export type PartAttachment = PendingAttachment & Pick<MessageAttachment, "url">;
 
 // @public
 export type PartData = {
@@ -2074,12 +2066,9 @@ export interface PatchFlow {
 }
 
 // @public
-export interface PendingAttachment {
+export type PendingAttachment = Omit<MessageAttachment, "id" | "url"> & {
     id?: string;
-    mediaType: string;
-    name: string;
-    size: number;
-}
+};
 
 // @public
 export function pendingProblem(row: Pick<PendingSend, "id" | "failure">, eligibleProblem: Problem | undefined): Problem | null;

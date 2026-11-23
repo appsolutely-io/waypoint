@@ -2212,12 +2212,15 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       const stored = row.attachments?.length
         ? await (
             await import("./attachment-upload")
-          ).upload(row.attachments, config.attachments, conversationId, id)
+          ).upload(
+            row.attachments,
+            config.attachments,
+            conversationId,
+            id,
+            record,
+            persist,
+          )
         : undefined;
-      if (stored) {
-        record({ kind: "attach", id, attachments: stored });
-        await persist();
-      }
       await config.transport.send(
         {
           kind: "message",

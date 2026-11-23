@@ -49,16 +49,26 @@ function wellFormed(attachment: PendingAttachment): boolean {
   );
 }
 
+/** The outbox change that keeps a message's stored references on its row. */
+type AttachOperation = {
+  kind: "attach";
+  id: string;
+  attachments: readonly PendingAttachment[];
+};
+
 /**
- * Stores the files a message carries and returns the references the host
- * gave. A file the host refuses, a file it cannot store and a row whose
- * files are gone fail the message with the refusal it met.
+ * Stores the files a message carries and keeps the references the host gave
+ * on the row that carries them. A file the host refuses, a file it cannot
+ * store and a row whose files are gone fail the message with the refusal it
+ * met.
  */
 export async function upload(
   attachments: readonly PendingAttachment[],
   port: AttachmentPort | undefined,
   conversationId: string,
   clientMessageId: string,
+  record: (operation: AttachOperation) => void,
+  persist: () => Promise<unknown>,
 ): Promise<MessageAttachment[]> {
   if (!port) throw { code: "refused", id: clientMessageId };
   const files = staged.get(clientMessageId) ?? [];
@@ -98,5 +108,9 @@ export async function upload(
     });
   }
   staged.delete(clientMessageId);
+  // The row keeps the references, so a message that is sent twice carries
+  // the same ones.
+  record({ kind: "attach", id: clientMessageId, attachments: stored });
+  await persist();
   return stored;
 }

@@ -47,6 +47,7 @@ export type WaypointProtocol =
   | Block
   | MessageSender
   | Message
+  | MessageAttachment
   | Source
   | ReplyFailure
   | Conversation
@@ -786,11 +787,24 @@ export interface Message {
    * @maxItems 50
    */
   sources?: Source[];
+  /**
+   * The files the message carries, as the host stored them. Optional.
+   *
+   * @maxItems 50
+   */
+  attachments?: MessageAttachment[];
 }
 export interface Source {
   id: string;
   title: string;
   url: string;
+}
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  mediaType: string;
+  size: number;
+  url?: string;
 }
 export interface ReplyFailure {
   id: string;
@@ -811,6 +825,12 @@ export interface ReplyMessage {
   clientReplyId: string;
   content: string;
   clientMessageId: string;
+  /**
+   * The files the message carries, as the host stored them. Optional.
+   *
+   * @maxItems 50
+   */
+  attachments?: MessageAttachment[];
 }
 export interface ReplyConfirm {
   kind: 'confirm';

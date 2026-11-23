@@ -477,6 +477,13 @@
     "blocks": [],
     "createdAt": 0
   },
+  "MessageAttachment": {
+    "id": "file-a",
+    "name": "report.pdf",
+    "mediaType": "application/pdf",
+    "size": 1024,
+    "url": "https://example.test/files/file-a"
+  },
   "Conversation": {
     "protocol": "1.0",
     "id": "conversation-a",

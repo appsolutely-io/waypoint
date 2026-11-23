@@ -67,6 +67,48 @@ describe("a card's applied answer", () => {
       expect(block({ ...card, answer })).toBe(false);
   });
 });
+describe("a message's attachments", () => {
+  const ajv = new Ajv2020({ strict: false });
+  ajv.addSchema(schema);
+  const message = ajv.getSchema(
+    "https://waypoint.example/schema#/$defs/Message",
+  )!;
+  const reply = ajv.getSchema(
+    "https://waypoint.example/schema#/$defs/ReplyMessage",
+  )!;
+  it("carries the files a host stored, with an optional link", () => {
+    expect(
+      message({
+        ...samples.Message,
+        attachments: [samples.MessageAttachment],
+      }),
+      JSON.stringify(message.errors),
+    ).toBe(true);
+    expect(
+      reply({
+        ...samples.ReplyMessage,
+        attachments: [samples.MessageAttachment],
+      }),
+      JSON.stringify(reply.errors),
+    ).toBe(true);
+  });
+  it("refuses a malformed attachment", () => {
+    for (const broken of [
+      { ...samples.MessageAttachment, id: "" },
+      { ...samples.MessageAttachment, name: "" },
+      { ...samples.MessageAttachment, mediaType: "" },
+      { ...samples.MessageAttachment, size: -1 },
+    ])
+      expect(
+        message({ ...samples.Message, attachments: [broken] }),
+        JSON.stringify(message.errors),
+      ).toBe(false);
+  });
+  it("keeps a message without attachments valid", () =>
+    expect(message(samples.Message), JSON.stringify(message.errors)).toBe(
+      true,
+    ));
+});
 describe("recovery views from a newer host", () => {
   const ajv = new Ajv2020({ strict: false });
   ajv.addSchema(schema);

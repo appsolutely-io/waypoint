@@ -837,7 +837,8 @@ export const english: {
     readonly "chat.sending": "Sending";
     readonly "chat.pendingSending": "Sending…";
     readonly "chat.pendingUploading": "Uploading…";
-    readonly "chat.attachmentFailed": "The site could not store {names}.";
+    readonly "chat.attachmentFailed": "The site could not upload {names}.";
+    readonly "chat.formFilesRemoved": "This conversation takes a form; the files were removed.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";
     readonly "chat.arrival": "New reply";
@@ -1278,7 +1279,7 @@ export interface FormValidation {
 }
 
 // @public (undocumented)
-export type Frame = FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem;
+export type Frame = FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem;
 
 // @public (undocumented)
 export interface FrameBlock {
@@ -1416,6 +1417,20 @@ export interface FrameStale {
     type: 'stale';
     // (undocumented)
     versionIndex?: number;
+}
+
+// @public (undocumented)
+export interface FrameStep {
+    // (undocumented)
+    messageId: string;
+    // (undocumented)
+    protocol: string;
+    // (undocumented)
+    sequence: number;
+    // (undocumented)
+    step: ReplyStep;
+    // (undocumented)
+    type: 'step';
 }
 
 // @public (undocumented)
@@ -1771,6 +1786,8 @@ export interface Message {
     sources?: Source[];
     // (undocumented)
     status?: 'writing' | 'completed' | 'failed' | 'unavailable' | 'stopped';
+    // (undocumented)
+    steps?: ReplyStep[];
     // (undocumented)
     versionCount?: number;
     // (undocumented)
@@ -2321,7 +2338,7 @@ export interface PrivateAttachmentPort {
 // @public (undocumented)
 export interface Problem {
     // (undocumented)
-    code: 'update-required' | 'in-doubt' | 'replaced' | 'retryable' | 'refused' | 'closed' | 'full' | 'declined' | 'unavailable' | 'sign-in' | 'rate-limited' | 'step-up-cancelled' | 'mismatch' | 'invalid-read' | 'invalid-plan' | 'needs-attention' | 'stopped' | 'plan-changed' | 'agreement-expired';
+    code: 'update-required' | 'in-doubt' | 'replaced' | 'retryable' | 'refused' | 'closed' | 'full' | 'declined' | 'unavailable' | 'sign-in' | 'rate-limited' | 'step-up-cancelled' | 'mismatch' | 'invalid-read' | 'invalid-plan' | 'needs-attention' | 'stopped' | 'plan-changed' | 'agreement-expired' | 'attachments-lost';
     confirmation?: {
         reason: 'expired' | 'used' | 'stale' | 'mismatch' | 'missing';
     };
@@ -2347,7 +2364,7 @@ export interface ProblemDisplayOptions {
 }
 
 // @public (undocumented)
-export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered" | "chat.problem.details" | "chat.problem.code" | "chat.problem.reference" | "chat.problem.refresh";
+export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.attachmentsLost" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered" | "chat.problem.details" | "chat.problem.code" | "chat.problem.reference" | "chat.problem.refresh";
 
 // @public
 export interface ReaderRequestContext {
@@ -2721,6 +2738,16 @@ export function replyRowView(state: ReplyState, options?: {
 // @public (undocumented)
 export type ReplyState = "none" | "writing" | "unavailable" | "failed" | "overdue" | "expected" | "expected-overdue";
 
+// @public (undocumented)
+export interface ReplyStep {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    status: 'running' | 'done' | 'failed';
+}
+
 // @public
 export interface ReplyStop {
     // (undocumented)
@@ -3012,7 +3039,7 @@ export function useComposer(client?: WaypointClient): {
     sending: boolean;
     hints: readonly string[];
     setDraft: (value: string) => Promise<void>;
-    send: (attachments?: readonly AttachmentUpload[]) => Promise<void>;
+    send: (attachments?: readonly AttachmentUpload[]) => Promise<boolean>;
     retry: (id: string) => Promise<void>;
     withdraw: (id: string) => Promise<void>;
     dismiss: (id: string) => Promise<void>;
@@ -3189,7 +3216,7 @@ export interface WaypointClient {
     // (undocumented)
     selectVersion(messageId: string, index: number): Promise<void>;
     // (undocumented)
-    send(attachments?: readonly AttachmentUpload[]): Promise<void>;
+    send(attachments?: readonly AttachmentUpload[]): Promise<boolean>;
     sendFeedback(messageId: string, rating: FeedbackInput["rating"]): Promise<boolean>;
     // (undocumented)
     setDraft(value: string): Promise<void>;
@@ -3225,7 +3252,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | Message | MessageAttachment | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory | OutlineMessage | ConversationPage;
+export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | ReplyStep | FrameStep | Message | MessageAttachment | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory | OutlineMessage | ConversationPage;
 
 // @public (undocumented)
 export function WaypointProvider(props: WaypointProviderProps): react.JSX.Element;

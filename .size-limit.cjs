@@ -7,9 +7,9 @@ const budgets = [
     name: "core with lazy recovery",
     path: "dist/index.js",
     // Reachable reply recovery and frame reconciliation remain covered by the deduplicated aggregate guard.
-    // Node 22 maximum across lockfile/lowest peers: 25,730 B;
-    // add 5% and round up to 100 B.
-    limit: "27.1 KB",
+    // This budget also counts the attachments' lazy upload chunk and the reply steps a host runs, beside the eager pieces both changes add.
+    // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
+    limit: "27.7 KB",
     gzip: true,
     brotli: false,
     ignore: [
@@ -27,10 +27,10 @@ const budgets = [
     name: "core",
     path: "dist/index.js",
     // Synchronous reply state, recovery eligibility, frame reconciliation and cancellation ownership belong to every core consumer.
-    // The composer attachments add the row's references, the upload at send time and the pick-time policy to the eager core.
-    // Node 22 maximum across lockfile/lowest peers: 19,577 B for the base, 919 B for the host-run steps change and 142 B for the attachments;
-    // measured with Node 22's zlib.
-    limit: "20.7 KB",
+    // The composer attachments add the row's references, the upload at send time, the pick-time policy, the shape rule a restored row is
+    // validated with, the guards around the upload and the release of the staged bytes; the host-run steps change adds its own share.
+    // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
+    limit: "21 KB",
     gzip: true,
     brotli: false,
     ignore: [

@@ -24,9 +24,12 @@ A message MAY carry `attachments`, the files it brings: each has an `id`, a `nam
 
 A client sends files only to a host that gave it an upload port (`ClientConfig.attachments`). The port owns the policy: the media types it takes (`accept`) and the size it allows (`maxBytes`).
 
+The client checks that policy when a person picks the files, so the picker can say why it refused one. That check is for the picker only: a host MUST validate the type and the size of every file it receives, and MUST NOT trust the `contentType` or the `fileName` the client sends. A host SHOULD serve the stored files as attachments, or from an origin separate from the one that serves the chat.
+
 - A client MUST send attachments only to a host that injected an upload port, and MUST NOT put the files' bytes on the wire: it sends the references the host gave.
 - A client MUST send the references under the same `clientMessageId` as the message's text, so a message that is sent twice carries the same files.
-- A host MUST give every stored file an id, MUST keep that id for the same `clientMessageId`, and MUST return the references in its read.
+- The client calls the port once per file, with the message's `clientMessageId` and the file's `index` in that message (counting from zero), so a host tells the files of one message apart.
+- A host MUST give every stored file an id, MUST keep that id for the same `clientMessageId` and the file's `index` in that message, and MUST return the references in its read.
 - A host MAY add a `url` to a stored file. The chat links it only when its URL policy allows it (`isSafeUrl`, with `extraUrlSchemes`).
 - A host MUST ignore an `attachments` field it does not know, so a host that stores no files keeps working.
 - A file the host refuses, a file it cannot store and a client without an upload port fail the message itself: the message stays in the transcript marked "Not sent" with its problem under it, and the problem is not repeated below the composer.

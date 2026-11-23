@@ -392,6 +392,10 @@ export interface ClientConfig {
 export interface ClientSnapshot {
     // (undocumented)
     announcement: number;
+    attachmentPolicy?: {
+        accept?: readonly string[];
+        maxBytes?: number;
+    };
     // (undocumented)
     capabilities: readonly Capability[];
     confirmationRefusal?: {
@@ -453,6 +457,9 @@ export interface ClientSnapshot {
 }
 
 // @public (undocumented)
+export type ComposerCatalogue = Readonly<Record<ComposerMessageKey, string>>;
+
+// @public (undocumented)
 export interface ComposerContribution {
     // (undocumented)
     evaluate(context: {
@@ -466,6 +473,9 @@ export interface ComposerContribution {
     // (undocumented)
     id: string;
 }
+
+// @public (undocumented)
+export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.fileSize" | "composer.added" | "composer.removed" | "composer.refusedType" | "composer.refusedSize";
 
 // @public (undocumented)
 export type ConfirmationCatalogue = Readonly<Record<ConfirmationMessageKey, string>>;
@@ -1538,7 +1548,7 @@ export interface MessageAttachment {
 }
 
 // @public (undocumented)
-export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue;
+export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue | keyof ComposerCatalogue;
 
 // @public (undocumented)
 export interface MessageSender {

@@ -151,6 +151,8 @@ const budgets = [
       "./blocks-*",
       "../form-extras-*",
       "./form-extras-*",
+      "../composer-attachments-*",
+      "./composer-attachments-*",
       "../flows-panel-*",
       "./flows-panel-*",
       "../reply-controls-*",
@@ -218,6 +220,14 @@ const budgets = [
     // their messages ship in this chunk, not the entry. Measured with Node
     // 22's zlib: 2.22 kB. The limit is 10% above an earlier 2.64 kB.
     limit: "2.9 KB",
+    gzip: true,
+    brotli: false,
+    ignore: ["react", "react-dom", "./chunk-*"],
+  },
+  {
+    name: "lazy composer attachments",
+    path: "dist/composer-attachments-*.js",
+    limit: "2 KB",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],
@@ -347,6 +357,8 @@ const budgets = [
       "./blocks-*",
       "../form-extras-*",
       "./form-extras-*",
+      "../composer-attachments-*",
+      "./composer-attachments-*",
       "../flows-panel-*",
       "./flows-panel-*",
       "../reply-controls-*",

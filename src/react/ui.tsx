@@ -46,6 +46,8 @@ import {
   type ReplyState,
   type ReplyFailureRecord,
   type WaypointClient,
+  type AttachmentUpload,
+  type PendingAttachment,
 } from "../core/client";
 import type { Capability } from "../protocol/index";
 import {
@@ -190,6 +192,22 @@ function MessageActions(props: { client: WaypointClient; message: Message }) {
     <load.module.MessageActions {...props} />
   ) : null;
 }
+// The composer's file picker, loaded when a client that can attach files
+// shows its composer.
+const composerAttachmentsChunk = lazyChunk(
+  () => import("./composer-attachments"),
+);
+function ComposerAttachments(props: {
+  client: WaypointClient;
+  files: readonly AttachmentUpload[];
+  onFiles(files: readonly AttachmentUpload[]): void;
+}) {
+  const load = useChunk(composerAttachmentsChunk);
+  useEffect(() => composerAttachmentsChunk.request(), []);
+  return load.status === "ready" ? (
+    <load.module.ComposerAttachments {...props} />
+  ) : null;
+}
 // The saved requests' panel and parameter drawer, loaded with the tabs.
 const flowsChunk = lazyChunk(() => import("./flows-panel"));
 function useBlocks() {
@@ -242,6 +260,14 @@ export type PartName =
   | "recoveryPanel"
   | "stepStatusRow"
   | "recoveryActions";
+/** A file a message carries, as a part sees it. */
+export interface PartAttachment {
+  id?: string;
+  name: string;
+  mediaType: string;
+  size: number;
+  url?: string;
+}
 /** A message as a bubble or its actions see it. */
 export interface PartMessage {
   id: string;
@@ -250,6 +276,7 @@ export interface PartMessage {
   status?: Message["status"];
   versionIndex?: number;
   versionCount?: number;
+  attachments?: readonly PartAttachment[];
 }
 /** A message still being sent, or not sent. */
 export interface PartPending {
@@ -260,6 +287,7 @@ export interface PartPending {
     id?: string;
     host?: Problem["host"];
   } | null;
+  attachments?: readonly PartAttachment[];
 }
 /** A plan step as its row sees it. */
 export type PartStep = Pick<
@@ -1015,10 +1043,14 @@ function pendingSummary(pending: {
   id: string;
   content: string;
   failure: Problem | null;
+  attachments?: readonly PendingAttachment[];
 }) {
   return {
     id: pending.id,
     content: pending.content,
+    ...(pending.attachments
+      ? { attachments: pending.attachments.map((file) => ({ ...file })) }
+      : {}),
     failure: pending.failure
       ? {
           code: pending.failure.code,
@@ -1703,6 +1735,11 @@ const MessageRow = memo(function MessageRow({
             versionIndex: message.versionIndex,
             versionCount: message.versionCount,
             blocks: message.blocks.map(blockSummary),
+            ...(message.attachments
+              ? {
+                  attachments: message.attachments.map((file) => ({ ...file })),
+                }
+              : {}),
           },
         }}
       >
@@ -1724,6 +1761,19 @@ const MessageRow = memo(function MessageRow({
             />
           </ParseOf.Provider>
         </BodyOf.Provider>
+        {message.attachments?.length ? (
+          <ul className="wp-attachments">
+            {message.attachments.map((file) => (
+              <li key={file.id}>
+                {isSafeUrl(file.url, extraUrlSchemes) ? (
+                  <a href={file.url}>{file.name}</a>
+                ) : (
+                  <span>{file.name}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {/* Seen in the bubble; said once, by the reply row. */}
         {failure ? null : writing ? (
           <span data-writing="" aria-hidden="true">
@@ -1793,6 +1843,18 @@ function ChatBody({
   const state = useWaypointSnapshot();
   const root = useRef<HTMLElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
+  // The files the user picked for the next message. Nothing is uploaded
+  // until it is sent, and the message that carries them keeps them.
+  const [files, setFiles] = useState<readonly AttachmentUpload[]>([]);
+  // The message goes with the files the user picked. The queued message
+  // keeps them, so the composer forgets them once it is queued.
+  const send = () => {
+    if (!state.draft.trim() || state.sending) return;
+    const chosen = files;
+    void client.send(chosen).then(() => {
+      if (!client.getSnapshot().draft.trim()) setFiles([]);
+    });
+  };
   const transcript = useRef<HTMLDivElement>(null);
   const transcriptContent = useRef<HTMLDivElement>(null);
   // Message bodies whose stock rendering failed, said once below. Kept in
@@ -2982,6 +3044,15 @@ function ChatBody({
                                 {t("chat.roleUser")}
                               </span>
                               <p>{pending.content}</p>
+                              {pending.attachments?.length ? (
+                                <ul className="wp-attachments">
+                                  {pending.attachments.map((file, index) => (
+                                    <li key={`${file.name}-${index}`}>
+                                      <span>{file.name}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
                             </Part>
                             <p
                               id={`${pendingId}-${pending.id}`}
@@ -3282,6 +3353,13 @@ function ChatBody({
                 void client.setDraft(value);
               }}
             >
+              {state.attachmentPolicy ? (
+                <ComposerAttachments
+                  client={client}
+                  files={files}
+                  onFiles={setFiles}
+                />
+              ) : null}
               <T
                 inputRef={field}
                 disabled={state.conversationUnavailable}
@@ -3306,7 +3384,7 @@ function ChatBody({
                     event.keyCode !== 229
                   ) {
                     event.preventDefault();
-                    void client.send();
+                    send();
                   }
                 }}
               />
@@ -3317,7 +3395,7 @@ function ChatBody({
                   state.sending
                 }
                 onPress={() => {
-                  void client.send();
+                  send();
                 }}
               >
                 {t(state.sending ? "chat.sending" : "chat.send")}

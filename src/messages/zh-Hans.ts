@@ -373,5 +373,12 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.message.previous": "上一个版本",
   "chat.message.next": "下一个版本",
   "chat.message.version": "第 {index} 个版本，共 {count} 个",
+  "composer.attach": "添加文件",
+  "composer.remove": "移除 {name}",
+  "composer.fileSize": "{size}",
+  "composer.added": "已添加 {name}。",
+  "composer.removed": "已移除 {name}。",
+  "composer.refusedType": "{name} 不是本站接受的文件类型。",
+  "composer.refusedSize": "{name} 超过本站允许的大小。",
 });
 export default messages;

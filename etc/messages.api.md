@@ -14,6 +14,12 @@ export type BlockMessageKey = "chat.block.required" | "chat.block.requiredMissin
 export type Catalogue = Readonly<Partial<Record<MessageKey, string>>>;
 
 // @public (undocumented)
+export type ComposerCatalogue = Readonly<Record<ComposerMessageKey, string>>;
+
+// @public (undocumented)
+export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.fileSize" | "composer.added" | "composer.removed" | "composer.refusedType" | "composer.refusedSize";
+
+// @public (undocumented)
 export type ConfirmationCatalogue = Readonly<Record<ConfirmationMessageKey, string>>;
 
 // @public (undocumented)
@@ -156,7 +162,7 @@ export type FormCatalogue = Readonly<Record<FormMessageKey, string>>;
 export type FormMessageKey = "form.generating" | "form.ready" | "form.attention" | "form.reverted" | "form.revert" | "form.revertWait" | "form.suggested" | "form.replaceIt" | "form.keepMine" | "form.attach" | "form.remove" | "form.uploading" | "form.attached" | "form.attachFailed" | "form.removeFailed" | "form.onlyImages" | "form.busy" | "form.unusable";
 
 // @public (undocumented)
-export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue;
+export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue | keyof ComposerCatalogue;
 
 // @public (undocumented)
 export type MessageValues = Record<string, string | number | boolean>;

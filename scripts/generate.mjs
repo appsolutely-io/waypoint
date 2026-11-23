@@ -27,16 +27,16 @@ if (process.argv.includes("--check")) {
 const { tsImport } = await import("tsx/esm/api");
 const { format } = await import("prettier");
 const load = (path) => tsImport(path, import.meta.url);
-const [core, recovery, confirmation, block, problem, reply] = await Promise.all(
-  [
+const [core, recovery, confirmation, block, problem, reply, composer] =
+  await Promise.all([
     load("../src/react/i18n.ts"),
     load("../src/react/recovery-messages.ts"),
     load("../src/react/confirmation-messages.ts"),
     load("../src/react/block-messages.ts"),
     load("../src/react/problem-messages.ts"),
     load("../src/react/reply-messages.ts"),
-  ],
-);
+    load("../src/react/composer-messages.ts"),
+  ]);
 const locales = {
   en: [
     core.english,
@@ -45,6 +45,7 @@ const locales = {
     block.blockEnglish,
     problem.problemEnglish,
     reply.replyEnglish,
+    composer.composerEnglish,
   ],
   "zh-Hans": [
     core.simplifiedChinese,
@@ -53,6 +54,7 @@ const locales = {
     block.blockSimplifiedChinese,
     problem.problemSimplifiedChinese,
     reply.replySimplifiedChinese,
+    composer.composerSimplifiedChinese,
   ],
 };
 for (const [locale, catalogues] of Object.entries(locales)) {

@@ -418,5 +418,12 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.message.previous": "Previous version",
   "chat.message.next": "Next version",
   "chat.message.version": "Version {index} of {count}",
+  "composer.attach": "Attach files",
+  "composer.remove": "Remove {name}",
+  "composer.fileSize": "{size}",
+  "composer.added": "Attached {name}.",
+  "composer.removed": "Removed {name}.",
+  "composer.refusedType": "{name} is not a file type this site takes.",
+  "composer.refusedSize": "{name} is larger than this site allows.",
 });
 export default messages;

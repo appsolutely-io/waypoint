@@ -6,6 +6,7 @@ import type { ConfirmationCatalogue } from "./confirmation-messages";
 import type { ProblemCatalogue } from "./problem-messages";
 import type { ReplyCatalogue } from "./reply-messages";
 import type { FormCatalogue } from "./form-messages";
+import type { ComposerCatalogue } from "./composer-messages";
 export const english = {
   "form.valid": "Valid",
   "form.invalid": "Invalid",
@@ -147,7 +148,8 @@ export type MessageKey =
   | keyof BlockCatalogue
   | keyof ProblemCatalogue
   | keyof ReplyCatalogue
-  | keyof FormCatalogue;
+  | keyof FormCatalogue
+  | keyof ComposerCatalogue;
 const added: { en: Record<string, string>; zh: Record<string, string> } = {
   en: {},
   zh: {},

@@ -922,11 +922,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     | { kind: "withdraw"; id: string; restoredId: string }
     | { kind: "discard"; id: string }
     | { kind: "remove"; id: string }
-    | {
-        kind: "attachments";
-        id: string;
-        attachments: readonly PendingAttachment[];
-      };
+    | { kind: "attach"; id: string; attachments: readonly PendingAttachment[] };
   const empty: Outbox = {
     revision: 0,
     draft: "",
@@ -972,17 +968,6 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         ...record,
         restored: record.restored.filter((item) => item.id !== operation.id),
       };
-    // The files a message carries are the host's references; the row keeps
-    // them, so a message that is sent twice carries the same ones.
-    if (operation.kind === "attachments")
-      return {
-        ...record,
-        pending: record.pending.map((row) =>
-          row.id === operation.id
-            ? { ...row, attachments: operation.attachments }
-            : row,
-        ),
-      };
     const current = record.pending.find((row) => row.id === operation.id);
     if (!current) return record;
     const without = record.pending.filter((row) => row !== current);
@@ -1008,13 +993,20 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             open: [...current.open, operation.attempt],
             failure: null,
           }
-        : {
-            ...current,
-            open: definite(operation.failure)
-              ? current.open.filter((attempt) => attempt !== operation.attempt)
-              : current.open,
-            failure: operation.failure,
-          };
+        : operation.kind === "attach"
+          ? // The files a message carries are the host's references; the row
+            // keeps them, so a message that is sent twice carries the same
+            // ones.
+            { ...current, attachments: operation.attachments }
+          : {
+              ...current,
+              open: definite(operation.failure)
+                ? current.open.filter(
+                    (attempt) => attempt !== operation.attempt,
+                  )
+                : current.open,
+              failure: operation.failure,
+            };
     return {
       ...record,
       pending: record.pending.map((row) => (row === current ? next : row)),
@@ -1087,7 +1079,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             ? row.failure
             : { code: "in-doubt", id: row.id },
         ...(row.extensions ? { extensions: row.extensions } : {}),
-        ...(row.attachments ? { attachments: row.attachments } : {}),
+        attachments: row.attachments,
       })),
     });
   };
@@ -2223,7 +2215,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           ).upload(row.attachments, config.attachments, conversationId, id)
         : undefined;
       if (stored) {
-        record({ kind: "attachments", id, attachments: stored });
+        record({ kind: "attach", id, attachments: stored });
         await persist();
       }
       await config.transport.send(

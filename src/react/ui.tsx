@@ -28,6 +28,7 @@ import {
 import type {
   Block,
   Message,
+  MessageAttachment,
   OutlineMessage,
   Problem,
   ReplyFailure,
@@ -50,6 +51,7 @@ import {
   type PendingAttachment,
 } from "../core/client";
 import type { Capability } from "../protocol/index";
+import { attachmentWellFormed } from "../core/attachment-shape";
 import {
   ChatFocusContext,
   focusFor,
@@ -200,7 +202,11 @@ const composerAttachmentsChunk = lazyChunk(
 function ComposerAttachments(props: {
   client: WaypointClient;
   files: readonly AttachmentUpload[];
-  onFiles(files: readonly AttachmentUpload[]): void;
+  onFiles(
+    update: (files: readonly AttachmentUpload[]) => readonly AttachmentUpload[],
+  ): void;
+  disabled?: boolean;
+  reset?: number;
 }) {
   const load = useChunk(composerAttachmentsChunk);
   useEffect(() => composerAttachmentsChunk.request(), []);
@@ -261,13 +267,7 @@ export type PartName =
   | "stepStatusRow"
   | "recoveryActions";
 /** A file a message carries, as a part sees it. */
-export interface PartAttachment {
-  id?: string;
-  name: string;
-  mediaType: string;
-  size: number;
-  url?: string;
-}
+export type PartAttachment = PendingAttachment & Pick<MessageAttachment, "url">;
 /** A message as a bubble or its actions see it. */
 export interface PartMessage {
   id: string;
@@ -1039,6 +1039,16 @@ export function RecoveryPanel(props: {
 function blockSummary(block: Block): BlockSummary {
   return { id: block.id, type: block.type, answered: Boolean(block.answered) };
 }
+// The files a message carries, as the protocol allows them: a stored file
+// names the id the host gave it, a file that is not stored yet has none.
+function attachmentsOf(
+  files: readonly PartAttachment[] | undefined,
+  stored: boolean,
+): readonly PartAttachment[] {
+  return Array.isArray(files)
+    ? files.filter((file) => attachmentWellFormed(file, stored))
+    : [];
+}
 function pendingSummary(pending: {
   id: string;
   content: string;
@@ -1049,7 +1059,13 @@ function pendingSummary(pending: {
     id: pending.id,
     content: pending.content,
     ...(pending.attachments
-      ? { attachments: pending.attachments.map((file) => ({ ...file })) }
+      ? {
+          attachments: attachmentsOf(pending.attachments, false).map(
+            (file) => ({
+              ...file,
+            }),
+          ),
+        }
       : {}),
     failure: pending.failure
       ? {
@@ -1737,7 +1753,9 @@ const MessageRow = memo(function MessageRow({
             blocks: message.blocks.map(blockSummary),
             ...(message.attachments
               ? {
-                  attachments: message.attachments.map((file) => ({ ...file })),
+                  attachments: attachmentsOf(message.attachments, true).map(
+                    (file) => ({ ...file }),
+                  ),
                 }
               : {}),
           },
@@ -1761,10 +1779,10 @@ const MessageRow = memo(function MessageRow({
             />
           </ParseOf.Provider>
         </BodyOf.Provider>
-        {message.attachments?.length ? (
+        {attachmentsOf(message.attachments, true).length ? (
           <ul className="wp-attachments">
-            {message.attachments.map((file) => (
-              <li key={file.id}>
+            {attachmentsOf(message.attachments, true).map((file, index) => (
+              <li key={`${file.id ?? file.name}-${index}`}>
                 {isSafeUrl(file.url, extraUrlSchemes) ? (
                   <a href={file.url}>{file.name}</a>
                 ) : (
@@ -1846,14 +1864,21 @@ function ChatBody({
   // The files the user picked for the next message. Nothing is uploaded
   // until it is sent, and the message that carries them keeps them.
   const [files, setFiles] = useState<readonly AttachmentUpload[]>([]);
+  // The picker forgets what it said when the composer sends.
+  const [sent, setSent] = useState(0);
+  // The files belong to the conversation they were picked in.
+  useEffect(() => {
+    setFiles([]);
+  }, [state.conversationId]);
   // The message goes with the files the user picked. The queued message
-  // keeps them, so the composer forgets them once it is queued.
+  // keeps them, so the composer forgets them at once: they go with this
+  // message, not with the next one.
   const send = () => {
     if (!state.draft.trim() || state.sending) return;
     const chosen = files;
-    void client.send(chosen).then(() => {
-      if (!client.getSnapshot().draft.trim()) setFiles([]);
-    });
+    setFiles([]);
+    setSent((count) => count + 1);
+    void client.send(chosen);
   };
   const transcript = useRef<HTMLDivElement>(null);
   const transcriptContent = useRef<HTMLDivElement>(null);
@@ -3017,6 +3042,15 @@ function ChatBody({
                           pending,
                           shownProblem,
                         );
+                        // A file the host has not stored yet is still on its
+                        // way to the host.
+                        const uploading = (pending.attachments ?? []).some(
+                          (file) => !file.id,
+                        );
+                        const unstored = (pending.attachments ?? [])
+                          .filter((file) => !file.id)
+                          .map((file) => file.name)
+                          .join(", ");
                         const rowText = rowProblem
                           ? (provider.problemText?.(rowProblem, {
                               answeredElsewhere:
@@ -3047,7 +3081,9 @@ function ChatBody({
                               {pending.attachments?.length ? (
                                 <ul className="wp-attachments">
                                   {pending.attachments.map((file, index) => (
-                                    <li key={`${file.name}-${index}`}>
+                                    <li
+                                      key={`${file.id ?? file.name}-${index}`}
+                                    >
                                       <span>{file.name}</span>
                                     </li>
                                   ))}
@@ -3057,15 +3093,28 @@ function ChatBody({
                             <p
                               id={`${pendingId}-${pending.id}`}
                               data-pending-status={
-                                pending.failure ? "failed" : "sending"
+                                pending.failure
+                                  ? "failed"
+                                  : uploading
+                                    ? "uploading"
+                                    : "sending"
                               }
                             >
                               {t(
                                 pending.failure
                                   ? "chat.pendingFailed"
-                                  : "chat.pendingSending",
+                                  : uploading
+                                    ? "chat.pendingUploading"
+                                    : "chat.pendingSending",
                               )}
                             </p>
+                            {pending.failure && unstored ? (
+                              <p>
+                                {t("chat.attachmentFailed", {
+                                  names: unstored,
+                                })}
+                              </p>
+                            ) : null}
                             <PendingProblemText
                               key={`problem-${state.pendingRestoration?.visit ?? 0}`}
                               text={rowText?.text}
@@ -3353,11 +3402,14 @@ function ChatBody({
                 void client.setDraft(value);
               }}
             >
-              {state.attachmentPolicy ? (
+              {state.attachmentPolicy &&
+              state.conversation?.mode !== "form-fill" ? (
                 <ComposerAttachments
                   client={client}
                   files={files}
                   onFiles={setFiles}
+                  disabled={state.conversationUnavailable}
+                  reset={sent}
                 />
               ) : null}
               <T

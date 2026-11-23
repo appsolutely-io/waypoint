@@ -352,6 +352,15 @@
   gap: var(--wp-space1);
   margin-block-end: var(--wp-space1);
 }
+/* A file's name may be long; it wraps instead of widening the row. */
+.waypoint .wp-attachment-name {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+/* The picker says nothing until it has something to say. */
+.waypoint .wp-composer-status:empty {
+  display: none;
+}
 /* A fill's suggestion for an edited field reads as one aside: a small
    label over its value, its validation under it, its answers in a row. */
 .waypoint [data-suggestion] {

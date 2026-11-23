@@ -30,6 +30,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.send": "Send",
   "chat.sending": "Sending",
   "chat.pendingSending": "Sending…",
+  "chat.pendingUploading": "Uploading…",
+  "chat.attachmentFailed": "The site could not store {names}.",
   "chat.pendingFailed": "Not sent",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",
@@ -419,11 +421,15 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.message.next": "Next version",
   "chat.message.version": "Version {index} of {count}",
   "composer.attach": "Attach files",
-  "composer.remove": "Remove {name}",
-  "composer.fileSize": "{size}",
+  "composer.remove": "Remove",
+  "composer.removeNamed": "Remove {name}",
   "composer.added": "Attached {name}.",
   "composer.removed": "Removed {name}.",
-  "composer.refusedType": "{name} is not a file type this site takes.",
-  "composer.refusedSize": "{name} is larger than this site allows.",
+  "composer.reading": "Reading the files…",
+  "composer.readFailed": "{name} could not be read.",
+  "composer.refusedType": "The site does not take {name}; it takes {types}.",
+  "composer.refusedSize":
+    "The site does not take {name}; it takes files up to {max}.",
+  "composer.tooMany": "The site takes at most {max} files.",
 });
 export default messages;

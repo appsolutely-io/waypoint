@@ -6,30 +6,39 @@ import type {
   PendingAttachment,
 } from "./client";
 import type { MessageAttachment } from "../protocol/generated";
-import { acceptsFile, attachmentWellFormed } from "./attachment-shape";
+import type { ScopeSignal } from "./scope";
+import {
+  acceptsFile,
+  attachmentWellFormed,
+  MAX_ATTACHMENTS,
+} from "./attachment-shape";
 
-/** The files a message will carry, until the host has stored them. */
-const staged = new Map<string, readonly AttachmentUpload[]>();
+/** The files a message will carry, and the ids the host has given so far. */
+export interface StagedFiles {
+  files: readonly AttachmentUpload[];
+  ids: (string | undefined)[];
+}
 
 /**
- * Keeps the files a message will carry and returns what the outbox row
- * keeps of them: their names, their media types and their sizes.
+ * Keeps the files a message will carry in the client's own record and
+ * returns what the outbox row keeps of them: their names, their media
+ * types and their sizes. A message may carry at most twenty files.
  */
 export function stage(
   id: string,
   attachments: readonly AttachmentUpload[],
+  into: Map<string, StagedFiles>,
 ): PendingAttachment[] {
-  staged.set(id, attachments);
+  if (attachments.length > MAX_ATTACHMENTS) throw { code: "refused", id };
+  into.set(id, {
+    files: attachments,
+    ids: attachments.map(() => undefined),
+  });
   return attachments.map((file) => ({
     name: file.name,
     mediaType: file.mediaType,
     size: file.data.byteLength,
   }));
-}
-
-/** Releases the bytes a message's files held. */
-export function unstage(id: string): void {
-  staged.delete(id);
 }
 
 /** The outbox change that keeps a message's stored references on its row. */
@@ -45,36 +54,52 @@ type AttachOperation = {
  * host has it, so a message whose second file fails keeps the first and a
  * retry uploads only what is missing. A file the host refuses, a file it
  * cannot store and a row whose files are gone fail the message with the
- * refusal it met.
+ * refusal it met; a row whose bytes the client no longer holds fails with
+ * attachments-lost, and the person picks the files again.
+ *
+ * A scope that aborted while the files were uploading stops the loop: no
+ * further file is uploaded, and the reference is not written to a
+ * conversation the message does not belong to. The id is kept with the
+ * staged files instead, so a retry after switching back carries it without
+ * uploading the file again.
  */
 export async function upload(
   attachments: readonly PendingAttachment[],
+  staged: StagedFiles | undefined,
   port: AttachmentPort | undefined,
   conversationId: string,
   clientMessageId: string,
   record: (operation: AttachOperation) => void,
   persist: () => Promise<unknown>,
+  signal: ScopeSignal | undefined,
 ): Promise<MessageAttachment[]> {
   if (!port) throw { code: "refused", id: clientMessageId };
-  const files = staged.get(clientMessageId) ?? [];
+  if (attachments.length > MAX_ATTACHMENTS)
+    throw { code: "refused", id: clientMessageId };
+  const files = staged?.files ?? [];
+  const ids = staged?.ids ?? [];
   const stored: MessageAttachment[] = [];
   for (const [index, attachment] of attachments.entries()) {
     if (!attachmentWellFormed(attachment, false))
       throw { code: "refused", id: clientMessageId };
     // A file the host already stored keeps its reference: the same
     // message may be sent twice.
-    if (attachment.id) {
+    const kept = attachment.id ?? ids[index];
+    if (kept) {
       stored.push({
-        id: attachment.id,
+        id: kept,
         name: attachment.name,
         mediaType: attachment.mediaType,
         size: attachment.size,
       });
       continue;
     }
+    // A conversation that moved on does not get further uploads: the
+    // message belongs to the conversation before.
+    if (signal?.aborted) break;
     const file = files[index];
+    if (!file) throw { code: "attachments-lost", id: clientMessageId };
     if (
-      !file ||
       !acceptsFile(
         port.accept,
         port.maxBytes,
@@ -94,18 +119,25 @@ export async function upload(
       });
       id = typeof result.id === "string" ? result.id : "";
     } catch (error) {
-      // A host's own problem travels as it is; anything else is a refusal.
-      throw typeof (error as { code?: unknown } | null)?.code === "string"
+      // A host's own problem travels as it is when it is one a store can
+      // meet; anything else is the row's refusal.
+      const code = (error as { code?: unknown } | null)?.code;
+      throw typeof code === "string" &&
+        (code === "refused" ||
+          code === "rate-limited" ||
+          code === "unavailable")
         ? error
         : { code: "refused", id: clientMessageId };
     }
     if (!id) throw { code: "refused", id: clientMessageId };
+    ids[index] = id;
     stored.push({
       id,
       name: file.name,
       mediaType: file.mediaType,
       size: file.data.byteLength,
     });
+    if (signal?.aborted) continue;
     record({
       kind: "attach",
       id: clientMessageId,
@@ -113,6 +145,5 @@ export async function upload(
     });
     await persist();
   }
-  staged.delete(clientMessageId);
   return stored;
 }

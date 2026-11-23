@@ -77,7 +77,8 @@ import type {
   ManifestEntry,
   ToolCall,
 } from "../protocol/generated";
-import { attachmentWellFormed } from "./attachment-shape";
+import type { StagedFiles } from "./attachment-upload";
+import { attachmentWellFormed, MAX_ATTACHMENTS } from "./attachment-shape";
 export type {
   IntentAlert,
   IntentFailure,
@@ -477,7 +478,7 @@ export interface WaypointClient {
     messageId: string,
     rating: FeedbackInput["rating"],
   ): Promise<boolean>;
-  send(attachments?: readonly AttachmentUpload[]): Promise<void>;
+  send(attachments?: readonly AttachmentUpload[]): Promise<boolean>;
   retry(id: string): Promise<void>;
   withdraw(id: string): Promise<void>;
   /** Appends a withdrawn message's content to the draft; the item stays. */
@@ -684,12 +685,11 @@ function negotiatedCapabilities(
     ),
   );
 }
-/**
- * The upload chunk, once a client has loaded it. The bytes a message's
- * files hold are released when the row that carries them goes away.
- */
-let uploadChunk: typeof import("./attachment-upload") | undefined;
 export function createWaypointClient(config: ClientConfig): WaypointClient {
+  // The files a message will carry, until the host has stored them. Kept
+  // here, not in the chunk, so they belong to this client alone and go when
+  // it goes.
+  const stagedFiles = new Map<string, StagedFiles>();
   const tabIds = new Set<string>();
   for (const tab of config.tabs ?? DEFAULT_FLOW_TABS) {
     const id = flowTabId(tab);
@@ -1071,7 +1071,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             : [],
           // A restored row keeps only the files the protocol allows.
           attachments: Array.isArray(files)
-            ? files.filter((file) => attachmentWellFormed(file, false))
+            ? files.length <= MAX_ATTACHMENTS
+              ? files.filter((file) => attachmentWellFormed(file, false))
+              : undefined
             : undefined,
         };
       }),
@@ -1137,7 +1139,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       operation.kind === "withdraw" ||
       operation.kind === "discard"
     )
-      uploadChunk?.unstage(operation.id);
+      stagedFiles.delete(operation.id);
     queued.push(operation);
     derive();
   };
@@ -2279,19 +2281,23 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       }
       // The files the message carries are stored before it is sent: a store
       // that fails fails the message itself, not the conversation.
-      const stored = row.attachments?.length
-        ? await (uploadChunk ??= await import("./attachment-upload")).upload(
+      const references = row.attachments?.length
+        ? await (
+            await import("./attachment-upload")
+          ).upload(
             row.attachments,
+            stagedFiles.get(id),
             config.attachments,
             conversationId,
             id,
             record,
             persist,
+            scope,
           )
         : undefined;
       // A conversation that changed while the files were uploading does
       // not get the message: it belongs to the conversation before.
-      if (isDisposed() || scope.aborted) return;
+      if (scope.aborted) return;
       await config.transport.send(
         {
           kind: "message",
@@ -2300,7 +2306,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           clientMessageId: id,
           content: row.content,
           ...(row.extensions ? { extensions: row.extensions } : {}),
-          ...(stored ? { attachments: stored } : {}),
+          ...(references ? { attachments: references } : {}),
         },
         conversationId,
         requestContext(bound),
@@ -2771,7 +2777,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       await ready;
       await persist();
     },
-    async send(attachments?: readonly AttachmentUpload[]) {
+    async send(attachments?: readonly AttachmentUpload[]): Promise<boolean> {
       await ready;
       if (
         !negotiated ||
@@ -2780,13 +2786,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         state.sending ||
         !state.draft.trim()
       )
-        return;
+        return false;
       const scope = conversationScope.signal;
       const draft = state.draft;
       if (formMode()) {
         if (!config.formSession) {
           report({ code: "refused", id: "form-session" });
-          return;
+          return false;
         }
         update({ sending: true });
         try {
@@ -2814,7 +2820,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         } finally {
           if (!scope.aborted) update({ sending: false });
         }
-        return;
+        return true;
       }
       replySteps.begin(
         state.conversation?.messages ?? [],
@@ -2836,7 +2842,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             extensions[contribution.id] = result.payload;
         }
         update({ hints });
-        if (held || scope.aborted || state.conversationUnavailable) return;
+        if (held || scope.aborted || state.conversationUnavailable)
+          return false;
         const id = config.platform.ids();
         replySteps.bind(id);
         let outgoing: Reply = {
@@ -2852,7 +2859,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           scope.aborted ||
           state.conversationUnavailable
         )
-          return;
+          return false;
         if (transformed) outgoing = transformed;
         if (
           outgoing.kind !== "message" ||
@@ -2862,11 +2869,17 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           throw new Error("Invalid middleware reply");
         // The files the message carries are kept until the host stores them.
         const staged = attachments?.length
-          ? await (await import("./attachment-upload")).stage(id, attachments)
+          ? await (
+              await import("./attachment-upload")
+            ).stage(id, attachments, stagedFiles)
           : undefined;
-        // A conversation that changed while the files were being read does
-        // not get the message: it belongs to the conversation before.
-        if (scope.aborted) return;
+        // A conversation that changed while the files were being staged
+        // does not get the message: it belongs to the conversation before,
+        // and no row keeps the bytes.
+        if (scope.aborted) {
+          stagedFiles.delete(id);
+          return false;
+        }
         record({
           kind: "add",
           row: {
@@ -2889,8 +2902,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           replyId: id,
         });
         await dispatch(id);
+        return true;
       } catch {
         report({ code: "refused", id: "before-send" });
+        return false;
       } finally {
         if (!scope.aborted) update({ sending: false });
       }
@@ -3903,6 +3918,7 @@ const PROBLEM_CODES: readonly Problem["code"][] = [
   "stopped",
   "plan-changed",
   "agreement-expired",
+  "attachments-lost",
 ];
 export function replyRow(input: ReplyDecisionInput): ReplyState {
   return replyDecision(input).state;

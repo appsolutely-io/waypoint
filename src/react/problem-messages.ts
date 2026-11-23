@@ -13,6 +13,7 @@ export type ProblemMessageKey =
   | "chat.problem.invalid"
   | "chat.problem.mismatch"
   | "chat.problem.agreement"
+  | "chat.problem.attachmentsLost"
   | "chat.problem.inDoubt"
   | "chat.problem.replaced"
   | "chat.problem.needsAttention"
@@ -40,6 +41,8 @@ export const problemEnglish: ProblemCatalogue = {
     "Something changed since this plan was made. Review the current values.",
   "chat.problem.agreement":
     "The connection could not be renewed. Retry to check the current status.",
+  "chat.problem.attachmentsLost":
+    "The attached files are no longer here; pick them again to send them.",
   "chat.problem.inDoubt":
     "We couldn't confirm what happened. Check the current status before trying again.",
   "chat.problem.replaced": "A newer version replaced this. Refresh to see it.",
@@ -64,6 +67,7 @@ export const problemSimplifiedChinese: ProblemCatalogue = {
   "chat.problem.invalid": "此计划无法按原样使用。请提出新的计划。",
   "chat.problem.mismatch": "自计划生成以来，相关内容已有变化。请查看当前的值。",
   "chat.problem.agreement": "未能更新连接。请重试以检查当前状态。",
+  "chat.problem.attachmentsLost": "附件已不在本机，请重新选择后再发送。",
   "chat.problem.inDoubt": "无法确认刚才的结果。请先查看当前状态，再重试。",
   "chat.problem.replaced": "已有更新的版本。请刷新查看。",
   "chat.problem.needsAttention": "此计划需要您处理。请查看它的状态。",

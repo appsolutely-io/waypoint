@@ -29,6 +29,7 @@ const PROBLEM_TEXT: Partial<Record<Problem["code"], MessageKey>> = {
   "update-required": "chat.update",
   mismatch: "chat.problem.mismatch",
   "agreement-expired": "chat.problem.agreement",
+  "attachments-lost": "chat.problem.attachmentsLost",
   "in-doubt": "chat.problem.inDoubt",
   replaced: "chat.problem.replaced",
   "needs-attention": "chat.problem.needsAttention",

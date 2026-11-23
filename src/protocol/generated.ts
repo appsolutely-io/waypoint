@@ -267,7 +267,8 @@ export interface Problem {
     | 'needs-attention'
     | 'stopped'
     | 'plan-changed'
-    | 'agreement-expired';
+    | 'agreement-expired'
+    | 'attachments-lost';
   id: string;
   retryAfter?: number;
   host?: HostProblemDetail | null;

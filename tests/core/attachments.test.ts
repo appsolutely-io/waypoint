@@ -298,8 +298,19 @@ it("does not queue a message whose conversation changed while its files were bei
   client.dispose();
 });
 
-it("does not send a message whose conversation changed while the files were uploading", async () => {
+it("sends one message with both files after a switch away and back", async () => {
+  const values = new Map<string, string>();
+  const storage: StoragePort = {
+    get: (key) => values.get(key) ?? null,
+    set: (key, value) => {
+      values.set(key, value);
+    },
+    remove: (key) => {
+      values.delete(key);
+    },
+  };
   const sent: Reply[] = [];
+  const uploads: string[] = [];
   let release: () => void = () => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -309,6 +320,7 @@ it("does not send a message whose conversation changed while the files were uplo
     started = resolve;
   });
   const { client } = harness({
+    storage,
     send: async (reply) => {
       sent.push(reply as Reply);
       return { id: "stored" };
@@ -320,22 +332,41 @@ it("does not send a message whose conversation changed while the files were uplo
       messages: [],
     }),
     port: {
-      upload: async () => {
-        started();
-        await gate;
-        return { id: "file-1" };
+      upload: async (data, context) => {
+        uploads.push(context.fileName);
+        if (context.fileName === "a.txt") {
+          started();
+          await gate;
+        }
+        return { id: `file-${context.fileName}` };
       },
     },
   });
   await client.ready;
-  await client.setDraft("Here is the report");
-  const sending = client.send([file("report.txt", "hello")]);
+  await client.setDraft("Two files");
+  const sending = client.send([file("a.txt", "a"), file("b.txt", "b")]);
   await uploading;
   const switched = client.switchConversation("conversation-b");
   release();
   await sending;
   await switched;
+  // The message belongs to the conversation before: nothing was sent
+  // into the new one, and the first file was not uploaded again.
   expect(sent).toHaveLength(0);
+  await client.switchConversation("conversation-a");
+  await flush();
+  const row = client.getSnapshot().pending[0]!;
+  // The stored reference is kept with the staged files, not on the row of
+  // a conversation the message left; the retry carries it without asking
+  // the host for the file again.
+  expect(row.attachments?.map((each) => each.id ?? null)).toEqual([null, null]);
+  await client.retry(row.id);
+  expect(uploads).toEqual(["a.txt", "b.txt"]);
+  expect(sent).toHaveLength(1);
+  expect((sent[0] as ReplyMessage).attachments).toEqual([
+    { id: "file-a.txt", name: "a.txt", mediaType: "text/plain", size: 1 },
+    { id: "file-b.txt", name: "b.txt", mediaType: "text/plain", size: 1 },
+  ]);
   client.dispose();
 });
 
@@ -426,5 +457,150 @@ it("drops a restored row's malformed attachment", async () => {
     { id: "file-1", name: "report.txt", mediaType: "text/plain", size: 5 },
     { name: "unstaged.txt", mediaType: "text/plain", size: 5 },
   ]);
+  client.dispose();
+});
+
+it("reports whether it queued the message", async () => {
+  const held = harness({
+    send: async () => ({ id: "stored" }),
+  });
+  await held.client.ready;
+  await held.client.setDraft("Held");
+  // A contribution that holds the draft keeps the message unqueued.
+  const holding = createWaypointClient({
+    ...config(),
+    attachments: {
+      upload: async () => ({ id: "file-1" }),
+    },
+    contributions: [{ id: "hold", evaluate: async () => ({ hold: "hold" }) }],
+    transport: {
+      ...config().transport,
+      send: async () => ({ id: "stored" }),
+    },
+  });
+  await holding.ready;
+  await holding.setDraft("Held");
+  expect(await holding.send([file("report.txt", "hello")])).toBe(false);
+  expect(holding.getSnapshot().pending).toHaveLength(0);
+  holding.dispose();
+  const refused = createWaypointClient({
+    ...config(),
+    attachments: { upload: async () => ({ id: "file-1" }) },
+    beforeSend: () => false,
+    transport: {
+      ...config().transport,
+      send: async () => ({ id: "stored" }),
+    },
+  });
+  await refused.ready;
+  await refused.setDraft("Refused");
+  expect(await refused.send([file("report.txt", "hello")])).toBe(false);
+  expect(refused.getSnapshot().pending).toHaveLength(0);
+  refused.dispose();
+  const queued = harness();
+  await queued.client.ready;
+  await queued.client.setDraft("Here is the report");
+  expect(await queued.client.send([file("report.txt", "hello")])).toBe(true);
+  queued.client.dispose();
+  held.client.dispose();
+});
+
+it("fails a retried row whose files are no longer held", async () => {
+  const values = new Map<string, string>();
+  const storage: StoragePort = {
+    get: (key) => values.get(key) ?? null,
+    set: (key, value) => {
+      values.set(key, value);
+    },
+    remove: (key) => {
+      values.delete(key);
+    },
+  };
+  const sent: Reply[] = [];
+  const first = harness({
+    storage,
+    send: async (reply) => {
+      sent.push(reply as Reply);
+      return { id: "stored" };
+    },
+    port: {
+      upload: async () => {
+        throw new Error("no storage");
+      },
+    },
+  });
+  await first.client.ready;
+  await first.client.setDraft("Here is the report");
+  await first.client.send([file("report.txt", "hello")]);
+  expect(sent).toHaveLength(0);
+  const id = first.client.getSnapshot().pending[0]!.id;
+  first.client.dispose();
+  const second = harness({ storage });
+  await second.client.ready;
+  await flush();
+  await second.client.retry(id);
+  expect(sent).toHaveLength(0);
+  const failure = second.client.getSnapshot().pending[0]?.failure;
+  expect(failure?.code).toBe("attachments-lost");
+  second.client.dispose();
+});
+
+it("refuses a message with more files than the protocol allows", async () => {
+  const { client, sent, stored } = harness();
+  await client.ready;
+  await client.setDraft("Too many");
+  const many = Array.from({ length: 21 }, (_, at) =>
+    file(`report-${at}.txt`, "x"),
+  );
+  expect(await client.send(many)).toBe(false);
+  expect(sent).toHaveLength(0);
+  expect(stored).toHaveLength(0);
+  client.dispose();
+});
+
+it("keeps a host's binding problem out of the row's failure", async () => {
+  const { client, sent } = harness({
+    port: {
+      upload: async () => {
+        throw { code: "agreement-expired", id: "binding" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  expect(sent).toHaveLength(0);
+  expect(client.getSnapshot().pending[0]?.failure?.code).toBe("refused");
+  client.dispose();
+});
+
+it("drops a restored row's attachments when there are too many", async () => {
+  const record = JSON.stringify({
+    revision: 1,
+    draft: "",
+    pending: [
+      {
+        id: "m1",
+        content: "Too many",
+        failure: null,
+        open: [],
+        attachments: Array.from({ length: 21 }, (_, at) => ({
+          id: `file-${at}`,
+          name: `report-${at}.txt`,
+          mediaType: "text/plain",
+          size: 1,
+        })),
+      },
+    ],
+  });
+  const storage: StoragePort = {
+    get: () => record,
+    set: () => {},
+    remove: () => {},
+  };
+  const { client } = harness({ storage });
+  await client.ready;
+  await flush();
+  expect(client.getSnapshot().pending[0]?.attachments).toBeUndefined();
   client.dispose();
 });

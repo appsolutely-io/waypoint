@@ -38,7 +38,7 @@ The client checks that policy when a person picks the files, so the picker can s
 
 - A client MUST send attachments only to a host that injected an upload port, and MUST NOT put the files' bytes on the wire: it sends the references the host gave.
 - A client MUST send the references under the same `clientMessageId` as the message's text, so a message that is sent twice carries the same files.
-- The client calls the port once per file, with the message's `clientMessageId` and the file's `index` in that message (counting from zero), so a host tells the files of one message apart.
+- The client calls the port once per file per attempt, with the message's `clientMessageId` and the file's `index` in that message (counting from zero), until the host returns the file's id, so a host tells the files of one message apart and stores each once.
 - A host MUST give every stored file an id, MUST keep that id for the same `clientMessageId` and the file's `index` in that message, and MUST return the references in its read.
 - A host MAY add a `url` to a stored file. The chat links it only when its URL policy allows it (`isSafeUrl`, with `extraUrlSchemes`).
 - A host MUST ignore an `attachments` field it does not know, so a host that stores no files keeps working.

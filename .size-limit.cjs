@@ -28,7 +28,7 @@ const budgets = [
     path: "dist/index.js",
     // Synchronous reply state, recovery eligibility, frame reconciliation and cancellation ownership belong to every core consumer.
     // The composer attachments add the row's references, the upload at send time and the pick-time policy to the eager core.
-    // Node 22 maximum across lockfile/lowest peers: 19,577 B for the base, 919 B for feat/host-run-steps and 142 B for the attachments;
+    // Node 22 maximum across lockfile/lowest peers: 19,577 B for the base, 919 B for the host-run steps change and 142 B for the attachments;
     // measured with Node 22's zlib.
     limit: "20.7 KB",
     gzip: true,

@@ -49,6 +49,8 @@ const budgets = [
       "./stream-reads-*",
       "./storage-commit.js",
       "./storage-commit-*",
+      "./attachment-upload.js",
+      "./attachment-upload-*",
       "./frame-decoder.js",
       "./frame-decoder-*",
     ],
@@ -88,6 +90,13 @@ const budgets = [
   {
     name: "lazy storage commit",
     path: "dist/storage-commit.js",
+    limit: "1 KB",
+    gzip: true,
+    brotli: false,
+  },
+  {
+    name: "lazy attachment upload",
+    path: "dist/attachment-upload.js",
     limit: "1 KB",
     gzip: true,
     brotli: false,

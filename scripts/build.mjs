@@ -9,6 +9,7 @@ const entry = {
   "on-demand": "src/core/on-demand.ts",
   "stream-reads": "src/core/reads-impl.ts",
   "storage-commit": "src/core/storage-commit.ts",
+  "attachment-upload": "src/core/attachment-upload.ts",
   "frame-decoder": "src/core/frame-decoder.ts",
   "messages/index": "src/messages/index.ts",
   "messages/en/index": "src/messages/en.ts",

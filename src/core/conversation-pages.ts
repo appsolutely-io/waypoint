@@ -64,6 +64,19 @@ function validMessage(value: Message): boolean {
             typeof source.id === "string" &&
             typeof source.title === "string" &&
             typeof source.url === "string",
+        ))) &&
+    (value.attachments === undefined ||
+      (Array.isArray(value.attachments) &&
+        value.attachments.length <= 50 &&
+        value.attachments.every(
+          (attachment) =>
+            attachment &&
+            nonempty(attachment.id) &&
+            nonempty(attachment.name) &&
+            nonempty(attachment.mediaType) &&
+            Number.isInteger(attachment.size) &&
+            attachment.size >= 0 &&
+            (attachment.url === undefined || nonempty(attachment.url)),
         ))),
   );
 }

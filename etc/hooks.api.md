@@ -31,16 +31,23 @@ export function asProblem(error: unknown, id: string): Problem;
 
 // @public (undocumented)
 export interface AttachmentPort {
-    // (undocumented)
-    remove(id: string): MaybePromise<void>;
-    // (undocumented)
+    accept?: readonly string[];
+    maxBytes?: number;
     upload(data: Uint8Array, context: {
         conversationId: string;
+        clientMessageId: string;
         fileName: string;
         contentType: string;
     }): MaybePromise<{
         id: string;
     }>;
+}
+
+// @public
+export interface AttachmentUpload {
+    data: Uint8Array;
+    mediaType: string;
+    name: string;
 }
 
 // @public (undocumented)
@@ -345,6 +352,7 @@ export function cardReplyId(conversationId: string, messageId: string, blockId: 
 export interface ClientConfig {
     // (undocumented)
     accountId: string;
+    attachments?: AttachmentPort;
     // (undocumented)
     beforeSend?: (reply: Reply) => MaybePromise<Reply | false | void>;
     // (undocumented)
@@ -1644,10 +1652,19 @@ export interface PatchFlow {
 }
 
 // @public
+export interface PendingAttachment {
+    id?: string;
+    mediaType: string;
+    name: string;
+    size: number;
+}
+
+// @public
 export function pendingProblem(row: Pick<PendingSend, "id" | "failure">, eligibleProblem: Problem | undefined): Problem | null;
 
 // @public (undocumented)
 export interface PendingSend {
+    attachments?: readonly PendingAttachment[];
     // (undocumented)
     content: string;
     // (undocumented)
@@ -2626,7 +2643,7 @@ export interface WaypointClient {
     // (undocumented)
     selectVersion(messageId: string, index: number): Promise<void>;
     // (undocumented)
-    send(): Promise<void>;
+    send(attachments?: readonly AttachmentUpload[]): Promise<void>;
     sendFeedback(messageId: string, rating: FeedbackInput["rating"]): Promise<boolean>;
     // (undocumented)
     setDraft(value: string): Promise<void>;

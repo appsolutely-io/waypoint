@@ -15,6 +15,10 @@ function setup() {
   return createFormSession({ fields, ids: () => `request-${++id}` });
 }
 it("negotiates form fill only with a compatible peer and preserves old chat", () => {
+  expect(negotiate(["1.2", "1.1", "1.0"], ["form-fill"])).toEqual({
+    protocol: "1.2",
+    capabilities: ["form-fill"],
+  });
   expect(negotiate(["1.1", "1.0"], ["form-fill"])).toEqual({
     protocol: "1.1",
     capabilities: ["form-fill"],

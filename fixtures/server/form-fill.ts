@@ -5,6 +5,7 @@ import type {
   FormFillValue,
 } from "../../src/protocol/generated";
 import type { HttpResult } from "../../src/conformance/index";
+import { supportsFormFill } from "../../src/protocol/version";
 export type FormFault =
   | "form-mode"
   | "form-fields"
@@ -45,7 +46,7 @@ export function createFormFixture(fault?: string) {
       ) {
         const input = body as unknown as CreateConversation;
         if (
-          input.protocol !== "1.1" ||
+          !supportsFormFill(input.protocol) ||
           !input.subject ||
           !input.clientCreationId
         )
@@ -67,7 +68,7 @@ export function createFormFixture(fault?: string) {
           return { status: 200, body: records.get(prior) };
         const id = `form-${++serial}`;
         const value: Conversation = {
-          protocol: "1.1",
+          protocol: input.protocol,
           id,
           title: input.title,
           messages: [],

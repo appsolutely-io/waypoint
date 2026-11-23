@@ -12,7 +12,7 @@ const core =
   format === "cjs"
     ? require(entry)
     : await import(entry.startsWith("/") ? pathToFileURL(entry).href : entry);
-assert.deepEqual(core.SUPPORTED_PROTOCOLS, ["1.1", "1.0"]);
+assert.deepEqual(core.SUPPORTED_PROTOCOLS, ["1.2", "1.1", "1.0"]);
 const flow = await core.parseFlow(
   '---\nformat: "1.0"\nid: example/prompt\ntitle: Example\nkind: prompt\nparameters: []\ntags: []\n---\nHello',
   [],

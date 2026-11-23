@@ -7,7 +7,12 @@ import type {
 import type { ClientConfig, TransportEvent } from "../../src/core/client";
 import samples from "../protocol/samples.json";
 
-const chunk: { fail: boolean; loads: number; wait?: Promise<void> } = {
+const chunk: {
+  fail: boolean;
+  loads: number;
+  wait?: Promise<void>;
+  request?: Promise<void>;
+} = {
   fail: false,
   loads: 0,
 };
@@ -22,17 +27,27 @@ function setup(
     config: ClientConfig,
   ) => ReturnType<typeof import("../../src/core/client").createWaypointClient>,
   config: () => ClientConfig,
+  protocol = "1.0",
 ) {
   let listener!: (event: TransportEvent) => void;
   const replies: Reply[] = [];
   const requests: string[] = [];
   const base = config();
+  if (protocol !== "1.0") {
+    base.transport.negotiate = async () => ({ protocol, capabilities: [] });
+    const read = base.transport.read;
+    base.transport.read = async (...args) => ({
+      ...(await read(...args)),
+      protocol,
+    });
+  }
   const client = createWaypointClient({
     ...base,
     reads: {
       manifest: [samples.ManifestEntry as ManifestEntry],
       request: async (call) => {
         requests.push(call.id);
+        await chunk.request;
         return { title: "Safe" };
       },
     },
@@ -52,7 +67,7 @@ function setup(
   const frame = (value: Record<string, unknown>) =>
     listener({
       type: "frame",
-      frame: { protocol: "1.0", sequence: ++sequence, ...value } as never,
+      frame: { protocol, sequence: ++sequence, ...value } as never,
     });
   return { client, replies, requests, frame };
 }
@@ -64,8 +79,9 @@ describe("the stream read handlers chunk", () => {
     chunk.fail = false;
     chunk.loads = 0;
     chunk.wait = undefined;
+    chunk.request = undefined;
   });
-  async function load() {
+  async function load(protocol = "1.0") {
     vi.resetModules();
     vi.doMock("../../src/core/reads-impl", async (original) => {
       if (++chunk.loads > RUNAWAY_LOADS) return new Promise<never>(() => {});
@@ -75,8 +91,45 @@ describe("the stream read handlers chunk", () => {
     });
     const { createWaypointClient } = await import("../../src/core/client");
     const { config } = await import("../support/client");
-    return setup(createWaypointClient, config);
+    return setup(createWaypointClient, config, protocol);
   }
+
+  it.each([false, true])(
+    "keeps host steps behind a prior lazy read without answering them (%s)",
+    async (fail) => {
+      let release!: () => void;
+      chunk.wait = new Promise((resolve) => {
+        release = resolve;
+      });
+      let finish!: () => void;
+      chunk.request = new Promise((resolve) => {
+        finish = resolve;
+      });
+      chunk.fail = fail;
+      const { client, frame, replies } = await load("1.2");
+      await client.ready;
+      frame({ type: "tool.call", call: { ...samples.ToolCall, id: "local" } });
+      frame({ type: "message.start", messageId: "a", role: "assistant" });
+      frame({
+        type: "step",
+        messageId: "a",
+        step: { id: "host", status: "done" },
+      });
+      expect(client.getSnapshot().toolSteps).toEqual([]);
+      release();
+      await vi.waitFor(() =>
+        expect(
+          client.getSnapshot().toolSteps.some((s) => s.id === "host"),
+        ).toBe(true),
+      );
+      expect(
+        replies.every((r) => r.kind !== "tool-result" || r.callId === "local"),
+      ).toBe(true);
+      expect(client.getSnapshot().problem?.id).not.toBe("frame-dispatch");
+      client.dispose();
+      finish();
+    },
+  );
 
   it("is not loaded until a read frame arrives", async () => {
     const { client, frame } = await load();

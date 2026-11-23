@@ -15,6 +15,7 @@ import {
   type SetStateAction,
 } from "react";
 import type { FormDraft, FormSession, FormSnapshot } from "../core/form-fill";
+import { supportsFormFill } from "../protocol/version";
 import { addMessages, type FormatMessage } from "./i18n";
 import { formEnglish, formSimplifiedChinese } from "./form-messages";
 import { useHandoff } from "./focus";
@@ -532,7 +533,7 @@ export function PopupBody({
         : undefined;
       const subject = current.conversation?.subject ?? cached?.subject;
       if (
-        current.protocol !== "1.1" ||
+        !supportsFormFill(current.protocol) ||
         !current.capabilities.includes("form-fill") ||
         (current.conversation
           ? current.conversation.mode !== "form-fill"

@@ -1,6 +1,6 @@
 # Form-bound conversations
 
-Form fill is an additive protocol 1.1 capability named `form-fill`. Negotiate with `supported: ["1.1", "1.0"]`; the peer selects a mutually supported version and capabilities. A 1.0 peer retains ordinary conversation behavior and does not enable form fill. The JSON Schema export defines the wire types; generated TypeScript is derived from it.
+Form fill is an additive protocol 1.1 capability named `form-fill`, also available under protocol 1.2. Negotiate with `supported: ["1.2", "1.1", "1.0"]`; the peer selects a mutually supported version and capabilities. A 1.0 peer retains ordinary conversation behavior and does not enable form fill. The JSON Schema export defines the wire types; generated TypeScript is derived from it.
 
 ## Creating and reopening
 
@@ -78,6 +78,6 @@ Render `FormFillPopup` within `WaypointProvider`, supplying a session, `open` an
 
 ## Conformance boundary
 
-`runFormFillConformance` and the normal `waypoint-conformance` runner exercise creation replay, reopened mode, subject filters, per-field validation, reply replay, non-low rejection, inherited child mode, wrong-subject rejection and refusal of general replies. The normal runner enables these cases only for a peer advertising protocol 1.1 with form fill. Isolated test peers provide the existing test session endpoint; no production model credential is required. Faulted fixture peers prove the kit detects broken mode, values, subject checks, filtering and creation deduplication.
+`runFormFillConformance` and the normal `waypoint-conformance` runner exercise creation replay, reopened mode, subject filters, per-field validation, reply replay, non-low rejection, inherited child mode, wrong-subject rejection and refusal of general replies. The normal runner enables these cases only for a peer advertising protocol 1.1 or 1.2 with form fill. Isolated test peers provide the existing test session endpoint; no production model credential is required. Faulted fixture peers prove the kit detects broken mode, values, subject checks, filtering and creation deduplication.
 
 A host owns authorization, allowlisting, private attachment retention, binding pending subjects after its normal Save, saved-but-unlinked reporting, media selection/upload and audit attribution. These server behaviors are not implemented by this package. A host must also refuse plan commands and tool requests in form mode independently of the browser guards.

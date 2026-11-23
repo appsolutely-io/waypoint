@@ -46,6 +46,8 @@ export type WaypointProtocol =
   | ExtensionBlock
   | Block
   | MessageSender
+  | ReplyStep
+  | FrameStep
   | Message
   | MessageAttachment
   | Source
@@ -194,6 +196,7 @@ export type Frame =
   | FramePlanDraft
   | FramePlanFinal
   | FramePlanStep
+  | FrameStep
   | FrameToolCall
   | FramePlanningRead
   | FrameMessageEnd
@@ -770,11 +773,24 @@ export interface MessageSender {
   name: string;
   avatarUrl?: string;
 }
+export interface ReplyStep {
+  id: string;
+  label?: string;
+  status: 'running' | 'done' | 'failed';
+}
+export interface FrameStep {
+  type: 'step';
+  protocol: string;
+  sequence: number;
+  messageId: string;
+  step: ReplyStep;
+}
 export interface Message {
   id: string;
   clientMessageId?: string;
   role: 'user' | 'assistant' | 'notice';
   sender?: MessageSender;
+  steps?: ReplyStep[];
   content: string;
   blocks: Block[];
   createdAt: number;

@@ -51,6 +51,29 @@ for (const fault of ["reordered-answer", "extended-answer"] as const)
       await host.close();
     }
   });
+it("uses the negotiated 1.2 protocol for the form-fill suite", async () => {
+  const host = await createFixtureServer({ testMode: true });
+  const protocols: unknown[] = [];
+  try {
+    const result = await runConformance({
+      baseUrl: host.url,
+      profile: "app-host",
+      request: async (path, init) => {
+        const body =
+          typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+        if (body?.mode === "form-fill") protocols.push(body.protocol);
+        const response = await fetch(host.url + path, init);
+        return { status: response.status, body: await response.json() };
+      },
+    });
+    expect(result.passed, result.failures.join(", ")).toBe(true);
+    expect(protocols.length).toBeGreaterThan(0);
+    expect(protocols.every((p) => p === "1.2")).toBe(true);
+  } finally {
+    await host.close();
+  }
+});
+
 it("test-only endpoints are absent outside test mode", async () => {
   const host = await createFixtureServer({ testMode: false });
   try {

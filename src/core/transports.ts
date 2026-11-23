@@ -1,4 +1,5 @@
 import type { ConversationSource, ConversationSummary } from "./form-fill";
+import { stepEnvelope } from "./reply-steps";
 import type { Frame, Conversation, Reply } from "../protocol/generated";
 import type { HttpRequest } from "../conformance/index";
 import {
@@ -15,7 +16,24 @@ export async function* decodeFrames(
   chunks: AsyncIterable<string>,
   format: "sse" | "ndjson",
 ): AsyncGenerator<Frame> {
-  yield* (await import("./frame-decoder")).decodeFrames(chunks, format);
+  for await (const frame of (await import("./frame-decoder")).decodeFrames(
+    chunks,
+    format,
+  )) {
+    if ((frame as { type?: unknown } | null)?.type === "step") {
+      if (stepEnvelope(frame)) yield frame;
+    } else {
+      if (
+        typeof frame !== "object" ||
+        frame === null ||
+        typeof (frame as Frame).protocol !== "string" ||
+        !Number.isInteger((frame as Frame).sequence) ||
+        typeof (frame as Frame).type !== "string"
+      )
+        throw new Error("Invalid frame");
+      yield frame as Frame;
+    }
+  }
 }
 export interface StreamPort {
   subscribe(
@@ -89,6 +107,7 @@ export function createHttpTransport(
       const deliver = (text: string) => {
         try {
           const frame: Frame = JSON.parse(text);
+          if (frame?.type === "step" && !stepEnvelope(frame)) return;
           listener({ type: "frame", frame });
         } catch {
           listener({ type: "status", status: "unavailable" });

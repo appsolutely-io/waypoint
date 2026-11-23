@@ -109,7 +109,7 @@ for (const manager of ["npm", "pnpm"]) {
     "--input-type=module",
     "-e",
     `import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';import {SUPPORTED_PROTOCOLS} from '${name}';assert.deepEqual(SUPPORTED_PROTOCOLS,['1.1','1.0']);for(const entry of ['react','hooks','messages','messages/en','messages/zh-Hans','skin-default','skin-antd','testing','schema.json','styles.css'])assert.ok(import.meta.resolve('${name}/'+entry));`,
+import {createHash} from 'node:crypto';import {SUPPORTED_PROTOCOLS} from '${name}';assert.deepEqual(SUPPORTED_PROTOCOLS,['1.2','1.1','1.0']);for(const entry of ['react','hooks','messages','messages/en','messages/zh-Hans','skin-default','skin-antd','testing','schema.json','styles.css'])assert.ok(import.meta.resolve('${name}/'+entry));`,
   ]);
   run("node", ["-e", `require('${name}');require('${name}/skin-default');`]);
   // A native host's text, with no UI peer installed: the formatter and the

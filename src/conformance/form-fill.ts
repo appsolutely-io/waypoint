@@ -10,6 +10,13 @@ export async function runFormFillConformance(
   rawRequest: HttpRequest,
   options?: ConformanceAuthOptions,
 ): Promise<ConformanceResult> {
+  return runFormFillSuite(rawRequest, options, "1.1");
+}
+export async function runFormFillSuite(
+  rawRequest: HttpRequest,
+  options: ConformanceAuthOptions | undefined,
+  protocol: string,
+): Promise<ConformanceResult> {
   const failures: string[] = [],
     scenarios: string[] = [];
   const session = await authenticateSession(rawRequest, options);
@@ -19,7 +26,7 @@ export async function runFormFillConformance(
     request(path, {
       method: "POST",
       headers,
-      body: JSON.stringify({ protocol: "1.1", ...(value as object) }),
+      body: JSON.stringify({ protocol, ...(value as object) }),
     });
   const read = (id: string) =>
     request(`/conversations/${encodeURIComponent(id)}`, { headers });

@@ -32,7 +32,7 @@ describe("schema fixtures", () => {
   });
 });
 it("negotiates known capabilities and rejects incompatible versions", () => {
-  expect(SUPPORTED_PROTOCOLS).toEqual(["1.1", "1.0"]);
+  expect(SUPPORTED_PROTOCOLS).toEqual(["1.2", "1.1", "1.0"]);
   expect(negotiate(["9.0", "1.0"], ["plans", "future"])).toEqual({
     protocol: "1.0",
     capabilities: ["plans"],

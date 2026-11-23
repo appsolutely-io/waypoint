@@ -1,4 +1,5 @@
-import { runFormFillConformance } from "./form-fill";
+import { runFormFillConformance, runFormFillSuite } from "./form-fill";
+import { supportsFormFill } from "../protocol/version";
 import { runPlanConformance } from "./plans";
 import { namesAppliedAnswer } from "./card-answer";
 import { authenticateSession, authFailure } from "./auth";
@@ -65,10 +66,10 @@ export async function runConformance(
       skipped: Object.values(CAPABILITY_SCENARIOS).flat(),
     };
   if (
-    peer.protocol === "1.1" &&
+    supportsFormFill(peer.protocol) &&
     enabled(CONFORMANCE_CAPABILITIES.forms, peer)
   ) {
-    const forms = await runFormFillConformance(config.request, config);
+    const forms = await runFormFillSuite(config.request, config, peer.protocol);
     failures.push(...forms.failures);
     scenarios.push(...forms.scenarios);
   } else skipped.push(...CAPABILITY_SCENARIOS[CONFORMANCE_CAPABILITIES.forms]);

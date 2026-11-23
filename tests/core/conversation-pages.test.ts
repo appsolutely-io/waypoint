@@ -9,7 +9,9 @@ import type {
   Message,
   OutlineMessage,
   Frame,
+  ManifestEntry,
 } from "../../src/protocol/generated";
+import samples from "../protocol/samples.json";
 import { config, flush } from "../support/client";
 
 const ids = ["old", "middle", "latest"];
@@ -83,6 +85,123 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+it("adopts optional host steps from latest and historical bodies without rejecting malformed siblings", async () => {
+  const h = setup();
+  h.cfg.transport.negotiate = async () => ({
+    protocol: "1.2",
+    capabilities: [],
+  });
+  h.readPage.mockImplementation(async (_id, input) => {
+    const messages = input.cursor
+      ? [message("middle"), message("latest")]
+      : [message("latest")];
+    const bodies = messages.map((m) => ({
+      ...m,
+      steps: [
+        null,
+        { id: m.id, status: "done" },
+        { id: "invalid", status: "other" },
+      ],
+    })) as Message[];
+    return page(bodies, {
+      olderCursor: input.cursor ? null : "middle-cursor",
+      conversation: {
+        protocol: "1.2",
+        id: "conversation-a",
+        title: "Chat",
+        messages: bodies,
+      },
+    });
+  });
+  const client = createWaypointClient(h.cfg);
+  await client.ready;
+  expect(client.getSnapshot().toolSteps).toEqual([
+    { id: "latest", status: "done" },
+  ]);
+  expect(await client.loadOlder()).toBe(true);
+  expect(client.getSnapshot().toolSteps.map((s) => s.id)).toEqual([
+    "latest",
+    "middle",
+  ]);
+  expect(
+    client
+      .getSnapshot()
+      .conversation?.messages.every((m) => m.steps?.length === 1),
+  ).toBe(true);
+  expect(client.getSnapshot().problem).toBeNull();
+  client.dispose();
+});
+
+it.each([false, true])(
+  "uses the full user boundary while older bodies load (user body: %s)",
+  async (includeUser) => {
+    const h = setup();
+    h.cfg.transport.negotiate = async () => ({
+      protocol: "1.2",
+      capabilities: [],
+    });
+    let finish!: (value: unknown) => void;
+    const request = vi.fn(() => new Promise((resolve) => (finish = resolve)));
+    h.cfg.reads = {
+      manifest: [samples.ManifestEntry as ManifestEntry],
+      request,
+    };
+    const old = {
+      ...message("old"),
+      steps: [{ id: "old-step", status: "done" as const }],
+    };
+    const user: Message = { ...message("middle"), role: "user" };
+    const latest = {
+      ...message("latest"),
+      status: "writing" as const,
+      steps: [{ id: "current-step", status: "running" as const }],
+    };
+    const index = outline().map((entry) =>
+      entry.id === user.id ? { ...entry, role: "user" as const } : entry,
+    );
+    h.readPage.mockImplementation(async (_id, input) => {
+      const messages = input.cursor
+        ? [old, ...(includeUser ? [user] : [])]
+        : [latest];
+      return page(messages, {
+        conversation: {
+          protocol: "1.2",
+          id: "conversation-a",
+          title: "Chat",
+          messages,
+        },
+        outline: index,
+        olderCursor: input.cursor ? null : "middle-cursor",
+      });
+    });
+    const client = createWaypointClient(h.cfg);
+    await client.ready;
+    expect(client.getSnapshot().toolSteps).toEqual([
+      { id: "current-step", status: "running" },
+    ]);
+    h.frame({
+      protocol: "1.2",
+      type: "tool.call",
+      call: { ...samples.ToolCall, id: "current-local" },
+    });
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    expect(await client.loadOlder()).toBe(true);
+    expect(client.getSnapshot().toolSteps).toEqual([
+      { id: "current-step", status: "running" },
+      { id: "current-local", status: "running" },
+    ]);
+    finish({ title: "A" });
+    await vi.waitFor(() =>
+      expect(client.getSnapshot().toolSteps).toEqual([
+        { id: "current-step", status: "running" },
+        { id: "current-local", status: "done" },
+      ]),
+    );
+    expect(client.getSnapshot().problem).toBeNull();
+    client.dispose();
+  },
+);
 
 it("latest page keeps every outline entry without loading older bodies", async () => {
   const h = setup();

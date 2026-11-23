@@ -1,5 +1,6 @@
 export type * from "./generated";
-export const SUPPORTED_PROTOCOLS = ["1.1", "1.0"] as const;
+export const SUPPORTED_PROTOCOLS = ["1.2", "1.1", "1.0"] as const;
+import { supportsFormFill } from "./version";
 export const CAPABILITIES = [
   "plans",
   "flows",
@@ -54,7 +55,7 @@ export function negotiate(
         (value) =>
           capabilities.includes(value) &&
           (!offer || offer.capabilities.includes(value)) &&
-          (value !== "form-fill" || protocol === "1.1"),
+          (value !== "form-fill" || supportsFormFill(protocol)),
       ),
     ),
   };

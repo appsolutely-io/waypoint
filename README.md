@@ -72,6 +72,7 @@ Every client owns its state, listeners, streams and send failures. Providers cha
 | `PlatformPorts`        | `platform: { clock, online: () => true, visibility: () => true, ids }`; optional `subscribeOnline` / `subscribeVisibility`                                                                                                          |
 | `MessageVersionPort`   | `versions: { edit, regenerate, select }`; message actions refetch the authoritative sibling after the host operation; the host draws the controls ([docs/message-versions.md](docs/message-versions.md))                            |
 | `StoragePort`          | `storage: { get, set, remove }`; each operation may return a promise                                                                                                                                                                |
+| `AttachmentPort`       | `attachments: { upload(data, context) }` with optional `accept` and `maxBytes`; the host stores each file and gives it an id ([docs/reply-protocol.md](docs/reply-protocol.md))                                                     |
 | `transport`            | `createSseTransport(request, stream)`, `createFetchStreamTransport(request, stream)` or `createSignalTransport(request, stream)`                                                                                                    |
 | State subscriptions    | `const unsubscribe = client.subscribe(() => draw(client.getSnapshot()))`                                                                                                                                                            |
 | Typed events           | `client.on(event => recordId(event.type, event))`; events contain ids, never field values                                                                                                                                           |
@@ -175,21 +176,21 @@ function Transcript({ client }) {
 
 Each part receives a copy of its own data as `data`, typed by its name (`PartData`, `PartDataMap`; `PartProps<"stepRow">` for one part). Parts not listed receive none.
 
-| Part                 | `data`                                                                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `bubble`             | `{ message }` (`id`, `role`, `content`, `status`, `versionIndex`, `versionCount`, `blocks`) or `{ pending }` for a message being sent |
-| `messageActions`     | `{ message }` (`id`, `role`, `status`, `versionIndex`, `versionCount`)                                                                |
-| `widgetFrame`        | `{ block }` (`id`, `type`, `answered`)                                                                                                |
-| `failedSendControls` | `{ pending }` (`id`, `content`, `failure`: `{ code, id?, host? }` or `null`)                                                          |
-| `composer`           | `{ sending }`                                                                                                                         |
-| `confirmBar`         | `{ view, actions }`: the plan view and the actions the bar shows                                                                      |
-| `confirmation`       | `{ confirmation }`: the host's confirmation record                                                                                    |
-| `planNode`           | `{ view }`                                                                                                                            |
-| `stepRow`            | `{ step }` (`id`, `operation`, `resource`, `view`, `tier`, `undo`, `stepUp`)                                                          |
-| `stepUpPrompt`       | `{ stepUpCount }`                                                                                                                     |
-| `recoveryPanel`      | `{ view }`                                                                                                                            |
-| `stepStatusRow`      | `{ step }` (`stepId`, `index`, `resource`, `truth`, `textKey`): name it with `stepName(format, planLabels, step)`                     |
-| `recoveryActions`    | `{ actions }`                                                                                                                         |
+| Part                 | `data`                                                                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bubble`             | `{ message }` (`id`, `role`, `content`, `status`, `versionIndex`, `versionCount`, `blocks`, `attachments`) or `{ pending }` for a message being sent |
+| `messageActions`     | `{ message }` (`id`, `role`, `status`, `versionIndex`, `versionCount`)                                                                               |
+| `widgetFrame`        | `{ block }` (`id`, `type`, `answered`)                                                                                                               |
+| `failedSendControls` | `{ pending }` (`id`, `content`, `failure`: `{ code, id?, host? }` or `null`, `attachments`)                                                          |
+| `composer`           | `{ sending }`                                                                                                                                        |
+| `confirmBar`         | `{ view, actions }`: the plan view and the actions the bar shows                                                                                     |
+| `confirmation`       | `{ confirmation }`: the host's confirmation record                                                                                                   |
+| `planNode`           | `{ view }`                                                                                                                                           |
+| `stepRow`            | `{ step }` (`id`, `operation`, `resource`, `view`, `tier`, `undo`, `stepUp`)                                                                         |
+| `stepUpPrompt`       | `{ stepUpCount }`                                                                                                                                    |
+| `recoveryPanel`      | `{ view }`                                                                                                                                           |
+| `stepStatusRow`      | `{ step }` (`stepId`, `index`, `resource`, `truth`, `textKey`): name it with `stepName(format, planLabels, step)`                                    |
+| `recoveryActions`    | `{ actions }`                                                                                                                                        |
 
 `FlowSource` defaults to favourites, most-used, recent, presets, in that order, and initially chooses the first nonempty tab. An explicit selection survives subsequent reads. The source owns favourite status and usage; the client does not infer them. `load` optionally returns a parsed `Flow` matching `schema.json`. Both YAML and JSON paths use `validateFlowDocument`; `bindFlow` binds parameters, and `run` asks the host for a proposal. This path never bypasses confirmation or executes arbitrary flow requests directly.
 
@@ -197,7 +198,7 @@ The runner sends the confirmed canonical method, path and body unchanged, adds `
 
 Integrations not included in this release:
 
-- Form-popup images use the injected `PrivateAttachmentPort` upload/remove adapter. General composer attachments remain an unimplemented seam through the protocol `AttachmentPort` and `ComposerContribution`.
+- Form-popup images use the injected `PrivateAttachmentPort` upload/remove adapter. Composer attachments use the injected `AttachmentPort`: the composer picks the files, the client stores them when the message is sent and sends the references the host gave.
 - The command/mention registry: **seam exists, not implemented**. Contributions supply hints, hold decisions and payloads; no registry implementation ships.
 - The `/element` custom-element wrapper: **seam exists, not implemented**. The framework-free `subscribe` / `getSnapshot` contract can drive a future wrapper; there is no `/element` export.
 - A React Native UI: **seam exists, not implemented**. The core's injected platform/storage/transport ports require no DOM, and the `/hooks` entry gives a native UI the plan presses and the card answer lock; native rendering is outside this package.

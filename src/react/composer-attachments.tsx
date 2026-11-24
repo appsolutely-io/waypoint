@@ -164,13 +164,13 @@ export function ComposerAttachments({
           kept = merged.slice(current.length);
           return merged;
         });
-      if (taken.length > kept.length)
+      if (!late && taken.length > kept.length)
         refused.push(t("composer.tooMany", { max: String(MAX_ATTACHMENTS) }));
+      // A late pick says only that its files were not added.
       const words = late
-        ? [
-            ...refused,
-            ...taken.map((file) => t("composer.notAdded", { name: file.name })),
-          ].join(" ")
+        ? taken
+            .map((file) => t("composer.notAdded", { name: file.name }))
+            .join(" ")
         : [
             ...refused,
             ...kept.map((file) => t("composer.added", { name: file.name })),

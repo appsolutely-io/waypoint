@@ -588,7 +588,7 @@ it("drops and says a file whose read settled after the conversation changed", as
     await client.switchConversation("conversation-b");
   });
   end();
-  await waitFor(() => expect(status()).toContain("Not added: report.txt."));
+  await waitFor(() => expect(status()).toBe("Not added: report.txt."));
   expect(screen.queryByText("report.txt")).toBeNull();
   await waitFor(() => expect(uploads).toHaveLength(0));
   client.dispose();
@@ -869,7 +869,6 @@ it("names the files to pick again on a withdrawn message", async () => {
   client.dispose();
 });
 
-
 it("says a row whose files never reached the site differently", async () => {
   const base = config();
   const client = createWaypointClient({
@@ -910,7 +909,6 @@ it("says a row whose files never reached the site differently", async () => {
   );
   client.dispose();
 });
-
 
 it("refuses a file whose host says the client-only code", async () => {
   const base = config();

@@ -78,7 +78,12 @@ import type {
   ToolCall,
 } from "../protocol/generated";
 import type { StagedFiles } from "./attachment-upload";
-import { attachmentWellFormed, MAX_ATTACHMENTS } from "./attachment-shape";
+import {
+  attachmentWellFormed,
+  HOST_STORE_FAILURES,
+  isStoreFailure,
+  MAX_ATTACHMENTS,
+} from "./attachment-shape";
 export type {
   IntentAlert,
   IntentFailure,
@@ -2326,19 +2331,31 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           )
         : undefined;
       if (scope.aborted) return;
-      await config.transport.send(
-        {
-          kind: "message",
-          protocol: state.protocol!,
-          clientReplyId: id,
-          clientMessageId: id,
-          content: row.content,
-          ...(row.extensions ? { extensions: row.extensions } : {}),
-          ...(references ? { attachments: references } : {}),
-        },
-        conversationId,
-        requestContext(bound),
-      );
+      try {
+        await config.transport.send(
+          {
+            kind: "message",
+            protocol: state.protocol!,
+            clientReplyId: id,
+            clientMessageId: id,
+            content: row.content,
+            ...(row.extensions ? { extensions: row.extensions } : {}),
+            ...(references ? { attachments: references } : {}),
+          },
+          conversationId,
+          requestContext(bound),
+        );
+      } catch (error) {
+        // A host cannot know the client no longer holds its files; a code
+        // only the client may say about them comes back as the refusal it
+        // is, the same rule the upload itself follows.
+        const code = (error as { code?: unknown } | null)?.code;
+        throw typeof code === "string" &&
+          isStoreFailure(code) &&
+          !(HOST_STORE_FAILURES as readonly string[]).includes(code)
+          ? { code: "refused", id }
+          : error;
+      }
       if (scope.aborted) return;
       boundResponse(bound);
       inFlight.delete(attempt);

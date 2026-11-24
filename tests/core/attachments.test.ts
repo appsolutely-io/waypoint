@@ -1002,6 +1002,21 @@ it("treats a host's attachments-lost as a refusal on the row", async () => {
   client.dispose();
 });
 
+it("takes a host's attachments-lost answer to a send as a refusal", async () => {
+  const { client } = harness({
+    send: async () => {
+      throw { code: "attachments-lost", id: "host-side" };
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  await flush();
+  const row = client.getSnapshot().pending[0]!;
+  expect(row.failure?.code).toBe("refused");
+  client.dispose();
+});
+
 it("takes a wildcard prefix only for the types under it", async () => {
   const plain = acceptsMediaType(["x/*"], "application/pdf");
   expect(plain).toBe(false);

@@ -981,3 +981,81 @@ it("refuses a file whose host says the client-only code", async () => {
   expect(pending.textContent).toContain("did not accept");
   client.dispose();
 });
+
+
+it("drops files whose read settled after the same conversation took a form", async () => {
+  let formFill = false;
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: port(),
+    transport: {
+      ...base.transport,
+      read: async (id) => ({
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        ...(formFill ? { mode: "form-fill" } : {}),
+        messages: [],
+      }),
+    },
+  });
+  await client.ready;
+  const { input, status } = await chatWith(client);
+  const end = holdReads();
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() => expect(status()).toContain("Reading"));
+  formFill = true;
+  await act(async () => {
+    await client.refresh();
+  });
+  end();
+  // With a form, the picker itself is gone; the notice that stays says
+  // the files were dropped, and none was added.
+  expect(screen.queryByText("report.txt")).toBeNull();
+  await waitFor(() => expect(status()).toContain("takes a form"));
+  client.dispose();
+});
+
+
+it("clears the form notice when the conversation stops taking a form", async () => {
+  let formFill = false;
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: port(),
+    transport: {
+      ...base.transport,
+      read: async (id) => ({
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        ...(formFill ? { mode: "form-fill" } : {}),
+        messages: [],
+      }),
+    },
+  });
+  await client.ready;
+  const { input, status } = await chatWith(client);
+  const end = holdReads();
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() => expect(status()).toContain("Reading"));
+  formFill = true;
+  await act(async () => {
+    await client.refresh();
+  });
+  // The read was open when the conversation took a form: the notice
+  // stays even though no file had landed.
+  await waitFor(() => expect(screen.getByText(/takes a form/)).toBeTruthy());
+  end();
+  formFill = false;
+  await act(async () => {
+    await client.refresh();
+  });
+  await waitFor(() => expect(screen.queryByText(/takes a form/)).toBeNull());
+  client.dispose();
+});

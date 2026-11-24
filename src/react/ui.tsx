@@ -1905,8 +1905,11 @@ function ChatBody({
       setFiles([]);
       setFormDropped(true);
     }
+    // A conversation that stops taking a form never keeps the form's
+    // words above files it now accepts.
+    if (!form && wasForm.current) setFormDropped(false);
     wasForm.current = form;
-  }, [state.conversation?.mode]);
+  }, [state.conversation?.mode, reading]);
   // The message goes with the files the user picked. They leave with the
   // message that queued them; a message that never queued keeps them with
   // the draft it kept.

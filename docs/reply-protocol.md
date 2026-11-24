@@ -43,6 +43,7 @@ The client checks that policy when a person picks the files, so the picker can s
 - A host MAY add a `url` to a stored file. The chat links it only when its URL policy allows it (`isSafeUrl`, with `extraUrlSchemes`).
 - A host MUST ignore an `attachments` field it does not know, so a host that stores no files keeps working.
 - A file the host refuses, a file it cannot store and a client without an upload port fail the message itself: the message stays in the transcript marked "Not sent" with its problem under it, and the problem is not repeated below the composer.
+- A message whose files the client no longer holds after a reload fails with the problem code `attachments-lost`. That code is client-only: a host MUST NOT send it, and a host that reports its own store failure sends `refused` or `unavailable` instead. The row keeps no retry, because retrying cannot bring the bytes back.
 
 ## Collapsing supporting detail
 

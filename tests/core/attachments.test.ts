@@ -928,7 +928,6 @@ it("reports an abroad settle whose write fails", async () => {
   client.dispose();
 });
 
-
 it("treats a host's attachments-lost as a refusal on the row", async () => {
   const { client } = harness({
     port: {
@@ -944,4 +943,12 @@ it("treats a host's attachments-lost as a refusal on the row", async () => {
   const row = client.getSnapshot().pending[0]!;
   expect(row.failure?.code).toBe("refused");
   client.dispose();
+});
+
+
+it("takes a wildcard prefix only for the types under it", async () => {
+  const plain = acceptsMediaType(["x/*"], "application/pdf");
+  expect(plain).toBe(false);
+  expect(acceptsMediaType(["x/*"], "x/anything")).toBe(true);
+  expect(acceptsMediaType(["*/*"], "application/pdf")).toBe(true);
 });

@@ -95,9 +95,10 @@ export const acceptsMediaType = (
     const taken = named.toLowerCase();
     return (
       taken === type ||
-      // "*/*" takes every type, as a bare wildcard.
+      // The bare wildcard takes every type; a prefix like "x/*" takes only
+      // the types under it.
       (taken.endsWith("/*") &&
-        (taken.length === 3 || type.startsWith(taken.slice(0, -1))))
+        (taken === "*/*" || type.startsWith(taken.slice(0, -1))))
     );
   });
 };

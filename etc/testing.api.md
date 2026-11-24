@@ -884,7 +884,7 @@ export const english: {
     readonly "chat.attachmentFailed": "The site did not accept {names}.";
     readonly "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.";
     readonly "chat.attachmentNotUploaded": "{names} not uploaded. Retry.";
-    readonly "chat.attachmentNotUploadedYet": "{names} not uploaded yet. Retry.";
+    readonly "chat.attachmentNotUploadedYet": "{names} not uploaded yet; wait, then retry.";
     readonly "chat.formFilesRemoved": "This conversation takes a form; the files were removed.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";

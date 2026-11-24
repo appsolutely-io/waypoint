@@ -1017,7 +1017,7 @@ it("says a row the site asked to wait for with its own words", async () => {
   const pending = await screen.findByRole("article", { name: "You" });
   await waitFor(() =>
     expect(pending.textContent).toContain(
-      "report.txt not uploaded yet. Retry.",
+      "report.txt not uploaded yet; wait, then retry.",
     ),
   );
   client.dispose();

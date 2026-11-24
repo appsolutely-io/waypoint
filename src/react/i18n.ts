@@ -42,7 +42,8 @@ export const english = {
   "chat.attachmentFailed": "The site did not accept {names}.",
   "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.",
   "chat.attachmentNotUploaded": "{names} not uploaded. Retry.",
-  "chat.attachmentNotUploadedYet": "{names} not uploaded yet. Retry.",
+  "chat.attachmentNotUploadedYet":
+    "{names} not uploaded yet; wait, then retry.",
   "chat.formFilesRemoved":
     "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",

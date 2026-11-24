@@ -123,7 +123,12 @@ export function ComposerAttachments({
     const conversation = client.getSnapshot().conversationId;
     if (++picks.current === 1) onReading?.(true);
     try {
-      if (chosen.length) say(t("composer.reading", { name: chosen[0]!.name }));
+      if (chosen.length)
+        say(
+          t("composer.reading", {
+            name: joined.format(chosen.map((each) => each.name)),
+          }),
+        );
       const taken: AttachmentUpload[] = [];
       const refused: string[] = [];
       for (const file of chosen) {

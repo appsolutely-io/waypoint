@@ -66,7 +66,9 @@ export const acceptsMediaType = (
     const taken = named.toLowerCase();
     return (
       taken === type ||
-      (taken.endsWith("/*") && type.startsWith(taken.slice(0, -1)))
+      // "*/*" takes every type, as a bare wildcard.
+      (taken.endsWith("/*") &&
+        (taken.length === 3 || type.startsWith(taken.slice(0, -1))))
     );
   });
 };

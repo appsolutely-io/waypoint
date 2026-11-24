@@ -750,3 +750,21 @@ it("drops a restored row's attachments when there are too many", async () => {
   expect(client.getSnapshot().pending[0]?.attachments).toBeUndefined();
   client.dispose();
 });
+
+it("takes every file when the host names the bare wildcard", async () => {
+  const { client, stored } = harness({
+    port: {
+      accept: ["*/*"],
+      upload: async (data, context) => {
+        stored.push({ data, context });
+        return { id: "file-1" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  await flush();
+  expect(stored).toHaveLength(1);
+  client.dispose();
+});

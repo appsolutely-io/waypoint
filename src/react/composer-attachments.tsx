@@ -47,6 +47,7 @@ export function ComposerAttachments({
   onFiles,
   onReading,
   disabled,
+  statusId,
   reset,
 }: {
   client: WaypointClient;
@@ -57,6 +58,8 @@ export function ComposerAttachments({
   /** Says whether a file is still being read; the send waits for it. */
   onReading?(busy: boolean): void;
   disabled?: boolean;
+  /** The id the composer gives the picker's status region. */
+  statusId: string;
   /** Counts the sends: the picker's news belongs to the message before. */
   reset?: number;
 }) {
@@ -184,7 +187,6 @@ export function ComposerAttachments({
       if (--picks.current === 0) onReading?.(false);
     }
   };
-  const statusId = useId();
   return (
     <>
       <p id={statusId} role="status" className="wp-composer-status">
@@ -203,12 +205,7 @@ export function ComposerAttachments({
         }}
       />
       <div ref={picker}>
-        {/* The status region says why the picker waits. */}
-        <B
-          disabled={disabled}
-          aria-describedby={statusId}
-          onPress={() => input.current?.click()}
-        >
+        <B disabled={disabled} onPress={() => input.current?.click()}>
           {t("composer.attach")}
         </B>
       </div>

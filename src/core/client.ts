@@ -1146,10 +1146,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       })),
     });
   };
-  // Taking a row away releases the bytes its files hold, whichever way it
-  // goes: acknowledged by the transcript, withdrawn or discarded.
-  const remove = (id: string) => {
+  // The bytes a message's files hold are released through this one point,
+  // whichever way the row goes: acknowledged by the transcript, withdrawn,
+  // discarded, or never queued at all.
+  const release = (id: string) => {
     stagedFiles.delete(id);
+  };
+  const remove = (id: string) => {
+    release(id);
     queued.push({ kind: "remove", id });
   };
   const record = (operation: Operation) => {
@@ -1158,7 +1162,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       operation.kind === "withdraw" ||
       operation.kind === "discard"
     )
-      stagedFiles.delete(operation.id);
+      release(operation.id);
     queued.push(operation);
     derive();
   };
@@ -2906,7 +2910,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         // does not get the message: it belongs to the conversation before,
         // and no row keeps the bytes.
         if (scope.aborted) {
-          stagedFiles.delete(id);
+          release(id);
           return false;
         }
         livePendingIds.add(id);

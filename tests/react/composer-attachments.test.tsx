@@ -544,18 +544,14 @@ it("removes the files with a word when the conversation takes a form", async () 
   // notice says so in the region that stays.
   expect(screen.queryByRole("button", { name: "Attach" })).toBeNull();
   expect(screen.queryByText("report.txt")).toBeNull();
-  await waitFor(() =>
-    expect(screen.getByText(/removed for this form/)).toBeTruthy(),
-  );
+  await waitFor(() => expect(screen.getByText(/removed for this form/)).toBeTruthy());
   fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
     target: { value: "Fill this" },
   });
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
   });
-  await waitFor(() =>
-    expect(screen.queryByText(/removed for this form/)).toBeNull(),
-  );
+  await waitFor(() => expect(screen.queryByText(/removed for this form/)).toBeNull());
   client.dispose();
 });
 
@@ -869,5 +865,38 @@ it("names the files to pick again on a withdrawn message", async () => {
   render(<WaypointChat client={client} />);
   await screen.findByText("Here is the report");
   expect(screen.getByText("Pick report.txt again.")).toBeTruthy();
+  client.dispose();
+});
+
+
+it("refuses a file whose host says the client-only code", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: {
+      upload: async () => {
+        throw { code: "attachments-lost", id: "host-side" };
+      },
+    },
+    transport: {
+      ...base.transport,
+      send: async () => ({ id: "stored" }),
+    },
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() => expect(screen.getByText("report.txt")).toBeTruthy());
+  fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+    target: { value: "Here is the report" },
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  });
+  const pending = await screen.findByRole("article", { name: "You" });
+  await waitFor(() => expect(pending.textContent).toContain("Not sent"));
+  expect(pending.textContent).toContain("did not accept");
   client.dispose();
 });

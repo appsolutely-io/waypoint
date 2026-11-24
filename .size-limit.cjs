@@ -194,10 +194,10 @@ const budgets = [
   {
     name: "messages en",
     path: "dist/messages/en/index.js",
-    // English reply recovery, host activity and named-sender/notice text is available to renderer-neutral hosts,
-    // and its messages name what was lost: the files to pick again, the file being read, and what a form did.
-    // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
-    limit: "5.8 KB",
+    // English reply recovery, host activity and named-sender/notice text is available to renderer-neutral hosts.
+    // Node 22 maximum across lockfile/lowest peers: 5,427 B;
+    // add 5% and round up to 100 B.
+    limit: "5.7 KB",
     gzip: true,
     brotli: false,
   },

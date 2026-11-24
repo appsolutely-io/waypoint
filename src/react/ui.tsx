@@ -54,6 +54,7 @@ import type { Capability } from "../protocol/index";
 import {
   attachmentWellFormed,
   isStoreFailure,
+  MAX_ATTACHMENTS,
   STORE_FAILURE_TEXT,
 } from "../core/attachment-shape";
 import {
@@ -211,12 +212,18 @@ function ComposerAttachments(props: {
   ): void;
   onReading?(busy: boolean): void;
   disabled?: boolean;
+  disabledReason?: string;
+  statusId?: string;
   reset?: number;
 }) {
   const load = useChunk(composerAttachmentsChunk);
   useEffect(() => composerAttachmentsChunk.request(), []);
+  const fallbackId = useDomId("picker-status");
   return load.status === "ready" ? (
-    <load.module.ComposerAttachments {...props} />
+    <load.module.ComposerAttachments
+      {...props}
+      statusId={props.statusId ?? fallbackId}
+    />
   ) : null;
 }
 // The saved requests' panel and parameter drawer, loaded with the tabs.
@@ -1974,6 +1981,7 @@ function ChatBody({
   const extraPanels = !!(slots?.extraPanels || provider.parts?.extraPanels);
   const hintId = useDomId("hint");
   const pendingId = useDomId("pending");
+  const pickerStatusId = useDomId("picker-status");
   const enabled = (capability: Capability) =>
     (state.conversation?.mode !== "form-fill" ||
       capability === "form-fill" ||
@@ -3102,7 +3110,8 @@ function ChatBody({
                         // reached them does not name them. The words follow
                         // the outcome, one text per code.
                         const failureCode =
-                          pending.failure && isStoreFailure(pending.failure.code)
+                          pending.failure &&
+                          isStoreFailure(pending.failure.code)
                             ? pending.failure.code
                             : undefined;
                         const unstored = failureCode
@@ -3496,7 +3505,28 @@ function ChatBody({
                   files={files}
                   onFiles={changeFiles}
                   onReading={setReading}
-                  disabled={state.conversationUnavailable || state.sending}
+                  disabled={
+                    state.conversationUnavailable ||
+                    state.sending ||
+                    files.length >= MAX_ATTACHMENTS
+                  }
+                  disabledReason={
+                    state.conversationUnavailable ||
+                    state.sending ||
+                    files.length >= MAX_ATTACHMENTS
+                      ? t(
+                          state.conversationUnavailable
+                            ? "chat.conversationUnavailable"
+                            : state.sending
+                              ? "chat.sending"
+                              : "composer.tooMany",
+                          state.conversationUnavailable || state.sending
+                            ? undefined
+                            : { max: String(MAX_ATTACHMENTS) },
+                        )
+                      : undefined
+                  }
+                  statusId={pickerStatusId}
                   reset={sent}
                 />
               ) : null}
@@ -3538,6 +3568,7 @@ function ChatBody({
                   state.sending ||
                   reading
                 }
+                aria-describedby={reading ? pickerStatusId : undefined}
                 onPress={() => {
                   send();
                 }}

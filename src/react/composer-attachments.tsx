@@ -2,7 +2,7 @@
 // files the user picked and the reasons a file was refused. A lazy chunk,
 // loaded when a client that can attach files shows its composer, so a chat
 // that never attaches one pays nothing for it.
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AttachmentUpload, WaypointClient } from "../core/client";
 import {
   acceptsMediaType,
@@ -47,6 +47,7 @@ export function ComposerAttachments({
   onFiles,
   onReading,
   disabled,
+  disabledReason,
   statusId,
   reset,
 }: {
@@ -58,6 +59,8 @@ export function ComposerAttachments({
   /** Says whether a file is still being read; the send waits for it. */
   onReading?(busy: boolean): void;
   disabled?: boolean;
+  /** Why the picker waits, in the composer's own words. */
+  disabledReason?: string;
   /** The id the composer gives the picker's status region. */
   statusId: string;
   /** Counts the sends: the picker's news belongs to the message before. */
@@ -69,8 +72,13 @@ export function ComposerAttachments({
   const input = useRef<HTMLInputElement>(null);
   const picker = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  // What the picker said last, read out where the picker is.
+  // What the picker said last, read out where the picker is. A new
+  // conversation starts the news over, so a pick that was still reading
+  // never leaves its words behind.
   const [status, setStatus] = useState("");
+  useEffect(() => {
+    setStatus("");
+  }, [client.getSnapshot().conversationId]);
   // The words are said again when they repeat: the status carries a number
   // so the region changes even when the words do not.
   const [revision, setRevision] = useState(0);
@@ -176,13 +184,15 @@ export function ComposerAttachments({
           kept = merged.slice(current.length);
           return merged;
         });
+      // A late pick keeps each file's own refusal; only the limit's words
+      // go, because nothing was kept to count against it.
       if (!late && taken.length > kept.length)
         refused.push(t("composer.tooMany", { max: String(MAX_ATTACHMENTS) }));
-      // A late pick says only that its files were not added.
       const words = late
-        ? taken
-            .map((file) => t("composer.notAdded", { name: file.name }))
-            .join(" ")
+        ? [
+            ...refused,
+            ...taken.map((file) => t("composer.notAdded", { name: file.name })),
+          ].join(" ")
         : [
             ...refused,
             ...kept.map((file) => t("composer.added", { name: file.name })),
@@ -192,10 +202,12 @@ export function ComposerAttachments({
       if (--picks.current === 0) onReading?.(false);
     }
   };
+  // The status region states why the picker waits, in the composer's own
+  // words, so the button and the send name the same region.
   return (
     <>
       <p id={statusId} role="status" className="wp-composer-status">
-        {status ? <span key={revision}>{status}</span> : null}
+        {status ? <span key={revision}>{status}</span> : disabledReason}
       </p>
       <input
         ref={input}
@@ -210,7 +222,11 @@ export function ComposerAttachments({
         }}
       />
       <div ref={picker}>
-        <B disabled={disabled} onPress={() => input.current?.click()}>
+        <B
+          disabled={disabled}
+          aria-describedby={statusId}
+          onPress={() => input.current?.click()}
+        >
           {t("composer.attach")}
         </B>
       </div>

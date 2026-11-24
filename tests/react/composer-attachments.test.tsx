@@ -982,6 +982,46 @@ it("refuses a file whose host says the client-only code", async () => {
   client.dispose();
 });
 
+it("says a row the site asked to wait for with its own words", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    storage: seededStorage({
+      revision: 1,
+      draft: "",
+      pending: [
+        {
+          id: "m1",
+          content: "Here is the report",
+          failure: { code: "rate-limited", id: "m1" },
+          open: [],
+          attachments: [
+            { name: "report.txt", mediaType: "text/plain", size: 5 },
+          ],
+        },
+      ],
+    }),
+    attachments: { upload: async () => ({ id: "file-1" }) },
+    transport: {
+      ...base.transport,
+      read: async (id) => ({
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        messages: [],
+      }),
+    },
+  });
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  const pending = await screen.findByRole("article", { name: "You" });
+  await waitFor(() =>
+    expect(pending.textContent).toContain(
+      "report.txt not uploaded yet. Retry.",
+    ),
+  );
+  client.dispose();
+});
 
 it("drops files whose read settled after the same conversation took a form", async () => {
   let formFill = false;
@@ -1018,7 +1058,6 @@ it("drops files whose read settled after the same conversation took a form", asy
   await waitFor(() => expect(status()).toContain("takes a form"));
   client.dispose();
 });
-
 
 it("clears the form notice when the conversation stops taking a form", async () => {
   let formFill = false;
@@ -1057,5 +1096,42 @@ it("clears the form notice when the conversation stops taking a form", async () 
     await client.refresh();
   });
   await waitFor(() => expect(screen.queryByText(/takes a form/)).toBeNull());
+  client.dispose();
+});
+
+it("starts the picker's news over on a new conversation", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: port({ accept: ["text/plain"] }),
+    transport: {
+      ...base.transport,
+      read: async (id) => ({
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        messages: [],
+      }),
+    },
+  });
+  await client.ready;
+  const { input, status } = await chatWith(client);
+  const end = holdReads();
+  fireEvent.change(input, {
+    target: {
+      files: [file("photo.png", "x", "image/png"), file("report.txt", "hello")],
+    },
+  });
+  await waitFor(() => expect(status()).toContain("Reading"));
+  await act(async () => {
+    await client.switchConversation("conversation-b");
+  });
+  expect(status()).toBe("");
+  end();
+  await waitFor(() =>
+    expect(status()).toBe(
+      "The site takes text/plain, not photo.png. Not added: report.txt.",
+    ),
+  );
   client.dispose();
 });

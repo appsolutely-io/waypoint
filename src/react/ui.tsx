@@ -212,6 +212,7 @@ function ComposerAttachments(props: {
   ): void;
   onReading?(busy: boolean): void;
   disabled?: boolean;
+  pickDisabled?: boolean;
   disabledReason?: string;
   statusId?: string;
   reset?: number;
@@ -3509,11 +3510,8 @@ function ChatBody({
                   files={files}
                   onFiles={changeFiles}
                   onReading={setReading}
-                  disabled={
-                    state.conversationUnavailable ||
-                    state.sending ||
-                    files.length >= MAX_ATTACHMENTS
-                  }
+                  disabled={state.conversationUnavailable || state.sending}
+                  pickDisabled={files.length >= MAX_ATTACHMENTS}
                   disabledReason={
                     state.conversationUnavailable ||
                     state.sending ||

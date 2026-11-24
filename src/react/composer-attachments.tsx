@@ -47,6 +47,7 @@ export function ComposerAttachments({
   onFiles,
   onReading,
   disabled,
+  pickDisabled,
   disabledReason,
   statusId,
   reset,
@@ -58,7 +59,10 @@ export function ComposerAttachments({
   ): void;
   /** Says whether a file is still being read; the send waits for it. */
   onReading?(busy: boolean): void;
+  /** No file can be taken or put down: the conversation is gone or a send is on its way. */
   disabled?: boolean;
+  /** The message already carries all the files one message may take. */
+  pickDisabled?: boolean;
   /** Why the picker waits, in the composer's own words. */
   disabledReason?: string;
   /** The id the composer gives the picker's status region. */
@@ -223,7 +227,7 @@ export function ComposerAttachments({
       />
       <div ref={picker}>
         <B
-          disabled={disabled}
+          disabled={disabled || pickDisabled}
           aria-describedby={statusId}
           onPress={() => input.current?.click()}
         >

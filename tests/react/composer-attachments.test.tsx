@@ -803,6 +803,43 @@ it("keeps twenty files across two picks that overlap", async () => {
   client.dispose();
 });
 
+it("removes a file while the composer is full, which frees the pick button", async () => {
+  const client = createWaypointClient({
+    ...config(),
+    attachments: port(),
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: {
+      files: Array.from({ length: 20 }, (_, at) =>
+        file(`report-${at}.txt`, "x"),
+      ),
+    },
+  });
+  await waitFor(() =>
+    expect(document.querySelectorAll(".wp-composer-files > li")).toHaveLength(
+      20,
+    ),
+  );
+  const attach = screen.getByRole("button", {
+    name: "Attach files",
+  }) as HTMLButtonElement;
+  await waitFor(() => expect(attach.disabled).toBe(true));
+  const remove = screen.getByRole("button", {
+    name: "Remove report-0.txt",
+  }) as HTMLButtonElement;
+  expect(remove.disabled).toBe(false);
+  fireEvent.click(remove);
+  await waitFor(() =>
+    expect(document.querySelectorAll(".wp-composer-files > li")).toHaveLength(
+      19,
+    ),
+  );
+  await waitFor(() => expect(attach.disabled).toBe(false));
+  client.dispose();
+});
+
 it("clears the composer once the row is queued, while the upload waits", async () => {
   let release: () => void = () => {};
   const gate = new Promise<void>((resolve) => {

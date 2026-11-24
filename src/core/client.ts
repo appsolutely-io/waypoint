@@ -1153,7 +1153,6 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     queued.push({ kind: "remove", id });
   };
   const record = (operation: Operation) => {
-    if (operation.kind === "add") livePendingIds.add(operation.row.id);
     if (
       operation.kind === "remove" ||
       operation.kind === "withdraw" ||
@@ -2300,7 +2299,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         return;
       }
       // The files the message carries are stored before it is sent: a store
-      // that fails fails the message itself, not the conversation.
+      // that fails fails the message itself, not the conversation. A
+      // conversation that changes while they upload does not get the
+      // message: the chunk settles the attempt it opened on the row's own
+      // conversation, so it does not hang open.
       const references = row.attachments?.length
         ? await (
             await import("./attachment-upload")
@@ -2310,13 +2312,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             config.attachments,
             conversationId,
             id,
+            attempt,
             record,
             persist,
             scope,
+            config.storage,
+            key(conversationId),
           )
         : undefined;
-      // A conversation that changed while the files were uploading does
-      // not get the message: it belongs to the conversation before.
       if (scope.aborted) return;
       await config.transport.send(
         {
@@ -2847,6 +2850,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         state.history?.outline,
       );
       update({ sending: true });
+      let handed = false;
       try {
         const extensions: Record<string, unknown> = {};
         const hints: string[] = [];
@@ -2865,6 +2869,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         if (held || scope.aborted || state.conversationUnavailable)
           return false;
         const id = config.platform.ids();
+        if (attachments && attachments.length > MAX_ATTACHMENTS) {
+          report({ code: "refused", id });
+          return false;
+        }
         replySteps.bind(id);
         let outgoing: Reply = {
           kind: "message",
@@ -2900,6 +2908,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           stagedFiles.delete(id);
           return false;
         }
+        livePendingIds.add(id);
         record({
           kind: "add",
           row: {
@@ -2908,7 +2917,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             failure: null,
             extensions,
             open: [],
-            ...(staged ? { attachments: staged } : {}),
+            attachments: staged,
           },
         });
         record({
@@ -2921,13 +2930,16 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           conversationId: state.conversationId,
           replyId: id,
         });
-        await dispatch(id);
+        // The row is queued: the composer is cleared now, and the delivery
+        // keeps the sending state until it settles.
+        handed = true;
+        void dispatch(id);
         return true;
       } catch {
         report({ code: "refused", id: "before-send" });
         return false;
       } finally {
-        if (!scope.aborted) update({ sending: false });
+        if (!handed && !scope.aborted) update({ sending: false });
       }
     },
     async retry(id) {

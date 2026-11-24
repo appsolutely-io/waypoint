@@ -63,6 +63,7 @@ it("stores every file with the message's id and sends the references", async () 
   await client.ready;
   await client.setDraft("Here is the report");
   await client.send([file("report.txt", "hello")]);
+  await flush();
   expect(stored).toHaveLength(1);
   expect(stored[0]?.context.clientMessageId).toBe(
     (sent[0] as ReplyMessage).clientMessageId,
@@ -95,6 +96,7 @@ it("keeps the references in the outbox", async () => {
   await client.ready;
   await client.setDraft("Here is the report");
   await client.send([file("report.txt", "hello")]);
+  await flush();
   const record = JSON.parse([...values.values()][0]!);
   expect(record.pending[0].attachments).toEqual(references);
   client.dispose();
@@ -113,6 +115,7 @@ it("retries under the same id with the same references", async () => {
   await client.ready;
   await client.setDraft("Here is the report");
   await client.send([file("report.txt", "hello")]);
+  await flush();
   expect(client.getSnapshot().pending[0]?.failure?.code).toBe("in-doubt");
   await client.retry(sent[0]!.clientReplyId);
   expect(stored).toHaveLength(1);
@@ -134,6 +137,7 @@ it("fails the message itself when the host refuses the file", async () => {
   await client.ready;
   await client.setDraft("Here is the report");
   await client.send([file("report.txt", "hello")]);
+  await flush();
   expect(sent).toHaveLength(0);
   const pending = client.getSnapshot().pending[0];
   expect(pending?.failure?.code).toBe("refused");
@@ -147,6 +151,7 @@ it("refuses a message whose files it cannot store", async () => {
   await client.ready;
   await client.setDraft("Here is the report");
   await client.send([file("report.txt", "hello")]);
+  await flush();
   expect(sent).toHaveLength(0);
   expect(client.getSnapshot().pending[0]?.failure?.code).toBe("refused");
   client.dispose();
@@ -166,6 +171,7 @@ it("refuses a file the host does not take", async () => {
   await client.ready;
   await client.setDraft("Here is the report");
   await client.send([file("report.txt", "hello")]);
+  await flush();
   expect(stored).toHaveLength(0);
   expect(client.getSnapshot().pending[0]?.failure?.code).toBe("refused");
   client.dispose();
@@ -195,6 +201,7 @@ it("keeps the references of a restored row and does not store them again", async
   await first.client.ready;
   await first.client.setDraft("Here is the report");
   await first.client.send([file("report.txt", "hello")]);
+  await flush();
   const id = (sent[0] as ReplyMessage).clientReplyId;
   first.client.dispose();
   const second = harness({
@@ -240,6 +247,7 @@ it("keeps each stored file on the row, so a retry sends only what is missing", a
   await client.ready;
   await client.setDraft("Two files");
   await client.send([file("first.txt", "one"), file("second.txt", "two")]);
+  await flush();
   expect(uploaded).toEqual(["first.txt"]);
   const pending = client.getSnapshot().pending[0];
   expect(pending?.attachments?.map((each) => each.id ?? null)).toEqual([
@@ -271,6 +279,7 @@ it("tells the host which file of the message it stores", async () => {
   await client.ready;
   await client.setDraft("Two files");
   await client.send([file("first.txt", "one"), file("second.txt", "two")]);
+  await flush();
   expect(stored.map((each) => each.context.index)).toEqual([0, 1]);
   client.dispose();
 });
@@ -350,12 +359,16 @@ it("sends one message with both files after a switch away and back", async () =>
   release();
   await sending;
   await switched;
+  await flush();
   // The message belongs to the conversation before: nothing was sent
   // into the new one, and the first file was not uploaded again.
   expect(sent).toHaveLength(0);
   await client.switchConversation("conversation-a");
   await flush();
   const row = client.getSnapshot().pending[0]!;
+  // The attempt the switch abandoned settled on the row's own conversation;
+  // it does not hang open as an answer that never came.
+  expect(row.failure?.code).toBe("unavailable");
   // The stored reference is kept with the staged files, not on the row of
   // a conversation the message left; the retry carries it without asking
   // the host for the file again.
@@ -379,6 +392,7 @@ it("refuses a file the host stored without an id", async () => {
   await client.ready;
   await client.setDraft("Here is the report");
   await client.send([file("report.txt", "hello")]);
+  await flush();
   expect(sent).toHaveLength(0);
   expect(client.getSnapshot().pending[0]?.failure?.code).toBe("refused");
   client.dispose();
@@ -395,6 +409,7 @@ it("keeps the host's own problem when the store refuses a file", async () => {
   await client.ready;
   await client.setDraft("Here is the report");
   await client.send([file("report.txt", "hello")]);
+  await flush();
   expect(sent).toHaveLength(0);
   const failure = client.getSnapshot().pending[0]?.failure;
   expect(failure?.code).toBe("rate-limited");
@@ -417,6 +432,7 @@ it("takes a file whose media type the host takes as a wildcard", async () => {
   await client.send([
     { name: "shot.png", mediaType: "image/png", data: new Uint8Array([1]) },
   ]);
+  await flush();
   expect(stored).toHaveLength(1);
   expect(client.getSnapshot().pending).toHaveLength(0);
   client.dispose();
@@ -532,6 +548,7 @@ it("fails a retried row whose files are no longer held", async () => {
   await first.client.ready;
   await first.client.setDraft("Here is the report");
   await first.client.send([file("report.txt", "hello")]);
+  await flush();
   expect(sent).toHaveLength(0);
   const id = first.client.getSnapshot().pending[0]!.id;
   first.client.dispose();
@@ -569,8 +586,99 @@ it("keeps a host's binding problem out of the row's failure", async () => {
   await client.ready;
   await client.setDraft("Here is the report");
   await client.send([file("report.txt", "hello")]);
+  await flush();
   expect(sent).toHaveLength(0);
   expect(client.getSnapshot().pending[0]?.failure?.code).toBe("refused");
+  client.dispose();
+});
+
+it("resolves the send once the row is queued, not once it is delivered", async () => {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const sent: Reply[] = [];
+  const { client } = harness({
+    send: async (reply) => {
+      sent.push(reply as Reply);
+      await gate;
+      return { id: "stored" };
+    },
+  });
+  await client.ready;
+  await client.setDraft("Two steps");
+  expect(await client.send([file("report.txt", "hello")])).toBe(true);
+  // The row is queued and the composer's sending state holds while the
+  // delivery is still on its way.
+  expect(client.getSnapshot().pending).toHaveLength(1);
+  expect(client.getSnapshot().sending).toBe(true);
+  expect(sent).toHaveLength(0);
+  release();
+  await flush();
+  expect(sent).toHaveLength(1);
+  client.dispose();
+});
+
+it("releases the staged bytes when a read confirms an in-doubt row", async () => {
+  const spy = vi.spyOn(Map.prototype, "delete");
+  let rowId = "";
+  const { client } = harness({
+    send: async () => {
+      throw new Error("connection lost");
+    },
+    read: async (id) => ({
+      protocol: "1.0",
+      id,
+      title: "Chat",
+      messages: [
+        {
+          id: "host-1",
+          role: "user" as const,
+          content: "Here is the report",
+          blocks: [],
+          createdAt: 0,
+          ...(rowId ? { clientMessageId: rowId } : {}),
+        },
+      ],
+    }),
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  await flush();
+  rowId = client.getSnapshot().pending[0]!.id;
+  expect(client.getSnapshot().pending[0]?.failure?.code).toBe("in-doubt");
+  await client.refresh();
+  await flush();
+  expect(client.getSnapshot().pending).toHaveLength(0);
+  // The bytes the row's files held leave with the row itself.
+  expect(spy).toHaveBeenCalledWith(rowId);
+  spy.mockRestore();
+  client.dispose();
+});
+
+it("refuses too many files under the message's id, before the middleware", async () => {
+  const base = config();
+  const beforeSend = vi.fn();
+  const client = createWaypointClient({
+    ...base,
+    beforeSend,
+    attachments: { upload: async () => ({ id: "file-1" }) },
+    transport: {
+      ...base.transport,
+      send: async () => ({ id: "stored" }),
+    },
+  });
+  await client.ready;
+  await client.setDraft("Too many");
+  const many = Array.from({ length: 21 }, (_, at) =>
+    file("report-" + at + ".txt", "x"),
+  );
+  expect(await client.send(many)).toBe(false);
+  expect(beforeSend).not.toHaveBeenCalled();
+  const problem = client.getSnapshot().problem;
+  expect(problem?.code).toBe("refused");
+  expect(problem?.id).not.toBe("before-send");
   client.dispose();
 });
 
@@ -642,41 +750,3 @@ it("drops a restored row's attachments when there are too many", async () => {
   expect(client.getSnapshot().pending[0]?.attachments).toBeUndefined();
   client.dispose();
 });
-it("releases the staged bytes when a read confirms an in-doubt row", async () => {
-  const spy = vi.spyOn(Map.prototype, "delete");
-  let rowId = "";
-  const { client } = harness({
-    send: async () => {
-      throw new Error("connection lost");
-    },
-    read: async (id) => ({
-      protocol: "1.0",
-      id,
-      title: "Chat",
-      messages: [
-        {
-          id: "host-1",
-          role: "user" as const,
-          content: "Here is the report",
-          blocks: [],
-          createdAt: 0,
-          ...(rowId ? { clientMessageId: rowId } : {}),
-        },
-      ],
-    }),
-  });
-  await client.ready;
-  await client.setDraft("Here is the report");
-  await client.send([file("report.txt", "hello")]);
-  await flush();
-  rowId = client.getSnapshot().pending[0]!.id;
-  expect(client.getSnapshot().pending[0]?.failure?.code).toBe("in-doubt");
-  await client.refresh();
-  await flush();
-  expect(client.getSnapshot().pending).toHaveLength(0);
-  // The bytes the row's files held leave with the row itself.
-  expect(spy).toHaveBeenCalledWith(rowId);
-  spy.mockRestore();
-  client.dispose();
-});
-

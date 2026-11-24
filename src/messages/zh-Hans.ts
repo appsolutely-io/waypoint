@@ -31,6 +31,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.pendingSending": "正在发送……",
   "chat.pendingUploading": "正在上传……",
   "chat.attachmentFailed": "本站未接受 {names}。",
+  "chat.attachmentUnreachable": "无法连接本站，未上传 {names}。",
+  "chat.attachmentLost": "这些文件未被保留。请撤回消息后重新选择 {names}。",
   "chat.formFilesRemoved": "文件已因表单移除。",
   "chat.pendingFailed": "未发送",
   "chat.planUnavailable": "无法加载此计划的步骤。",

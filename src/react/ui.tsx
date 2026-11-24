@@ -3104,6 +3104,19 @@ function ChatBody({
                                   .map((file) => file.name),
                               )
                             : "";
+                        // The line follows the code: what the host refused,
+                        // what never reached it, and what is gone for good.
+                        const filesLine = unstored
+                          ? pending.failure?.code === "attachments-lost"
+                            ? t("chat.attachmentLost", { names: unstored })
+                            : pending.failure?.code === "unavailable"
+                              ? t("chat.attachmentUnreachable", {
+                                  names: unstored,
+                                })
+                              : t("chat.attachmentFailed", {
+                                  names: unstored,
+                                })
+                          : "";
                         // The row's buttons name the status line, and the
                         // files line when it is there.
                         const describedBy = unstored
@@ -3168,11 +3181,9 @@ function ChatBody({
                                     : "chat.pendingSending",
                               )}
                             </p>
-                            {unstored ? (
+                            {filesLine ? (
                               <p id={`${pendingId}-${pending.id}-files`}>
-                                {t("chat.attachmentFailed", {
-                                  names: unstored,
-                                })}
+                                {filesLine}
                               </p>
                             ) : null}
                             <PendingProblemText

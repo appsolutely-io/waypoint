@@ -869,6 +869,48 @@ it("names the files to pick again on a withdrawn message", async () => {
 });
 
 
+it("says a row whose files never reached the site differently", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    storage: seededStorage({
+      revision: 1,
+      draft: "",
+      pending: [
+        {
+          id: "m1",
+          content: "Here is the report",
+          failure: { code: "unavailable", id: "m1" },
+          open: [],
+          attachments: [
+            { name: "report.txt", mediaType: "text/plain", size: 5 },
+          ],
+        },
+      ],
+    }),
+    attachments: { upload: async () => ({ id: "file-1" }) },
+    transport: {
+      ...base.transport,
+      read: async (id) => ({
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        messages: [],
+      }),
+    },
+  });
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  const pending = await screen.findByRole("article", { name: "You" });
+  await waitFor(() =>
+    expect(pending.textContent).toContain(
+      "The site could not be reached for report.txt.",
+    ),
+  );
+  client.dispose();
+});
+
+
 it("refuses a file whose host says the client-only code", async () => {
   const base = config();
   const client = createWaypointClient({

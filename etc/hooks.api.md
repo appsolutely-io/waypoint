@@ -716,6 +716,8 @@ export const english: {
     readonly "chat.pendingSending": "Sending…";
     readonly "chat.pendingUploading": "Uploading…";
     readonly "chat.attachmentFailed": "The site did not accept {names}.";
+    readonly "chat.attachmentUnreachable": "The site could not be reached for {names}.";
+    readonly "chat.attachmentLost": "The files were not kept. Withdraw the message, then pick {names} again.";
     readonly "chat.formFilesRemoved": "Files removed for this form.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";

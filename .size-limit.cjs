@@ -7,9 +7,10 @@ const budgets = [
     name: "core with lazy recovery",
     path: "dist/index.js",
     // Reachable reply recovery and frame reconciliation remain covered by the deduplicated aggregate guard, which also counts the
-    // attachments' lazy upload chunk and the reply steps a host runs.
+    // attachments' lazy upload chunk and the reply steps a host runs; the chunk now settles an upload abandoned by a conversation
+    // switch on the conversation it started in, so the row it leaves behind never hangs open.
     // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
-    limit: "27.7 KB",
+    limit: "28 KB",
     gzip: true,
     brotli: false,
     ignore: [
@@ -28,9 +29,11 @@ const budgets = [
     path: "dist/index.js",
     // Synchronous reply state, recovery eligibility, frame reconciliation, cancellation ownership, the host-run reply steps and the
     // composer attachments — the row's references, the upload at send time, the pick-time policy, the shape rule a restored row is
-    // validated with, the guards around the upload and the release of the staged bytes — belong to every core consumer.
+    // validated with, the guards around the upload and the release of the staged bytes — belong to every core consumer, as does the
+    // send that settles where it started: it resolves once its row is queued, refuses an over-limit message under its own id before
+    // the middleware runs, and leaves a withdrawn message's file names on its restored item.
     // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
-    limit: "21 KB",
+    limit: "21.1 KB",
     gzip: true,
     brotli: false,
     ignore: [
@@ -195,10 +198,10 @@ const budgets = [
   {
     name: "messages zh-Hans",
     path: "dist/messages/zh-Hans/index.js",
-    // Simplified Chinese reply recovery, host activity and named-sender/notice text matches the English catalogue.
-    // Node 22 maximum across lockfile/lowest peers: 6,341 B;
-    // add 5% and round up to 100 B.
-    limit: "6.7 KB",
+    // Simplified Chinese reply recovery, host activity and named-sender/notice text matches the English catalogue, and its
+    // composer adds the words for a file that arrived too late and for the files a withdrawn message names to pick again.
+    // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
+    limit: "6.8 KB",
     gzip: true,
     brotli: false,
   },

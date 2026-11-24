@@ -3133,10 +3133,14 @@ function ChatBody({
                           ? `${pendingId}-${pending.id} ${pendingId}-${pending.id}-files`
                           : `${pendingId}-${pending.id}`;
                         // A row whose files are gone for good says it once:
-                        // the files line names the files.
+                        // the files line names the files. Without it the row
+                        // keeps its own words, or it would say nothing.
                         const rowText =
                           rowProblem &&
-                          pending.failure?.code !== "attachments-lost"
+                          !(
+                            filesLine &&
+                            pending.failure?.code === "attachments-lost"
+                          )
                             ? (provider.problemText?.(rowProblem, {
                                 answeredElsewhere:
                                   rowProblem === answeredElsewhere.current,

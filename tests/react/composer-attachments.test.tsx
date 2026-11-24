@@ -893,6 +893,63 @@ it("offers no retry for a row whose files are no longer held", async () => {
   client.dispose();
 });
 
+it("says the lost-files words when the files line has nothing to name", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    storage: seededStorage({
+      revision: 1,
+      draft: "",
+      pending: [
+        {
+          id: "m1",
+          content: "Here is the report",
+          failure: { code: "attachments-lost", id: "m1" },
+          open: [],
+          attachments: [
+            {
+              id: "file-1",
+              name: "report.txt",
+              mediaType: "text/plain",
+              size: 5,
+            },
+          ],
+        },
+      ],
+    }),
+    attachments: { upload: async () => ({ id: "file-1" }) },
+    transport: {
+      ...base.transport,
+      read: async (id) => ({
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        messages: [],
+      }),
+    },
+  });
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  const pending = await screen.findByRole("article", { name: "You" });
+  // Every file the row carries is stored, so the files line has no one to
+  // name: the row's own words carry the outcome, once, and no retry is
+  // offered for files that must be picked again.
+  await waitFor(() =>
+    expect(pending.textContent).toContain(
+      "Files not kept. Withdraw, then pick them again.",
+    ),
+  );
+  expect(pending.textContent.match(/Files not kept\./g)).toHaveLength(1);
+  expect(pending.textContent).not.toContain("pick report.txt again");
+  await waitFor(() =>
+    expect(within(pending).queryByRole("button", { name: "Retry" })).toBeNull(),
+  );
+  expect(
+    within(pending).getByRole("button", { name: "Withdraw" }),
+  ).toBeTruthy();
+  client.dispose();
+});
+
 it("names the files to pick again on a withdrawn message", async () => {
   const base = config();
   const client = createWaypointClient({

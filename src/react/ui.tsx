@@ -213,7 +213,7 @@ function ComposerAttachments(props: {
   onReading?(busy: boolean): void;
   disabled?: boolean;
   pickDisabled?: boolean;
-  disabledReason?: string;
+  describedBy?: string;
   statusId?: string;
   reset?: number;
 }) {
@@ -224,6 +224,7 @@ function ComposerAttachments(props: {
     <load.module.ComposerAttachments
       {...props}
       statusId={props.statusId ?? fallbackId}
+      describedBy={props.describedBy ?? props.statusId ?? fallbackId}
     />
   ) : null;
 }
@@ -1983,6 +1984,7 @@ function ChatBody({
   const hintId = useDomId("hint");
   const pendingId = useDomId("pending");
   const pickerStatusId = useDomId("picker-status");
+  const pickerReasonId = useDomId("picker-reason");
   const enabled = (capability: Capability) =>
     (state.conversation?.mode !== "form-fill" ||
       capability === "form-fill" ||
@@ -3505,15 +3507,23 @@ function ChatBody({
             >
               {state.attachmentPolicy &&
               state.conversation?.mode !== "form-fill" ? (
-                <ComposerAttachments
-                  client={client}
-                  files={files}
-                  onFiles={changeFiles}
-                  onReading={setReading}
-                  disabled={state.conversationUnavailable || state.sending}
-                  pickDisabled={files.length >= MAX_ATTACHMENTS}
-                  disabledReason={
-                    state.conversationUnavailable ||
+                <>
+                  <ComposerAttachments
+                    client={client}
+                    files={files}
+                    onFiles={changeFiles}
+                    onReading={setReading}
+                    disabled={state.conversationUnavailable || state.sending}
+                    pickDisabled={files.length >= MAX_ATTACHMENTS}
+                    statusId={pickerStatusId}
+                    describedBy={`${pickerStatusId} ${pickerReasonId}`}
+                    reset={sent}
+                  />
+                  {/* Why a pick waits sits beside the picker's news,
+                      outside its live region, and the pick button names
+                      both; the limit's words explain the list above them. */}
+                  <p id={pickerReasonId} className="wp-composer-status">
+                    {state.conversationUnavailable ||
                     state.sending ||
                     files.length >= MAX_ATTACHMENTS
                       ? t(
@@ -3526,11 +3536,9 @@ function ChatBody({
                             ? undefined
                             : { max: String(MAX_ATTACHMENTS) },
                         )
-                      : undefined
-                  }
-                  statusId={pickerStatusId}
-                  reset={sent}
-                />
+                      : undefined}
+                  </p>
+                </>
               ) : null}
               <p role="status" className="wp-composer-status">
                 {formDropped ? t("chat.formFilesRemoved") : ""}

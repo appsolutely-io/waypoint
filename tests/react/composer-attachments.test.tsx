@@ -826,6 +826,13 @@ it("removes a file while the composer is full, which frees the pick button", asy
     name: "Attach files",
   }) as HTMLButtonElement;
   await waitFor(() => expect(attach.disabled).toBe(true));
+  // The limit stops the pick, not the removal, and the button's
+  // description names the reason beside the news.
+  const described = (attach.getAttribute("aria-describedby") ?? "").split(" ");
+  expect(
+    described.map((each) => document.getElementById(each)?.textContent),
+  ).toContain("A message can carry at most 20 files.");
+  expect(described).toHaveLength(2);
   const remove = screen.getByRole("button", {
     name: "Remove report-0.txt",
   }) as HTMLButtonElement;

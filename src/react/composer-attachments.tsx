@@ -48,8 +48,8 @@ export function ComposerAttachments({
   onReading,
   disabled,
   pickDisabled,
-  disabledReason,
   statusId,
+  describedBy,
   reset,
 }: {
   client: WaypointClient;
@@ -63,10 +63,10 @@ export function ComposerAttachments({
   disabled?: boolean;
   /** The message already carries all the files one message may take. */
   pickDisabled?: boolean;
-  /** Why the picker waits, in the composer's own words. */
-  disabledReason?: string;
   /** The id the composer gives the picker's status region. */
   statusId: string;
+  /** The ids the pick button's description names: the news and, beside it outside the live region, why it waits. */
+  describedBy: string;
   /** Counts the sends: the picker's news belongs to the message before. */
   reset?: number;
 }) {
@@ -206,12 +206,13 @@ export function ComposerAttachments({
       if (--picks.current === 0) onReading?.(false);
     }
   };
-  // The status region states why the picker waits, in the composer's own
-  // words, so the button and the send name the same region.
+  // The status region carries the news; why the picker waits is rendered
+  // beside it by the composer, outside the live region, so a wait never
+  // rides an announcement and an announcement never hides the wait.
   return (
     <>
       <p id={statusId} role="status" className="wp-composer-status">
-        {status ? <span key={revision}>{status}</span> : disabledReason}
+        {status ? <span key={revision}>{status}</span> : null}
       </p>
       <input
         ref={input}
@@ -228,7 +229,7 @@ export function ComposerAttachments({
       <div ref={picker}>
         <B
           disabled={disabled || pickDisabled}
-          aria-describedby={statusId}
+          aria-describedby={describedBy}
           onPress={() => input.current?.click()}
         >
           {t("composer.attach")}

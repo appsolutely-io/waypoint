@@ -101,9 +101,15 @@ const budgets = [
   {
     name: "lazy attachment upload",
     path: "dist/attachment-upload.js",
-    limit: "1 KB",
+    // The chunk carries the upload of a message's files and the settle an
+    // abandoned upload leaves on its own conversation, which goes through
+    // the shared committed write and reports a write that failed; the
+    // commit code it loads on demand is measured by its own budget and
+    // left out here, as every other lazy chunk leaves out such pieces.
+    limit: "1.1 KB",
     gzip: true,
     brotli: false,
+    ignore: ["./storage-commit.js", "./storage-commit-*", "./chunk-*"],
   },
   {
     name: "lazy conformance runners",
@@ -188,10 +194,10 @@ const budgets = [
   {
     name: "messages en",
     path: "dist/messages/en/index.js",
-    // English reply recovery, host activity and named-sender/notice text is available to renderer-neutral hosts.
-    // Node 22 maximum across lockfile/lowest peers: 5,427 B;
-    // add 5% and round up to 100 B.
-    limit: "5.7 KB",
+    // English reply recovery, host activity and named-sender/notice text is available to renderer-neutral hosts,
+    // and its messages name what was lost: the files to pick again, the file being read, and what a form did.
+    // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
+    limit: "5.8 KB",
     gzip: true,
     brotli: false,
   },
@@ -231,7 +237,10 @@ const budgets = [
   {
     name: "lazy composer attachments",
     path: "dist/composer-attachments-*.js",
-    limit: "2 KB",
+    // A pick that settles after the conversation changed says only what it
+    // dropped, a form under a read counts as gone, and the attach button's
+    // state is described by the picker's status region.
+    limit: "2.1 KB",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],

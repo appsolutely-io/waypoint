@@ -52,7 +52,9 @@ type AttachOperation = {
 /**
  * Finishes a message's attempt on its own conversation's stored record,
  * wherever the client is now: the row it left behind gets a definite
- * failure instead of an attempt that never settled.
+ * failure instead of an attempt that never settled. The write goes
+ * through the same committed path every other write takes, so a commit
+ * that lands meanwhile is kept and the revision only moves forward.
  */
 export async function finishAbroad(
   storage: StoragePort | undefined,
@@ -60,21 +62,21 @@ export async function finishAbroad(
   id: string,
   attempt: string,
 ): Promise<void> {
-  try {
-    const record = storage
-      ? (JSON.parse((await storage.get(at)) ?? "null") as {
-          pending?: { id?: string; open?: unknown[]; failure?: unknown }[];
-        } | null)
-      : null;
-    const row = record?.pending?.find((entry) => entry.id === id);
-    if (row && Array.isArray(row.open) && row.open.includes(attempt)) {
-      row.open = row.open.filter((each) => each !== attempt);
-      row.failure = { code: "unavailable", id };
-      await storage?.set(at, JSON.stringify(record));
-    }
-  } catch {
-    // A record this client cannot read or finish is left as it is.
-  }
+  if (!storage) return;
+  await (
+    await import("./storage-commit")
+  ).commitRecord(storage, at, (stored) => {
+    const rows = (stored as { pending?: unknown[] } | null)?.pending;
+    if (!Array.isArray(rows)) return null;
+    const row = rows.find(
+      (entry) => (entry as { id?: unknown } | null)?.id === id,
+    ) as { open?: unknown; failure?: unknown } | undefined;
+    if (!row || !Array.isArray(row.open) || !row.open.includes(attempt))
+      return null;
+    row.open = row.open.filter((each) => each !== attempt);
+    row.failure = { code: "unavailable", id };
+    return { ...stored };
+  });
 }
 
 /**
@@ -105,12 +107,20 @@ export async function upload(
   signal: ScopeSignal | undefined,
   storage: StoragePort | undefined,
   at: string,
+  report: (problem: { code: "unavailable"; id: "storage-write" }) => void,
 ): Promise<MessageAttachment[]> {
   if (!port) throw { code: "refused", id: clientMessageId };
   const files = staged?.files ?? [];
   const ids = staged?.ids ?? [];
   const stored: MessageAttachment[] = [];
-  try {
+  const settle = async () => {
+    try {
+      await finishAbroad(storage, at, clientMessageId, attempt);
+    } catch {
+      report({ code: "unavailable", id: "storage-write" });
+    }
+  };
+  const place = async (): Promise<MessageAttachment[]> => {
     for (const [index, attachment] of attachments.entries()) {
       if (!attachmentWellFormed(attachment, false))
         throw { code: "refused", id: clientMessageId };
@@ -177,12 +187,14 @@ export async function upload(
       });
       await persist();
     }
+    return stored;
+  };
+  try {
+    const placed = await place();
+    if (signal?.aborted) await settle();
+    return placed;
   } catch (problem) {
-    if (signal?.aborted)
-      await finishAbroad(storage, at, clientMessageId, attempt);
+    if (signal?.aborted) await settle();
     throw problem;
   }
-  if (signal?.aborted)
-    await finishAbroad(storage, at, clientMessageId, attempt);
-  return stored;
 }

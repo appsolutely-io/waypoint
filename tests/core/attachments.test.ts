@@ -768,3 +768,136 @@ it("takes every file when the host names the bare wildcard", async () => {
   expect(stored).toHaveLength(1);
   client.dispose();
 });
+
+it("keeps a commit that lands during the abroad settle", async () => {
+  const at = JSON.stringify(["waypoint", "account-a", "conversation-a"]);
+  const values = new Map<string, string>([[at, "{}"]]);
+  let armed = false;
+  let raced = false;
+  const storage = {
+    get: (key: string) => values.get(key) ?? null,
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
+    remove: (key: string) => {
+      values.delete(key);
+    },
+    compareAndSet: async (key: string, expected: string, value: string) => {
+      if (armed && !raced) {
+        // Another runtime commits between the settle's read and its write:
+        // it read the same record and added its own row.
+        raced = true;
+        const theirs = JSON.parse(values.get(key) ?? "{}") as Record<
+          string,
+          unknown
+        > & { pending?: unknown[]; revision?: number };
+        values.set(
+          key,
+          JSON.stringify({
+            ...theirs,
+            revision: (theirs.revision ?? 0) + 1,
+            pending: [
+              ...(Array.isArray(theirs.pending) ? theirs.pending : []),
+              { id: "theirs", content: "Theirs", failure: null, open: [] },
+            ],
+          }),
+        );
+        return false;
+      }
+      if (values.get(key) !== expected) return false;
+      values.set(key, value);
+      return true;
+    },
+  } as StoragePort;
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const { client } = harness({
+    storage,
+    send: async () => ({ id: "stored" }),
+    read: async (id) => ({
+      protocol: "1.0",
+      id,
+      title: "Chat",
+      messages: [],
+    }),
+    port: {
+      upload: async () => {
+        await gate;
+        return { id: "file-a.txt" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Two files");
+  const sending = client.send([file("a.txt", "a")]);
+  await flush();
+  const rowId = client.getSnapshot().pending[0]!.id;
+  const switched = client.switchConversation("conversation-b");
+  await flush();
+  armed = true;
+  release();
+  await sending;
+  await switched;
+  await flush();
+  await client.switchConversation("conversation-a");
+  await flush();
+  const record = JSON.parse(values.get(at) ?? "{}") as {
+    revision: number;
+    pending: { id: string; failure?: { code: string } | null }[];
+  };
+  const rows = record.pending.map((row) => row.id).sort();
+  expect(rows).toEqual([rowId, "theirs"]);
+  expect(record.revision).toBeGreaterThan(1);
+  const ours = record.pending.find((row) => row.id === rowId);
+  expect(ours?.failure?.code).toBe("unavailable");
+  client.dispose();
+});
+
+it("reports an abroad settle whose write fails", async () => {
+  const values = new Map<string, string>();
+  const storage: StoragePort = {
+    get: (key) => values.get(key) ?? null,
+    set: () => {
+      throw new Error("disk gone");
+    },
+    remove: (key) => {
+      values.delete(key);
+    },
+  };
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const { client } = harness({
+    storage,
+    send: async () => ({ id: "stored" }),
+    read: async (id) => ({
+      protocol: "1.0",
+      id,
+      title: "Chat",
+      messages: [],
+    }),
+    port: {
+      upload: async () => {
+        await gate;
+        return { id: "file-a.txt" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Two files");
+  const sending = client.send([file("a.txt", "a")]);
+  await flush();
+  const switched = client.switchConversation("conversation-b");
+  await flush();
+  release();
+  await sending;
+  await switched;
+  await flush();
+  const problem = client.getSnapshot().problem;
+  expect(problem?.code).toBe("unavailable");
+  expect(problem?.id).toBe("storage-write");
+  client.dispose();
+});

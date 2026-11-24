@@ -32,9 +32,9 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.pendingSending": "Sending…",
   "chat.pendingUploading": "Uploading…",
   "chat.attachmentFailed": "The site did not accept {names}.",
-  "chat.attachmentUnreachable": "The site could not be reached for {names}.",
-  "chat.attachmentLost":
-    "The files were not kept. Withdraw the message, then pick {names} again.",
+  "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.",
+  "chat.attachmentNotUploaded": "{names} not uploaded. Retry.",
+  "chat.attachmentNotUploadedYet": "{names} not uploaded yet. Retry.",
   "chat.formFilesRemoved":
     "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",
@@ -396,7 +396,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.problem.agreement":
     "The connection could not be renewed. Retry to check the current status.",
   "chat.problem.attachmentsLost":
-    "The files were not kept. Withdraw the message, then pick them again.",
+    "Files not kept. Withdraw, then pick them again.",
   "chat.problem.inDoubt":
     "We couldn't confirm what happened. Check the current status before trying again.",
   "chat.problem.replaced": "A newer version replaced this. Refresh to see it.",
@@ -434,7 +434,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "composer.added": "Added {name}.",
   "composer.removed": "Removed {name}.",
   "composer.reading": "Reading {name}…",
-  "composer.readFailed": "Not read: {name}.",
+  "composer.readFailed": "Not read: {name}; pick it again.",
   "composer.refusedType": "The site takes {types}, not {name}.",
   "composer.refusedSize": "The site takes up to {max}, not {name}.",
   "composer.tooMany": "A message can carry at most {max} files.",

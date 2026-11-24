@@ -42,7 +42,7 @@ export const problemEnglish: ProblemCatalogue = {
   "chat.problem.agreement":
     "The connection could not be renewed. Retry to check the current status.",
   "chat.problem.attachmentsLost":
-    "The files were not kept. Withdraw the message, then pick them again.",
+    "Files not kept. Withdraw, then pick them again.",
   "chat.problem.inDoubt":
     "We couldn't confirm what happened. Check the current status before trying again.",
   "chat.problem.replaced": "A newer version replaced this. Refresh to see it.",

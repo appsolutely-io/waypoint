@@ -51,7 +51,11 @@ import {
   type PendingAttachment,
 } from "../core/client";
 import type { Capability } from "../protocol/index";
-import { attachmentWellFormed, STORE_FAILURES } from "../core/attachment-shape";
+import {
+  attachmentWellFormed,
+  isStoreFailure,
+  STORE_FAILURE_TEXT,
+} from "../core/attachment-shape";
 import {
   ChatFocusContext,
   focusFor,
@@ -3092,42 +3096,40 @@ function ChatBody({
                           (file) => !file.id,
                         );
                         // The store met these files: a failure that never
-                        // reached them does not name them.
-                        const unstored =
-                          pending.failure &&
-                          (STORE_FAILURES as readonly string[]).includes(
-                            pending.failure.code,
-                          )
-                            ? new Intl.ListFormat(provider.lang).format(
-                                (pending.attachments ?? [])
-                                  .filter((file) => !file.id)
-                                  .map((file) => file.name),
-                              )
-                            : "";
-                        // The line follows the code: what the host refused,
-                        // what never reached it, and what is gone for good.
-                        const filesLine = unstored
-                          ? pending.failure?.code === "attachments-lost"
-                            ? t("chat.attachmentLost", { names: unstored })
-                            : pending.failure?.code === "unavailable"
-                              ? t("chat.attachmentUnreachable", {
-                                  names: unstored,
-                                })
-                              : t("chat.attachmentFailed", {
-                                  names: unstored,
-                                })
+                        // reached them does not name them. The words follow
+                        // the outcome, one text per code.
+                        const failureCode =
+                          pending.failure && isStoreFailure(pending.failure.code)
+                            ? pending.failure.code
+                            : undefined;
+                        const unstored = failureCode
+                          ? new Intl.ListFormat(provider.lang).format(
+                              (pending.attachments ?? [])
+                                .filter((file) => !file.id)
+                                .map((file) => file.name),
+                            )
                           : "";
+                        const filesLine =
+                          unstored && failureCode
+                            ? t(STORE_FAILURE_TEXT[failureCode], {
+                                names: unstored,
+                              })
+                            : "";
                         // The row's buttons name the status line, and the
                         // files line when it is there.
                         const describedBy = unstored
                           ? `${pendingId}-${pending.id} ${pendingId}-${pending.id}-files`
                           : `${pendingId}-${pending.id}`;
-                        const rowText = rowProblem
-                          ? (provider.problemText?.(rowProblem, {
-                              answeredElsewhere:
-                                rowProblem === answeredElsewhere.current,
-                            }) ?? defaultProblemText(rowProblem, t))
-                          : undefined;
+                        // A row whose files are gone for good says it once:
+                        // the files line names the files.
+                        const rowText =
+                          rowProblem &&
+                          pending.failure?.code !== "attachments-lost"
+                            ? (provider.problemText?.(rowProblem, {
+                                answeredElsewhere:
+                                  rowProblem === answeredElsewhere.current,
+                              }) ?? defaultProblemText(rowProblem, t))
+                            : undefined;
                         return (
                           <article
                             key={pending.id}

@@ -838,8 +838,9 @@ export const english: {
     readonly "chat.pendingSending": "Sending…";
     readonly "chat.pendingUploading": "Uploading…";
     readonly "chat.attachmentFailed": "The site did not accept {names}.";
-    readonly "chat.attachmentUnreachable": "The site could not be reached for {names}.";
-    readonly "chat.attachmentLost": "The files were not kept. Withdraw the message, then pick {names} again.";
+    readonly "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.";
+    readonly "chat.attachmentNotUploaded": "{names} not uploaded. Retry.";
+    readonly "chat.attachmentNotUploadedYet": "{names} not uploaded yet. Retry.";
     readonly "chat.formFilesRemoved": "This conversation takes a form; the files were removed.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";

@@ -833,11 +833,10 @@ it("offers no retry for a row whose files are no longer held", async () => {
   await client.ready;
   render(<WaypointChat client={client} />);
   const pending = await screen.findByRole("article", { name: "You" });
-  await waitFor(() =>
-    expect(pending.textContent).toContain("The files were not kept"),
-  );
+  await waitFor(() => expect(pending.textContent).toContain("Files not kept"));
+  expect(pending.textContent.match(/Files not kept\./g)).toHaveLength(1);
   expect(pending.textContent).toContain(
-    "The files were not kept. Withdraw the message, then pick report.txt again.",
+    "Files not kept. Withdraw, then pick report.txt again.",
   );
   await waitFor(() =>
     expect(within(pending).queryByRole("button", { name: "Retry" })).toBeNull(),
@@ -946,9 +945,7 @@ it("says a row whose files never reached the site differently", async () => {
   render(<WaypointChat client={client} />);
   const pending = await screen.findByRole("article", { name: "You" });
   await waitFor(() =>
-    expect(pending.textContent).toContain(
-      "The site could not be reached for report.txt.",
-    ),
+    expect(pending.textContent).toContain("report.txt not uploaded. Retry."),
   );
   client.dispose();
 });

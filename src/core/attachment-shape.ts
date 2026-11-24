@@ -41,20 +41,35 @@ export const attachmentWellFormed = (
 };
 
 /**
+ * The problem codes a file store can meet, whichever side said them. The
+ * words a row gets for its files follow this list.
+ */
+export const STORE_FAILURES: readonly string[] = [
+  "refused",
+  "rate-limited",
+  "unavailable",
+  "attachments-lost",
+];
+
+/**
  * Whether the host takes a file of this media type. A type the host names
- * may end in "/*", which takes every type under it.
+ * may end in "/*", which takes every type under it. Media types compare
+ * without regard to case, as RFC 2045 reads them.
  */
 export const acceptsMediaType = (
   accept: readonly string[] | undefined,
   mediaType: string,
-): boolean =>
-  accept === undefined ||
-  accept.some(
-    (type) =>
-      type === mediaType ||
-      (type.endsWith("/*") &&
-        mediaType.startsWith(type.slice(0, type.length - 1))),
-  );
+): boolean => {
+  if (accept === undefined) return true;
+  const type = mediaType.toLowerCase();
+  return accept.some((named) => {
+    const taken = named.toLowerCase();
+    return (
+      taken === type ||
+      (taken.endsWith("/*") && type.startsWith(taken.slice(0, -1)))
+    );
+  });
+};
 
 /** Whether the host takes a file of this size. */
 export const acceptsSize = (

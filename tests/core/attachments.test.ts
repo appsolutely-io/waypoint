@@ -574,6 +574,24 @@ it("keeps a host's binding problem out of the row's failure", async () => {
   client.dispose();
 });
 
+it("takes a file whatever case its media type is written in", async () => {
+  const { client, stored } = harness({
+    port: {
+      accept: ["Text/Plain"],
+      upload: async (data, context) => {
+        stored.push({ data, context });
+        return { id: "file-1" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  await flush();
+  expect(stored).toHaveLength(1);
+  client.dispose();
+});
+
 it("drops a restored row's attachments when there are too many", async () => {
   const record = JSON.stringify({
     revision: 1,

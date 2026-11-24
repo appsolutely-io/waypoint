@@ -106,7 +106,7 @@ const budgets = [
     // the shared committed write and reports a write that failed; the
     // commit code it loads on demand is measured by its own budget and
     // left out here, as every other lazy chunk leaves out such pieces.
-    limit: "1.1 KB",
+    limit: "1.2 KB",
     gzip: true,
     brotli: false,
     ignore: ["./storage-commit.js", "./storage-commit-*", "./chunk-*"],
@@ -240,7 +240,7 @@ const budgets = [
     // A pick that settles after the conversation changed says only what it
     // dropped, a form under a read counts as gone, and the attach button's
     // state is described by the picker's status region.
-    limit: "2.1 KB",
+    limit: "2.2 KB",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],

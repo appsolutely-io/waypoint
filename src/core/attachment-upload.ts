@@ -170,7 +170,7 @@ export async function upload(
       record({
         kind: "attach",
         id: clientMessageId,
-        attachments: attachments.map((entry, at) => stored[at] ?? entry),
+        attachments: attachments.map((entry, place) => stored[place] ?? entry),
       });
       await persist();
     }

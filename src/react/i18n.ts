@@ -40,7 +40,7 @@ export const english = {
   "chat.pendingSending": "Sending…",
   "chat.pendingUploading": "Uploading…",
   "chat.attachmentFailed": "The site did not accept {names}.",
-  "chat.formFilesRemoved": "The files were removed for the form.",
+  "chat.formFilesRemoved": "Files removed for this form.",
   "chat.pendingFailed": "Not sent",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",

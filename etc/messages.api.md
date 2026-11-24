@@ -60,7 +60,7 @@ export const english: {
     readonly "chat.pendingSending": "Sending…";
     readonly "chat.pendingUploading": "Uploading…";
     readonly "chat.attachmentFailed": "The site did not accept {names}.";
-    readonly "chat.formFilesRemoved": "The files were removed for the form.";
+    readonly "chat.formFilesRemoved": "Files removed for this form.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";
     readonly "chat.arrival": "New reply";

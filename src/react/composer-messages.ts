@@ -18,11 +18,11 @@ export const composerEnglish: ComposerCatalogue = {
   "composer.removeNamed": "Remove {name}",
   "composer.added": "Added {name}.",
   "composer.removed": "Removed {name}.",
-  "composer.reading": "Reading…",
-  "composer.readFailed": "Could not read {name}.",
+  "composer.reading": "Reading",
+  "composer.readFailed": "Not read: {name}.",
   "composer.refusedType": "The site takes {types}, not {name}.",
-  "composer.refusedSize": "The site takes files up to {max}, not {name}.",
-  "composer.tooMany": "At most {max} files per message.",
+  "composer.refusedSize": "The site takes up to {max}, not {name}.",
+  "composer.tooMany": "At most {max} per message.",
   "composer.notAdded": "Not added: {name}.",
 };
 export const composerSimplifiedChinese: ComposerCatalogue = {

@@ -838,9 +838,9 @@ it("offers no retry for a row whose files are no longer held", async () => {
   render(<WaypointChat client={client} />);
   const pending = await screen.findByRole("article", { name: "You" });
   await waitFor(() =>
-    expect(pending.textContent).toContain("The files are gone"),
+    expect(pending.textContent).toContain("Withdraw, then pick"),
   );
-  expect(pending.textContent).toContain("withdraw the message");
+  expect(pending.textContent).toContain("Withdraw, then pick");
   expect(pending.textContent).toContain("did not accept");
   await waitFor(() =>
     expect(within(pending).queryByRole("button", { name: "Retry" })).toBeNull(),

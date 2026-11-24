@@ -51,7 +51,7 @@ import {
   type PendingAttachment,
 } from "../core/client";
 import type { Capability } from "../protocol/index";
-import { attachmentWellFormed } from "../core/attachment-shape";
+import { attachmentWellFormed, STORE_FAILURES } from "../core/attachment-shape";
 import {
   ChatFocusContext,
   focusFor,
@@ -205,6 +205,7 @@ function ComposerAttachments(props: {
   onFiles(
     update: (files: readonly AttachmentUpload[]) => readonly AttachmentUpload[],
   ): void;
+  onReading?(busy: boolean): void;
   disabled?: boolean;
   reset?: number;
 }) {
@@ -1864,28 +1865,51 @@ function ChatBody({
   const root = useRef<HTMLElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   // The files the user picked for the next message. Nothing is uploaded
-  // until it is sent, and the message that carries them keeps them.
+  // until it is sent, and the message that carries them keeps them. The
+  // mirror lets the picker read, in the same tick, what its change kept.
   const [files, setFiles] = useState<readonly AttachmentUpload[]>([]);
+  const filesRef = useRef<readonly AttachmentUpload[]>([]);
+  const changeFiles = (
+    update: (
+      current: readonly AttachmentUpload[],
+    ) => readonly AttachmentUpload[],
+  ) => {
+    filesRef.current = update(filesRef.current);
+    setFiles(filesRef.current);
+  };
+  // A file is still being read: the composer's send waits for it.
+  const [reading, setReading] = useState(false);
   // The picker forgets what it said when the composer sends.
   const [sent, setSent] = useState(0);
   // Files dropped because the conversation turned out to take a form are
   // said, not silently lost.
   const [formDropped, setFormDropped] = useState(false);
+  const wasForm = useRef(false);
   // The files belong to the conversation they were picked in.
   useEffect(() => {
+    filesRef.current = [];
     setFiles([]);
     setFormDropped(false);
+    wasForm.current = false;
   }, [state.conversationId]);
+  // A conversation that turns out to take a form drops the picked files
+  // the moment it becomes one, and says so.
+  useEffect(() => {
+    const form = state.conversation?.mode === "form-fill";
+    if (form && !wasForm.current && filesRef.current.length) {
+      filesRef.current = [];
+      setFiles([]);
+      setFormDropped(true);
+    }
+    wasForm.current = form;
+  }, [state.conversation?.mode]);
   // The message goes with the files the user picked. They leave with the
   // message that queued them; a message that never queued keeps them with
   // the draft it kept.
   const send = () => {
-    if (!state.draft.trim() || state.sending) return;
+    if (!state.draft.trim() || state.sending || reading) return;
+    setFormDropped(false);
     if (state.conversation?.mode === "form-fill") {
-      if (files.length) {
-        setFiles([]);
-        setFormDropped(true);
-      }
       void client.send();
       return;
     }
@@ -1894,7 +1918,9 @@ function ChatBody({
       if (!queued) return;
       // Only the files this message took leave: ones picked while it was
       // on its way stay for the next message.
-      setFiles((current) => current.filter((kept) => !chosen.includes(kept)));
+      changeFiles((current) =>
+        current.filter((kept) => !chosen.includes(kept)),
+      );
       setSent((count) => count + 1);
     });
   };
@@ -3069,14 +3095,18 @@ function ChatBody({
                         // reached them does not name them.
                         const unstored =
                           pending.failure &&
-                          (pending.failure.code === "refused" ||
-                            pending.failure.code === "rate-limited")
+                          STORE_FAILURES.includes(pending.failure.code)
                             ? new Intl.ListFormat(provider.lang).format(
                                 (pending.attachments ?? [])
                                   .filter((file) => !file.id)
                                   .map((file) => file.name),
                               )
                             : "";
+                        // The row's buttons name the status line, and the
+                        // files line when it is there.
+                        const describedBy = unstored
+                          ? `${pendingId}-${pending.id} ${pendingId}-${pending.id}-files`
+                          : `${pendingId}-${pending.id}`;
                         const rowText = rowProblem
                           ? (provider.problemText?.(rowProblem, {
                               answeredElsewhere:
@@ -3137,7 +3167,7 @@ function ChatBody({
                               )}
                             </p>
                             {unstored ? (
-                              <p>
+                              <p id={`${pendingId}-${pending.id}-files`}>
                                 {t("chat.attachmentFailed", {
                                   names: unstored,
                                 })}
@@ -3168,20 +3198,22 @@ function ChatBody({
                                 slots={slots}
                                 data={{ pending: pendingSummary(pending) }}
                               >
+                                {pending.failure.code !== "attachments-lost" ? (
+                                  <B
+                                    aria-describedby={describedBy}
+                                    disabled={
+                                      state.conversationUnavailable ||
+                                      state.sending
+                                    }
+                                    onPress={() => {
+                                      void client.retry(pending.id);
+                                    }}
+                                  >
+                                    {t("chat.retry")}
+                                  </B>
+                                ) : null}
                                 <B
-                                  aria-describedby={`${pendingId}-${pending.id}`}
-                                  disabled={
-                                    state.conversationUnavailable ||
-                                    state.sending
-                                  }
-                                  onPress={() => {
-                                    void client.retry(pending.id);
-                                  }}
-                                >
-                                  {t("chat.retry")}
-                                </B>
-                                <B
-                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  aria-describedby={describedBy}
                                   disabled={state.withdrawing.includes(
                                     pending.id,
                                   )}
@@ -3192,7 +3224,7 @@ function ChatBody({
                                   {t("chat.withdraw")}
                                 </B>
                                 <B
-                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  aria-describedby={describedBy}
                                   onPress={() => {
                                     void client.dismiss(pending.id);
                                   }}
@@ -3402,6 +3434,15 @@ function ChatBody({
                 {state.restored.map((item) => (
                   <article key={item.id}>
                     <p>{item.content}</p>
+                    {item.files?.length ? (
+                      <p>
+                        {t("chat.restoredFiles", {
+                          names: new Intl.ListFormat(provider.lang).format(
+                            item.files,
+                          ),
+                        })}
+                      </p>
+                    ) : null}
                     <B
                       onPress={() => {
                         void client.editRestored(item.id);
@@ -3435,15 +3476,15 @@ function ChatBody({
                 <ComposerAttachments
                   client={client}
                   files={files}
-                  onFiles={setFiles}
-                  disabled={state.conversationUnavailable}
+                  onFiles={changeFiles}
+                  onReading={setReading}
+                  disabled={state.conversationUnavailable || state.sending}
                   reset={sent}
                 />
-              ) : formDropped ? (
-                <p role="status" className="wp-composer-status">
-                  {t("chat.formFilesRemoved")}
-                </p>
               ) : null}
+              <p role="status" className="wp-composer-status">
+                {formDropped ? t("chat.formFilesRemoved") : ""}
+              </p>
               <T
                 inputRef={field}
                 disabled={state.conversationUnavailable}
@@ -3476,7 +3517,8 @@ function ChatBody({
                 disabled={
                   state.conversationUnavailable ||
                   !state.draft.trim() ||
-                  state.sending
+                  state.sending ||
+                  reading
                 }
                 onPress={() => {
                   send();

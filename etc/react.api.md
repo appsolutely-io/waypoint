@@ -550,7 +550,7 @@ export interface ComposerContribution {
 }
 
 // @public (undocumented)
-export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany";
+export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany" | "composer.notAdded";
 
 // @public (undocumented)
 export type ConfirmationCatalogue = Readonly<Record<ConfirmationMessageKey, string>>;
@@ -837,8 +837,8 @@ export const english: {
     readonly "chat.sending": "Sending";
     readonly "chat.pendingSending": "Sending…";
     readonly "chat.pendingUploading": "Uploading…";
-    readonly "chat.attachmentFailed": "The site could not upload {names}.";
-    readonly "chat.formFilesRemoved": "This conversation takes a form; the files were removed.";
+    readonly "chat.attachmentFailed": "The site did not accept {names}.";
+    readonly "chat.formFilesRemoved": "The files were removed for the form.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";
     readonly "chat.arrival": "New reply";
@@ -874,6 +874,7 @@ export const english: {
     readonly "chat.restored": "Withdrawn messages";
     readonly "chat.restoredEdit": "Edit";
     readonly "chat.restoredDiscard": "Discard";
+    readonly "chat.restoredFiles": "Pick {names} again.";
     readonly "chat.dismiss": "Dismiss";
     readonly "chat.historyOlder": "Load older messages";
     readonly "chat.historyLoading": "Loading older messages…";
@@ -2789,6 +2790,7 @@ export type ResolvedTheme = {
 export interface RestoredMessage {
     // (undocumented)
     content: string;
+    files?: readonly string[];
     // (undocumented)
     id: string;
 }

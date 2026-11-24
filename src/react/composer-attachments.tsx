@@ -45,6 +45,7 @@ export function ComposerAttachments({
   client,
   files,
   onFiles,
+  onReading,
   disabled,
   reset,
 }: {
@@ -53,11 +54,14 @@ export function ComposerAttachments({
   onFiles(
     update: (files: readonly AttachmentUpload[]) => readonly AttachmentUpload[],
   ): void;
+  /** Says whether a file is still being read; the send waits for it. */
+  onReading?(busy: boolean): void;
   disabled?: boolean;
   /** Counts the sends: the picker's news belongs to the message before. */
   reset?: number;
 }) {
-  const { format: t, primitives: ui } = context();
+  const { format: t, primitives: ui, lang } = context();
+  const joined = new Intl.ListFormat(lang);
   const B = ui.button;
   const input = useRef<HTMLInputElement>(null);
   const picker = useRef<HTMLDivElement>(null);
@@ -108,63 +112,73 @@ export function ComposerAttachments({
     picked.current.set(file, id);
     return id;
   };
+  // Picks in flight: the composer's send waits for the last read.
+  const picks = useRef(0);
   const pick = async (chosen: readonly File[]) => {
     // Files that settle after their message left, or after the
     // conversation changed, belong to neither: they are dropped.
     const conversation = client.getSnapshot().conversationId;
-    const sentWhenReset = sentCount.current;
-    if (chosen.length) say(t("composer.reading"));
-    const taken: AttachmentUpload[] = [];
-    const refused: string[] = [];
-    let full = false;
-    const room = MAX_ATTACHMENTS - files.length;
-    for (const file of chosen) {
-      const mediaType = file.type || "application/octet-stream";
-      if (!acceptsMediaType(policy?.accept, mediaType)) {
-        refused.push(
-          t("composer.refusedType", {
-            name: file.name,
-            types: policy?.accept?.join(", ") ?? "",
-          }),
-        );
-        continue;
+    if (++picks.current === 1) onReading?.(true);
+    try {
+      if (chosen.length) say(t("composer.reading"));
+      const taken: AttachmentUpload[] = [];
+      const refused: string[] = [];
+      for (const file of chosen) {
+        const mediaType = file.type || "application/octet-stream";
+        if (!acceptsMediaType(policy?.accept, mediaType)) {
+          refused.push(
+            t("composer.refusedType", {
+              name: file.name,
+              types: joined.format(policy?.accept ?? []),
+            }),
+          );
+          continue;
+        }
+        if (!acceptsSize(policy?.maxBytes, file.size)) {
+          refused.push(
+            t("composer.refusedSize", {
+              name: file.name,
+              max: size(policy?.maxBytes ?? 0),
+            }),
+          );
+          continue;
+        }
+        let data: Uint8Array;
+        try {
+          data = await read(file);
+        } catch {
+          refused.push(t("composer.readFailed", { name: file.name }));
+          continue;
+        }
+        taken.push({ name: file.name, mediaType, data });
       }
-      if (!acceptsSize(policy?.maxBytes, file.size)) {
-        refused.push(
-          t("composer.refusedSize", {
-            name: file.name,
-            max: size(policy?.maxBytes ?? 0),
-          }),
-        );
-        continue;
-      }
-      if (taken.length >= room) {
-        full = true;
-        continue;
-      }
-      let data: Uint8Array;
-      try {
-        data = await read(file);
-      } catch {
-        refused.push(t("composer.readFailed", { name: file.name }));
-        continue;
-      }
-      taken.push({ name: file.name, mediaType, data });
+      // What stays is decided against the files the composer holds now,
+      // not the ones this pick started from. A send cannot leave while a
+      // read is open (the composer holds it), so the only way to be late is
+      // the conversation changing under the read.
+      let kept: readonly AttachmentUpload[] = [];
+      const late = client.getSnapshot().conversationId !== conversation;
+      if (taken.length && !late)
+        onFiles((current) => {
+          const merged = [...current, ...taken].slice(0, MAX_ATTACHMENTS);
+          kept = merged.slice(current.length);
+          return merged;
+        });
+      if (taken.length > kept.length)
+        refused.push(t("composer.tooMany", { max: String(MAX_ATTACHMENTS) }));
+      const words = late
+        ? [
+            ...refused,
+            ...taken.map((file) => t("composer.notAdded", { name: file.name })),
+          ].join(" ")
+        : [
+            ...refused,
+            ...kept.map((file) => t("composer.added", { name: file.name })),
+          ].join(" ");
+      if (words) say(words);
+    } finally {
+      if (--picks.current === 0) onReading?.(false);
     }
-    if (full)
-      refused.push(t("composer.tooMany", { max: String(MAX_ATTACHMENTS) }));
-    const late =
-      sentCount.current !== sentWhenReset ||
-      client.getSnapshot().conversationId !== conversation;
-    if (taken.length && !late)
-      onFiles((current) => [...current, ...taken].slice(0, MAX_ATTACHMENTS));
-    const words = late
-      ? refused.join(" ")
-      : [
-          ...refused,
-          ...taken.map((file) => t("composer.added", { name: file.name })),
-        ].join(" ");
-    if (words) say(words);
   };
   return (
     <>

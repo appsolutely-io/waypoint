@@ -717,8 +717,54 @@ it("waits for a read before it sends", async () => {
   });
   const send = screen.getByRole("button", { name: "Send" });
   await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(true));
+  // The send names the reading the composer waits on.
+  expect(
+    (send.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((each) => document.getElementById(each)?.textContent),
+  ).toContain("Reading report.txt…");
   end();
   await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+  client.dispose();
+});
+
+it("names every file the reading line waits on", async () => {
+  const client = createWaypointClient({
+    ...config(),
+    attachments: port(),
+  });
+  await client.ready;
+  const { input, status } = await chatWith(client);
+  const end = holdReads();
+  fireEvent.change(input, {
+    target: { files: [file("a.txt", "a"), file("b.txt", "b")] },
+  });
+  await waitFor(() => expect(status()).toBe("Reading a.txt and b.txt…"));
+  end();
+  client.dispose();
+});
+
+it("says to pick again a file that could not be read", async () => {
+  const client = createWaypointClient({
+    ...config(),
+    attachments: port(),
+  });
+  await client.ready;
+  const { input, status } = await chatWith(client);
+  class Unreadable {
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    readAsArrayBuffer() {
+      this.onerror?.();
+    }
+  }
+  vi.stubGlobal("FileReader", Unreadable);
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() =>
+    expect(status()).toBe("Not read: report.txt; pick it again."),
+  );
   client.dispose();
 });
 

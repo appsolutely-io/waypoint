@@ -7,8 +7,8 @@ const budgets = [
     name: "core with lazy recovery",
     path: "dist/index.js",
     // Reachable reply recovery and frame reconciliation remain covered by the deduplicated aggregate guard, which also counts the
-    // attachments' lazy upload chunk and the reply steps a host runs; the chunk now settles an upload abandoned by a conversation
-    // switch on the conversation it started in, so the row it leaves behind never hangs open.
+    // attachments' lazy upload chunk — the upload of a message's files, and the settle it leaves on the conversation it started in
+    // when that conversation moves on — and the reply steps a host runs.
     // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
     limit: "28 KB",
     gzip: true,

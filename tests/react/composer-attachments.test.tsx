@@ -90,7 +90,7 @@ async function chatWith(
 ): Promise<{ input: HTMLInputElement; status: () => string }> {
   render(<WaypointChat client={client} />);
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Attach" })).toBeTruthy(),
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeTruthy(),
   );
   return {
     input: document.querySelector<HTMLInputElement>('input[type="file"]')!,
@@ -103,7 +103,7 @@ it("offers attachments only when the client has an upload port", async () => {
   await plain.ready;
   render(<WaypointChat client={plain} />);
   await screen.findByRole("textbox", { name: "Message" });
-  expect(screen.queryByRole("button", { name: "Attach" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Attach files" })).toBeNull();
   plain.dispose();
 });
 
@@ -165,7 +165,7 @@ it("removes a file, says so and hands the focus to the picker", async () => {
   expect(status()).toContain("Removed report.txt.");
   await waitFor(() =>
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Attach" }),
+      screen.getByRole("button", { name: "Attach files" }),
     ),
   );
   client.dispose();
@@ -469,7 +469,7 @@ it("offers no attachments in a form-fill conversation", async () => {
   await client.ready;
   render(<WaypointChat client={client} />);
   await screen.findByRole("textbox", { name: "Message" });
-  expect(screen.queryByRole("button", { name: "Attach" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Attach files" })).toBeNull();
   client.dispose();
 });
 
@@ -542,16 +542,16 @@ it("removes the files with a word when the conversation takes a form", async () 
   });
   // The files leave the moment the conversation becomes a form, and the
   // notice says so in the region that stays.
-  expect(screen.queryByRole("button", { name: "Attach" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Attach files" })).toBeNull();
   expect(screen.queryByText("report.txt")).toBeNull();
-  await waitFor(() => expect(screen.getByText(/removed for this form/)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(/takes a form/)).toBeTruthy());
   fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
     target: { value: "Fill this" },
   });
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
   });
-  await waitFor(() => expect(screen.queryByText(/removed for this form/)).toBeNull());
+  await waitFor(() => expect(screen.queryByText(/takes a form/)).toBeNull());
   client.dispose();
 });
 
@@ -695,8 +695,8 @@ it("says the too-many refusal once for a pick that overflows", async () => {
     file(`report-${at}.txt`, "x"),
   );
   fireEvent.change(input, { target: { files: many } });
-  await waitFor(() => expect(status()).toContain("At most"));
-  expect(status().match(/At most/g)).toHaveLength(1);
+  await waitFor(() => expect(status()).toContain("at most"));
+  expect(status().match(/at most/g)).toHaveLength(1);
   expect(document.querySelectorAll(".wp-composer-files > li")).toHaveLength(20);
   client.dispose();
 });
@@ -752,8 +752,8 @@ it("keeps twenty files across two picks that overlap", async () => {
       20,
     ),
   );
-  await waitFor(() => expect(status()).toContain("At most"));
-  expect(status().match(/At most/g)).toHaveLength(1);
+  await waitFor(() => expect(status()).toContain("at most"));
+  expect(status().match(/at most/g)).toHaveLength(1);
   client.dispose();
 });
 
@@ -834,10 +834,11 @@ it("offers no retry for a row whose files are no longer held", async () => {
   render(<WaypointChat client={client} />);
   const pending = await screen.findByRole("article", { name: "You" });
   await waitFor(() =>
-    expect(pending.textContent).toContain("Withdraw, then pick"),
+    expect(pending.textContent).toContain("The files were not kept"),
   );
-  expect(pending.textContent).toContain("Withdraw, then pick");
-  expect(pending.textContent).toContain("did not accept");
+  expect(pending.textContent).toContain(
+    "The files were not kept. Withdraw the message, then pick report.txt again.",
+  );
   await waitFor(() =>
     expect(within(pending).queryByRole("button", { name: "Retry" })).toBeNull(),
   );

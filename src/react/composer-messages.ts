@@ -13,28 +13,28 @@ export type ComposerMessageKey =
   | "composer.notAdded";
 export type ComposerCatalogue = Readonly<Record<ComposerMessageKey, string>>;
 export const composerEnglish: ComposerCatalogue = {
-  "composer.attach": "Attach",
+  "composer.attach": "Attach files",
   "composer.remove": "Remove",
   "composer.removeNamed": "Remove {name}",
   "composer.added": "Added {name}.",
   "composer.removed": "Removed {name}.",
-  "composer.reading": "Reading",
+  "composer.reading": "Reading {name}…",
   "composer.readFailed": "Not read: {name}.",
   "composer.refusedType": "The site takes {types}, not {name}.",
   "composer.refusedSize": "The site takes up to {max}, not {name}.",
-  "composer.tooMany": "At most {max} per message.",
+  "composer.tooMany": "A message can carry at most {max} files.",
   "composer.notAdded": "Not added: {name}.",
 };
 export const composerSimplifiedChinese: ComposerCatalogue = {
-  "composer.attach": "添加",
+  "composer.attach": "添加文件",
   "composer.remove": "移除",
   "composer.removeNamed": "移除 {name}",
   "composer.added": "已添加 {name}。",
   "composer.removed": "已移除 {name}。",
-  "composer.reading": "正在读取文件……",
+  "composer.reading": "正在读取 {name}……",
   "composer.readFailed": "无法读取 {name}。",
   "composer.refusedType": "本站不接受 {name}；本站接受 {types}。",
   "composer.refusedSize": "本站接受不超过 {max} 的文件，不接受 {name}。",
-  "composer.tooMany": "每条消息最多 {max} 个文件。",
+  "composer.tooMany": "一条消息最多携带 {max} 个文件。",
   "composer.notAdded": "未添加：{name}。",
 };

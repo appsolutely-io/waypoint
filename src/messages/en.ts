@@ -35,7 +35,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.attachmentUnreachable": "The site could not be reached for {names}.",
   "chat.attachmentLost":
     "The files were not kept. Withdraw the message, then pick {names} again.",
-  "chat.formFilesRemoved": "Files removed for this form.",
+  "chat.formFilesRemoved":
+    "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",
@@ -394,7 +395,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
     "Something changed since this plan was made. Review the current values.",
   "chat.problem.agreement":
     "The connection could not be renewed. Retry to check the current status.",
-  "chat.problem.attachmentsLost": "Withdraw, then pick again.",
+  "chat.problem.attachmentsLost":
+    "The files were not kept. Withdraw the message, then pick them again.",
   "chat.problem.inDoubt":
     "We couldn't confirm what happened. Check the current status before trying again.",
   "chat.problem.replaced": "A newer version replaced this. Refresh to see it.",
@@ -426,16 +428,16 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.message.previous": "Previous version",
   "chat.message.next": "Next version",
   "chat.message.version": "Version {index} of {count}",
-  "composer.attach": "Attach",
+  "composer.attach": "Attach files",
   "composer.remove": "Remove",
   "composer.removeNamed": "Remove {name}",
   "composer.added": "Added {name}.",
   "composer.removed": "Removed {name}.",
-  "composer.reading": "Reading",
+  "composer.reading": "Reading {name}…",
   "composer.readFailed": "Not read: {name}.",
   "composer.refusedType": "The site takes {types}, not {name}.",
   "composer.refusedSize": "The site takes up to {max}, not {name}.",
-  "composer.tooMany": "At most {max} per message.",
+  "composer.tooMany": "A message can carry at most {max} files.",
   "composer.notAdded": "Not added: {name}.",
 });
 export default messages;

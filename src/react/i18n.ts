@@ -43,7 +43,8 @@ export const english = {
   "chat.attachmentUnreachable": "The site could not be reached for {names}.",
   "chat.attachmentLost":
     "The files were not kept. Withdraw the message, then pick {names} again.",
-  "chat.formFilesRemoved": "Files removed for this form.",
+  "chat.formFilesRemoved":
+    "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",
@@ -204,7 +205,7 @@ export const simplifiedChinese: Record<keyof typeof english, string> = {
   "chat.attachmentFailed": "本站未接受 {names}。",
   "chat.attachmentUnreachable": "无法连接本站，未上传 {names}。",
   "chat.attachmentLost": "这些文件未被保留。请撤回消息后重新选择 {names}。",
-  "chat.formFilesRemoved": "文件已因表单移除。",
+  "chat.formFilesRemoved": "此对话以表单进行，已移除文件。",
   "chat.pendingFailed": "未发送",
   "chat.planUnavailable": "无法加载此计划的步骤。",
   "chat.arrival": "收到新回复",

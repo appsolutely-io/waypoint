@@ -2,7 +2,7 @@
 // files the user picked and the reasons a file was refused. A lazy chunk,
 // loaded when a client that can attach files shows its composer, so a chat
 // that never attaches one pays nothing for it.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { AttachmentUpload, WaypointClient } from "../core/client";
 import {
   acceptsMediaType,
@@ -120,7 +120,7 @@ export function ComposerAttachments({
     const conversation = client.getSnapshot().conversationId;
     if (++picks.current === 1) onReading?.(true);
     try {
-      if (chosen.length) say(t("composer.reading"));
+      if (chosen.length) say(t("composer.reading", { name: chosen[0]!.name }));
       const taken: AttachmentUpload[] = [];
       const refused: string[] = [];
       for (const file of chosen) {
@@ -180,9 +180,10 @@ export function ComposerAttachments({
       if (--picks.current === 0) onReading?.(false);
     }
   };
+  const statusId = useId();
   return (
     <>
-      <p role="status" className="wp-composer-status">
+      <p id={statusId} role="status" className="wp-composer-status">
         {status ? <span key={revision}>{status}</span> : null}
       </p>
       <input
@@ -198,7 +199,12 @@ export function ComposerAttachments({
         }}
       />
       <div ref={picker}>
-        <B disabled={disabled} onPress={() => input.current?.click()}>
+        {/* The status region says why the picker waits. */}
+        <B
+          disabled={disabled}
+          aria-describedby={statusId}
+          onPress={() => input.current?.click()}
+        >
           {t("composer.attach")}
         </B>
       </div>

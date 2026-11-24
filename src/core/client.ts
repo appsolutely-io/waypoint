@@ -2322,7 +2322,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             scope,
             config.storage,
             key(conversationId),
-            report,
+            () => report({ code: "unavailable", id: "storage-write" }),
           )
         : undefined;
       if (scope.aborted) return;

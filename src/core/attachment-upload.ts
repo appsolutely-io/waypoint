@@ -11,7 +11,9 @@ import type { ScopeSignal } from "./scope";
 import {
   acceptsFile,
   attachmentWellFormed,
-  STORE_FAILURES,
+  HOST_STORE_FAILURES,
+  isStoreFailure,
+  type StoreFailure,
 } from "./attachment-shape";
 
 /** The files a message will carry, and the ids the host has given so far. */
@@ -51,16 +53,20 @@ type AttachOperation = {
 
 /**
  * Finishes a message's attempt on its own conversation's stored record,
- * wherever the client is now: the row it left behind gets a definite
- * failure instead of an attempt that never settled. The write goes
- * through the same committed path every other write takes, so a commit
- * that lands meanwhile is kept and the revision only moves forward.
+ * wherever the client is now: the row it left behind gets the failure the
+ * upload met — `unavailable` when the scope simply aborted — instead of an
+ * attempt that never settled, and keeps the ids the host already gave, so
+ * a stored file never reads as one still waiting. The write goes through
+ * the same committed path every other write takes, so a commit that lands
+ * meanwhile is kept and the revision only moves forward.
  */
 export async function finishAbroad(
   storage: StoragePort | undefined,
   at: string,
   id: string,
   attempt: string,
+  failure: { code: StoreFailure },
+  attachments?: readonly PendingAttachment[],
 ): Promise<void> {
   if (!storage) return;
   await (
@@ -70,11 +76,18 @@ export async function finishAbroad(
     if (!Array.isArray(rows)) return null;
     const row = rows.find(
       (entry) => (entry as { id?: unknown } | null)?.id === id,
-    ) as { open?: unknown; failure?: unknown } | undefined;
+    ) as
+      | {
+          open?: unknown;
+          failure?: unknown;
+          attachments?: unknown;
+        }
+      | undefined;
     if (!row || !Array.isArray(row.open) || !row.open.includes(attempt))
       return null;
     row.open = row.open.filter((each) => each !== attempt);
-    row.failure = { code: "unavailable", id };
+    row.failure = { code: failure.code, id };
+    if (attachments) row.attachments = [...attachments];
     return { ...stored };
   });
 }
@@ -107,17 +120,29 @@ export async function upload(
   signal: ScopeSignal | undefined,
   storage: StoragePort | undefined,
   at: string,
-  report: (problem: { code: "unavailable"; id: "storage-write" }) => void,
+  writeFailed: () => void,
 ): Promise<MessageAttachment[]> {
   if (!port) throw { code: "refused", id: clientMessageId };
   const files = staged?.files ?? [];
   const ids = staged?.ids ?? [];
   const stored: MessageAttachment[] = [];
-  const settle = async () => {
+  // What the row keeps of its files, with the ids the host has given so
+  // far: what the attach record writes, and what the settle writes so a
+  // host-stored file never reads as one still waiting.
+  const rowFiles = () =>
+    attachments.map((entry, index) => stored[index] ?? entry);
+  const settle = async (failure: { code: StoreFailure }) => {
     try {
-      await finishAbroad(storage, at, clientMessageId, attempt);
+      await finishAbroad(
+        storage,
+        at,
+        clientMessageId,
+        attempt,
+        failure,
+        rowFiles(),
+      );
     } catch {
-      report({ code: "unavailable", id: "storage-write" });
+      writeFailed();
     }
   };
   const place = async (): Promise<MessageAttachment[]> => {
@@ -161,13 +186,11 @@ export async function upload(
         });
         id = typeof result.id === "string" ? result.id : "";
       } catch (error) {
-        // A host's own problem travels as it is when it is one a store can
-        // meet; anything else, and a code only this client says, is the
-        // row's refusal.
+        // A host's own problem travels as it is when it is one a host may
+        // say about its store; anything else is the row's refusal.
         const code = (error as { code?: unknown } | null)?.code;
         throw typeof code === "string" &&
-          code !== "attachments-lost" &&
-          (STORE_FAILURES as readonly string[]).includes(code)
+          (HOST_STORE_FAILURES as readonly string[]).includes(code)
           ? error
           : { code: "refused", id: clientMessageId };
       }
@@ -183,18 +206,28 @@ export async function upload(
       record({
         kind: "attach",
         id: clientMessageId,
-        attachments: attachments.map((entry, place) => stored[place] ?? entry),
+        attachments: rowFiles(),
       });
       await persist();
     }
     return stored;
   };
   try {
-    const placed = await place();
-    if (signal?.aborted) await settle();
-    return placed;
+    const outcome = await place();
+    if (signal?.aborted) await settle({ code: "unavailable" });
+    return outcome;
   } catch (problem) {
-    if (signal?.aborted) await settle();
+    // The settle writes the failure the upload met when the scope aborted
+    // under it, and a bare abort otherwise.
+    if (signal?.aborted) {
+      const code = (problem as { code?: unknown } | null)?.code;
+      await settle({
+        code:
+          typeof code === "string" && isStoreFailure(code)
+            ? code
+            : "unavailable",
+      });
+    }
     throw problem;
   }
 }

@@ -2085,6 +2085,7 @@ export interface ReplyToolResult {
 export interface RestoredMessage {
     // (undocumented)
     content: string;
+    files?: readonly string[];
     // (undocumented)
     id: string;
 }

@@ -386,6 +386,8 @@ export interface ToolStep {
 export interface RestoredMessage {
   id: string;
   content: string;
+  /** The files the withdrawn message carried, by name. */
+  files?: readonly string[];
 }
 export interface ReadPorts {
   manifest: readonly ManifestEntry[];
@@ -1021,7 +1023,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             pending: without,
             restored: [
               ...record.restored,
-              { id: operation.restoredId, content: current.content },
+              {
+                id: operation.restoredId,
+                content: current.content,
+                // The bytes are not kept; the item names what to pick again.
+                files: current.attachments?.map((file) => file.name),
+              },
             ],
           }
         : record;
@@ -1077,11 +1084,21 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             : undefined,
         };
       }),
-    restored: (Array.isArray(value?.restored) ? value.restored : []).filter(
-      (item): item is RestoredMessage =>
-        typeof (item as RestoredMessage | null)?.id === "string" &&
-        typeof (item as RestoredMessage).content === "string",
-    ),
+    restored: (Array.isArray(value?.restored) ? value.restored : [])
+      .filter(
+        (item): item is RestoredMessage =>
+          typeof (item as RestoredMessage | null)?.id === "string" &&
+          typeof (item as RestoredMessage).content === "string",
+      )
+      .map((item) => {
+        const files = (item as Partial<RestoredMessage>).files;
+        return {
+          ...item,
+          files: Array.isArray(files)
+            ? files.filter((name): name is string => !!name)
+            : undefined,
+        };
+      }),
   });
   let stored = empty;
   let storedKey = key(config.conversationId);
@@ -1105,8 +1122,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       )?.messages.some((message) => message.clientMessageId === row.id),
     );
     if (acknowledged.length) {
-      for (const row of acknowledged)
-        queued.push({ kind: "remove", id: row.id });
+      for (const row of acknowledged) remove(row.id);
       view = queued.reduce(applyOperation, stored);
       void persist();
     }
@@ -1130,10 +1146,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       })),
     });
   };
+  // Taking a row away releases the bytes its files hold, whichever way it
+  // goes: acknowledged by the transcript, withdrawn or discarded.
+  const remove = (id: string) => {
+    stagedFiles.delete(id);
+    queued.push({ kind: "remove", id });
+  };
   const record = (operation: Operation) => {
     if (operation.kind === "add") livePendingIds.add(operation.row.id);
-    // The bytes a message's files hold are released when the row that
-    // carries them goes away.
     if (
       operation.kind === "remove" ||
       operation.kind === "withdraw" ||
@@ -1427,7 +1447,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const held = new Set(candidate.held);
     for (const message of candidate.conversation.messages)
       if (message.clientMessageId) held.add(message.clientMessageId);
-    for (const id of held) if (viewRow(id)) queued.push({ kind: "remove", id });
+    for (const id of held) if (viewRow(id)) remove(id);
   };
   const readConversation = async (
     owner?: ScopeSignal,
@@ -1508,7 +1528,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       else
         for (const message of conversation.messages)
           if (message.clientMessageId && viewRow(message.clientMessageId))
-            queued.push({ kind: "remove", id: message.clientMessageId });
+            remove(message.clientMessageId);
       const result: Extract<ConversationReadResult, { kind: "loaded" }> = {
         kind: "loaded",
         conversationId: id,

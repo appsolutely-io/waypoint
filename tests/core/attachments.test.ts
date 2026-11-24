@@ -1,4 +1,4 @@
-import { it, expect } from "vitest";
+import { it, expect, vi } from "vitest";
 import {
   createWaypointClient,
   type AttachmentPort,
@@ -592,6 +592,26 @@ it("takes a file whatever case its media type is written in", async () => {
   client.dispose();
 });
 
+it("names the withdrawn message's files on the restored item", async () => {
+  const { client } = harness({
+    port: {
+      upload: async () => {
+        throw { code: "refused", id: "store" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello"), file("notes.txt", "n")]);
+  await flush();
+  const id = client.getSnapshot().pending[0]!.id;
+  await client.withdraw(id);
+  await flush();
+  const restored = client.getSnapshot().restored[0];
+  expect(restored?.files).toEqual(["report.txt", "notes.txt"]);
+  client.dispose();
+});
+
 it("drops a restored row's attachments when there are too many", async () => {
   const record = JSON.stringify({
     revision: 1,
@@ -622,3 +642,41 @@ it("drops a restored row's attachments when there are too many", async () => {
   expect(client.getSnapshot().pending[0]?.attachments).toBeUndefined();
   client.dispose();
 });
+it("releases the staged bytes when a read confirms an in-doubt row", async () => {
+  const spy = vi.spyOn(Map.prototype, "delete");
+  let rowId = "";
+  const { client } = harness({
+    send: async () => {
+      throw new Error("connection lost");
+    },
+    read: async (id) => ({
+      protocol: "1.0",
+      id,
+      title: "Chat",
+      messages: [
+        {
+          id: "host-1",
+          role: "user" as const,
+          content: "Here is the report",
+          blocks: [],
+          createdAt: 0,
+          ...(rowId ? { clientMessageId: rowId } : {}),
+        },
+      ],
+    }),
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  await flush();
+  rowId = client.getSnapshot().pending[0]!.id;
+  expect(client.getSnapshot().pending[0]?.failure?.code).toBe("in-doubt");
+  await client.refresh();
+  await flush();
+  expect(client.getSnapshot().pending).toHaveLength(0);
+  // The bytes the row's files held leave with the row itself.
+  expect(spy).toHaveBeenCalledWith(rowId);
+  spy.mockRestore();
+  client.dispose();
+});
+

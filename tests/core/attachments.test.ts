@@ -7,6 +7,7 @@ import {
   type TransportPort,
 } from "../../src/core/client";
 import type { Reply, ReplyMessage } from "../../src/protocol/generated";
+import { acceptsMediaType } from "../../src/core/attachment-shape";
 import { config, flush } from "../support/client";
 
 const file = (name: string, text: string): AttachmentUpload => ({
@@ -369,10 +370,13 @@ it("sends one message with both files after a switch away and back", async () =>
   // The attempt the switch abandoned settled on the row's own conversation;
   // it does not hang open as an answer that never came.
   expect(row.failure?.code).toBe("unavailable");
-  // The stored reference is kept with the staged files, not on the row of
-  // a conversation the message left; the retry carries it without asking
-  // the host for the file again.
-  expect(row.attachments?.map((each) => each.id ?? null)).toEqual([null, null]);
+  // The settle wrote the id the host gave onto the row's own record, so a
+  // reload never reads a host-stored file as one still waiting; the retry
+  // asks the host only for the file it never got.
+  expect(row.attachments?.map((each) => each.id ?? null)).toEqual([
+    "file-a.txt",
+    null,
+  ]);
   await client.retry(row.id);
   expect(uploads).toEqual(["a.txt", "b.txt"]);
   expect(sent).toHaveLength(1);
@@ -774,6 +778,7 @@ it("keeps a commit that lands during the abroad settle", async () => {
   const values = new Map<string, string>([[at, "{}"]]);
   let armed = false;
   let raced = false;
+  let injectedRevision = 0;
   const storage = {
     get: (key: string) => values.get(key) ?? null,
     set: (key: string, value: string) => {
@@ -791,11 +796,12 @@ it("keeps a commit that lands during the abroad settle", async () => {
           string,
           unknown
         > & { pending?: unknown[]; revision?: number };
+        injectedRevision = (theirs.revision ?? 0) + 1;
         values.set(
           key,
           JSON.stringify({
             ...theirs,
-            revision: (theirs.revision ?? 0) + 1,
+            revision: injectedRevision,
             pending: [
               ...(Array.isArray(theirs.pending) ? theirs.pending : []),
               { id: "theirs", content: "Theirs", failure: null, open: [] },
@@ -845,11 +851,16 @@ it("keeps a commit that lands during the abroad settle", async () => {
   await flush();
   const record = JSON.parse(values.get(at) ?? "{}") as {
     revision: number;
-    pending: { id: string; failure?: { code: string } | null }[];
+    pending: {
+      id: string;
+      failure?: { code: string } | null;
+      attachments?: { id?: string | null }[];
+    }[];
   };
   const rows = record.pending.map((row) => row.id).sort();
   expect(rows).toEqual([rowId, "theirs"]);
-  expect(record.revision).toBeGreaterThan(1);
+  // The settle carries the writer's revision forward by exactly one.
+  expect(record.revision).toBe(injectedRevision + 1);
   const ours = record.pending.find((row) => row.id === rowId);
   expect(ours?.failure?.code).toBe("unavailable");
   client.dispose();
@@ -914,5 +925,23 @@ it("reports an abroad settle whose write fails", async () => {
   expect(problem?.id).toBe("storage-write");
   releaseRead();
   await switched;
+  client.dispose();
+});
+
+
+it("treats a host's attachments-lost as a refusal on the row", async () => {
+  const { client } = harness({
+    port: {
+      upload: async () => {
+        throw { code: "attachments-lost", id: "host-side" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  await flush();
+  const row = client.getSnapshot().pending[0]!;
+  expect(row.failure?.code).toBe("refused");
   client.dispose();
 });

@@ -50,6 +50,35 @@ export const STORE_FAILURES = [
   "unavailable",
   "attachments-lost",
 ] as const;
+/** Any one of the codes a file store can meet. */
+export type StoreFailure = (typeof STORE_FAILURES)[number];
+/**
+ * Whether a code is one a file store can meet, whichever side said it.
+ * This is the one place that widens the codes for a plain string.
+ */
+export const isStoreFailure = (code: string): code is StoreFailure =>
+  (STORE_FAILURES as readonly string[]).includes(code);
+/**
+ * The codes a host may say about files it was asked to store. The client's
+ * own attachments-lost never travels from a host, so a host that says it
+ * anyway is refused like any other error a store cannot meet.
+ */
+export const HOST_STORE_FAILURES = [
+  "refused",
+  "rate-limited",
+  "unavailable",
+] as const;
+/**
+ * The words a row's files line follows its failure code with, one message
+ * key per outcome: what the host refused, what it asked to wait for, what
+ * never reached it, and what is gone for good.
+ */
+export const STORE_FAILURE_TEXT = {
+  refused: "chat.attachmentFailed",
+  "rate-limited": "chat.attachmentNotUploadedYet",
+  unavailable: "chat.attachmentNotUploaded",
+  "attachments-lost": "chat.attachmentLost",
+} as const;
 
 /**
  * Whether the host takes a file of this media type. A type the host names

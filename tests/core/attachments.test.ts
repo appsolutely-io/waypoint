@@ -857,10 +857,14 @@ it("keeps a commit that lands during the abroad settle", async () => {
 
 it("reports an abroad settle whose write fails", async () => {
   const values = new Map<string, string>();
+  // Writes work until the settle is armed, so the row is stored; then the
+  // disk goes away under exactly the settle's own write.
+  let armed = false;
   const storage: StoragePort = {
     get: (key) => values.get(key) ?? null,
-    set: () => {
-      throw new Error("disk gone");
+    set: (key, value) => {
+      if (armed) throw new Error("disk gone");
+      values.set(key, value);
     },
     remove: (key) => {
       values.delete(key);
@@ -870,15 +874,24 @@ it("reports an abroad settle whose write fails", async () => {
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
+  // The switch's own read would clear the reported problem on success, so
+  // it waits until the settle has been observed.
+  let releaseRead: () => void = () => {};
+  const readGate = new Promise<void>((resolve) => {
+    releaseRead = resolve;
+  });
   const { client } = harness({
     storage,
     send: async () => ({ id: "stored" }),
-    read: async (id) => ({
-      protocol: "1.0",
-      id,
-      title: "Chat",
-      messages: [],
-    }),
+    read: async (id) => {
+      if (id === "conversation-b") await readGate;
+      return {
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        messages: [],
+      };
+    },
     port: {
       upload: async () => {
         await gate;
@@ -892,12 +905,14 @@ it("reports an abroad settle whose write fails", async () => {
   await flush();
   const switched = client.switchConversation("conversation-b");
   await flush();
+  armed = true;
   release();
   await sending;
-  await switched;
   await flush();
   const problem = client.getSnapshot().problem;
   expect(problem?.code).toBe("unavailable");
   expect(problem?.id).toBe("storage-write");
+  releaseRead();
+  await switched;
   client.dispose();
 });

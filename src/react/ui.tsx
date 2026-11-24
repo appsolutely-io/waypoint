@@ -3095,7 +3095,9 @@ function ChatBody({
                         // reached them does not name them.
                         const unstored =
                           pending.failure &&
-                          STORE_FAILURES.includes(pending.failure.code)
+                          (STORE_FAILURES as readonly string[]).includes(
+                            pending.failure.code,
+                          )
                             ? new Intl.ListFormat(provider.lang).format(
                                 (pending.attachments ?? [])
                                   .filter((file) => !file.id)

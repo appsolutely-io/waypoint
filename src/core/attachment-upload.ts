@@ -154,7 +154,8 @@ export async function upload(
         // A host's own problem travels as it is when it is one a store can
         // meet; anything else is the row's refusal.
         const code = (error as { code?: unknown } | null)?.code;
-        throw typeof code === "string" && STORE_FAILURES.includes(code)
+        throw typeof code === "string" &&
+          (STORE_FAILURES as readonly string[]).includes(code)
           ? error
           : { code: "refused", id: clientMessageId };
       }

@@ -44,12 +44,12 @@ export const attachmentWellFormed = (
  * The problem codes a file store can meet, whichever side said them. The
  * words a row gets for its files follow this list.
  */
-export const STORE_FAILURES: readonly string[] = [
+export const STORE_FAILURES = [
   "refused",
   "rate-limited",
   "unavailable",
   "attachments-lost",
-];
+] as const;
 
 /**
  * Whether the host takes a file of this media type. A type the host names

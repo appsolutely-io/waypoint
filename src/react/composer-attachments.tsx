@@ -155,9 +155,13 @@ export function ComposerAttachments({
       // What stays is decided against the files the composer holds now,
       // not the ones this pick started from. A send cannot leave while a
       // read is open (the composer holds it), so the only way to be late is
-      // the conversation changing under the read.
+      // the conversation changing under the read — into another one, or
+      // into a form.
       let kept: readonly AttachmentUpload[] = [];
-      const late = client.getSnapshot().conversationId !== conversation;
+      const now = client.getSnapshot();
+      const late =
+        now.conversationId !== conversation ||
+        now.conversation?.mode === "form-fill";
       if (taken.length && !late)
         onFiles((current) => {
           const merged = [...current, ...taken].slice(0, MAX_ATTACHMENTS);

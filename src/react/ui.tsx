@@ -1896,7 +1896,7 @@ function ChatBody({
   // the moment it becomes one, and says so.
   useEffect(() => {
     const form = state.conversation?.mode === "form-fill";
-    if (form && !wasForm.current && filesRef.current.length) {
+    if (form && !wasForm.current && (filesRef.current.length || reading)) {
       filesRef.current = [];
       setFiles([]);
       setFormDropped(true);

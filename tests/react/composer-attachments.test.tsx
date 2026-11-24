@@ -869,6 +869,49 @@ it("names the files to pick again on a withdrawn message", async () => {
   client.dispose();
 });
 
+it("drops and says a file whose read settled after the conversation took a form", async () => {
+  let formFill = false;
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: port(),
+    formSession: {
+      begin: () => ({ requestId: "form-1", fields: [] }),
+      getSnapshot: () => ({ fields: [] }),
+      cancel: () => {},
+      dispose: () => {},
+      // The form session's own contract is not under test here.
+    } as never,
+    transport: {
+      ...base.transport,
+      read: async (id) => ({
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        ...(formFill ? { mode: "form-fill" } : {}),
+        messages: [],
+      }),
+    },
+  });
+  await client.ready;
+  const { input, status } = await chatWith(client);
+  const end = holdReads();
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() => expect(status()).toContain("Reading report.txt"));
+  formFill = true;
+  await act(async () => {
+    await client.switchConversation("conversation-b");
+  });
+  end();
+  // The picker's own region is gone with the form; the notice that stays
+  // says the files were dropped, and none was added.
+  expect(screen.queryByText("report.txt")).toBeNull();
+  await waitFor(() => expect(screen.getByText(/takes a form/)).toBeTruthy());
+  client.dispose();
+});
+
 it("says a row whose files never reached the site differently", async () => {
   const base = config();
   const client = createWaypointClient({

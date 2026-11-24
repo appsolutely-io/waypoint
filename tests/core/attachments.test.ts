@@ -955,17 +955,22 @@ it("settles a host refusal the switch met, keeping the file it stored", async ()
       messages: [],
     }),
     port: {
-      upload: async () => {
+      // The first file is stored; the refusal lands on the second while
+      // the conversation already moved on.
+      upload: async (_data, meta) => {
+        if (meta.index === 0) return { id: "file-a.txt" };
         started();
         await gate;
-        // The refusal lands after the conversation already moved on.
         throw { code: "refused", id: "m1" };
       },
     },
   });
   await client.ready;
   await client.setDraft("Here is the report");
-  const sending = client.send([file("report.txt", "hello")]);
+  const sending = client.send([
+    file("a.txt", "a"),
+    file("report.txt", "hello"),
+  ]);
   await new Promise<void>((resolve) => {
     started = resolve;
   });
@@ -976,12 +981,86 @@ it("settles a host refusal the switch met, keeping the file it stored", async ()
   await switched;
   await flush();
   // The settle writes the refusal the upload met while aborted, not a
-  // blanket unavailable.
+  // blanket unavailable, and keeps the id the host gave the first file.
   const record = JSON.parse(values.get(at) ?? "{}") as {
-    pending: { id: string; failure?: { code: string } | null }[];
+    pending: {
+      id: string;
+      failure?: { code: string } | null;
+      attachments?: { id?: string | null }[];
+    }[];
   };
   const row = record.pending[0]!;
+  expect(row.attachments?.map((each) => each.id ?? null)).toEqual([
+    "file-a.txt",
+    null,
+  ]);
   expect(row.failure?.code).toBe("refused");
+  client.dispose();
+});
+
+it("settles a host rate limit the switch met, keeping the file it stored", async () => {
+  const at = JSON.stringify(["waypoint", "account-a", "conversation-a"]);
+  const values = new Map<string, string>();
+  const storage: StoragePort = {
+    get: (key) => values.get(key) ?? null,
+    set: (key, value) => {
+      values.set(key, value);
+    },
+    remove: (key) => {
+      values.delete(key);
+    },
+  };
+  let started: () => void = () => {};
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const { client } = harness({
+    storage,
+    send: async () => ({ id: "stored" }),
+    read: async (id) => ({
+      protocol: "1.0",
+      id,
+      title: "Chat",
+      messages: [],
+    }),
+    port: {
+      upload: async (_data, meta) => {
+        if (meta.index === 0) return { id: "file-a.txt" };
+        started();
+        await gate;
+        throw { code: "rate-limited", id: "m1" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  const sending = client.send([
+    file("a.txt", "a"),
+    file("report.txt", "hello"),
+  ]);
+  await new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const switched = client.switchConversation("conversation-b");
+  await flush();
+  release();
+  await sending;
+  await switched;
+  await flush();
+  const record = JSON.parse(values.get(at) ?? "{}") as {
+    pending: {
+      id: string;
+      failure?: { code: string } | null;
+      attachments?: { id?: string | null }[];
+    }[];
+  };
+  const row = record.pending[0]!;
+  expect(row.attachments?.map((each) => each.id ?? null)).toEqual([
+    "file-a.txt",
+    null,
+  ]);
+  expect(row.failure?.code).toBe("rate-limited");
   client.dispose();
 });
 

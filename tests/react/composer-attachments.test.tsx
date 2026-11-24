@@ -545,7 +545,7 @@ it("removes the files with a word when the conversation takes a form", async () 
   expect(screen.queryByRole("button", { name: "Attach" })).toBeNull();
   expect(screen.queryByText("report.txt")).toBeNull();
   await waitFor(() =>
-    expect(screen.getByText(/removed for the form/)).toBeTruthy(),
+    expect(screen.getByText(/removed for this form/)).toBeTruthy(),
   );
   fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
     target: { value: "Fill this" },
@@ -554,7 +554,7 @@ it("removes the files with a word when the conversation takes a form", async () 
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
   });
   await waitFor(() =>
-    expect(screen.queryByText(/removed for the form/)).toBeNull(),
+    expect(screen.queryByText(/removed for this form/)).toBeNull(),
   );
   client.dispose();
 });

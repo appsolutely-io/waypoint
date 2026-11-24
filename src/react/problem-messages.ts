@@ -41,8 +41,7 @@ export const problemEnglish: ProblemCatalogue = {
     "Something changed since this plan was made. Review the current values.",
   "chat.problem.agreement":
     "The connection could not be renewed. Retry to check the current status.",
-  "chat.problem.attachmentsLost":
-    "Withdraw, then pick again.",
+  "chat.problem.attachmentsLost": "Withdraw, then pick again.",
   "chat.problem.inDoubt":
     "We couldn't confirm what happened. Check the current status before trying again.",
   "chat.problem.replaced": "A newer version replaced this. Refresh to see it.",

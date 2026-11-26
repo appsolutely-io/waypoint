@@ -28,7 +28,7 @@ function read(file: File): Promise<Uint8Array> {
     const reader = new FileReader();
     reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
     reader.onerror = () =>
-      reject(reader.error ?? new Error("The file could not be read."));
+      reject(reader.error ?? new Error("Unreadable file."));
     reader.readAsArrayBuffer(file);
   });
 }
@@ -78,23 +78,20 @@ export function ComposerAttachments({
   const input = useRef<HTMLInputElement>(null);
   const picker = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  // What the picker said last, read out where the picker is. A new
-  // conversation starts the news over: a pick that settles after the
-  // switch says what it refused and what it dropped, since the file it
-  // read belongs to no conversation now.
+  // What the picker said last, read out where the picker is. The picker
+  // forgets it when the composer sends, and a new conversation starts the
+  // news over: a pick that settles after the switch says what it refused
+  // and what it dropped, since the file it read belongs to no conversation
+  // now.
   const [status, setStatus] = useState("");
-  useEffect(() => {
-    setStatus("");
-  }, [client.getSnapshot().conversationId]);
   // The words are said again when they repeat: the status carries a number
   // so the region changes even when the words do not.
   const [revision, setRevision] = useState(0);
   // The host's policy is fixed for this client: the port it was given.
   const policy = client.getSnapshot().attachmentPolicy;
-  // The picker forgets what it said when the composer sends.
   useEffect(() => {
     setStatus("");
-  }, [reset]);
+  }, [client.getSnapshot().conversationId, reset]);
   // A removed row hands focus to the row now at its place, else the one
   // before it, else the button that opens the picker.
   const at = useRef(0);
@@ -221,12 +218,15 @@ export function ComposerAttachments({
   return (
     <>
       <p id={statusId} role="status" className="wp-composer-status">
-        {status ? <span key={revision}>{status}</span> : null}
+        {status && <span key={revision}>{status}</span>}
       </p>
       {/* Why the composer cannot act sits beside the news, outside the live
-          region, and the buttons name it. */}
+          region, and the buttons name it. Both reasons are said when both
+          hold: the limit that stops the pick and the text the send needs. */}
       <p id={reasonId} className="wp-composer-status">
-        {reason ?? (needsText ? t("composer.needsText") : null)}
+        {needsText
+          ? `${reason ? reason + " " : ""}${t("composer.needsText")}`
+          : reason}
       </p>
       <input
         ref={input}

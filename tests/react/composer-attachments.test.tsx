@@ -51,6 +51,14 @@ function holdReads(): () => void {
   };
 }
 
+/** The words a control's own description carries. */
+function describedBy(control: Element): string {
+  return (control.getAttribute("aria-describedby") ?? "")
+    .split(" ")
+    .map((each) => document.getElementById(each)?.textContent ?? "")
+    .join(" ");
+}
+
 /** A storage port that starts with the given record for this account. */
 function seededStorage(record: unknown): StoragePort {
   const at = JSON.stringify(["waypoint", "account-a", "conversation-a"]);
@@ -877,10 +885,12 @@ it("removes a file while the composer is full, which frees the pick button", asy
   // The limit stops the pick, not the removal, and the button's
   // description names the reason beside the news.
   const described = (attach.getAttribute("aria-describedby") ?? "").split(" ");
-  expect(
-    described.map((each) => document.getElementById(each)?.textContent),
-  ).toContain("A message can carry at most 20 files.");
   expect(described).toHaveLength(2);
+  expect(
+    described
+      .map((each) => document.getElementById(each)?.textContent)
+      .join(" "),
+  ).toContain("A message can carry at most 20 files.");
   const remove = screen.getByRole("button", {
     name: "Remove report-0.txt",
   }) as HTMLButtonElement;
@@ -914,6 +924,59 @@ it("says a message needs text while files are picked", async () => {
       .split(" ")
       .map((each) => document.getElementById(each)?.textContent),
   ).toContain("A message needs text.");
+  client.dispose();
+});
+it("says a message needs text even when the composer is full", async () => {
+  const client = createWaypointClient({
+    ...config(),
+    attachments: port(),
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: {
+      files: Array.from({ length: 20 }, (_, at) =>
+        file(`report-${at}.txt`, "x"),
+      ),
+    },
+  });
+  await waitFor(() =>
+    expect(document.querySelectorAll(".wp-composer-files > li")).toHaveLength(
+      20,
+    ),
+  );
+  const send = screen.getByRole("button", { name: "Send" });
+  expect((send as HTMLButtonElement).disabled).toBe(true);
+  // The send names the text it needs, not only the limit that stopped the
+  // pick: both reasons hold and both are said, one after the other.
+  await waitFor(() =>
+    expect(describedBy(send)).toBe(
+      "A message can carry at most 20 files. A message needs text.",
+    ),
+  );
+  client.dispose();
+});
+
+it("says a message needs text, and only that, when the pick is not stopped", async () => {
+  const client = createWaypointClient({
+    ...config(),
+    attachments: port(),
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "x")] },
+  });
+  await waitFor(() =>
+    expect(document.querySelectorAll(".wp-composer-files > li")).toHaveLength(
+      1,
+    ),
+  );
+  const send = screen.getByRole("button", { name: "Send" });
+  expect((send as HTMLButtonElement).disabled).toBe(true);
+  // One reason holds, so it is said alone: no room is left before the
+  // words and none after them.
+  await waitFor(() => expect(describedBy(send)).toBe("A message needs text."));
   client.dispose();
 });
 it("clears the composer once the row is queued, while the upload waits", async () => {

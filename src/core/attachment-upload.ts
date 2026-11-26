@@ -193,7 +193,7 @@ export async function upload(
           isStoreFailure(code) &&
           !isClientOnlyStoreFailure(code)
           ? error
-          : { code: "refused", id: clientMessageId };
+          : { ...(error as object), code: "refused", id: clientMessageId };
       }
       if (!id) throw { code: "refused", id: clientMessageId };
       ids[index] = id;

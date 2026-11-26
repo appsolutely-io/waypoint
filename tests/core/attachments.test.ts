@@ -1133,3 +1133,21 @@ it("takes a wildcard prefix only for the types under it", async () => {
   expect(acceptsMediaType(["x/*"], "x/anything")).toBe(true);
   expect(acceptsMediaType(["*/*"], "application/pdf")).toBe(true);
 });
+
+it("a host's own detail survives the refusal of a file", async () => {
+  const { client } = harness({
+    port: {
+      upload: async () => {
+        throw { code: "attachments-lost", host: { code: "availability" } };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  await flush();
+  const failure = client.getSnapshot().pending[0]?.failure;
+  expect(failure?.code).toBe("refused");
+  expect(failure?.host).toEqual({ code: "availability" });
+  client.dispose();
+});

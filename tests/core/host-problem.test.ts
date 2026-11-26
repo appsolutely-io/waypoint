@@ -179,3 +179,25 @@ it("a stream problem naming a failed send stays on that send", async () => {
   expect(client.getSnapshot().pending[0]!.failure).toEqual(row.failure);
   client.dispose();
 });
+
+it("a host's own detail survives the refusal a client-only code becomes", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    transport: {
+      ...base.transport,
+      send: async () => {
+        throw { code: "attachments-lost", host: { code: "availability" } };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Refused message");
+  await client.send();
+  // The row's own refusal settles after the send resolves.
+  await flush();
+  const failure = client.getSnapshot().pending[0]?.failure;
+  expect(failure?.code).toBe("refused");
+  expect(failure?.host).toEqual({ code: "availability" });
+  client.dispose();
+});

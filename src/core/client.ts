@@ -2360,7 +2360,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         // is. Every other problem travels as the side that said it said it.
         const code = (error as { code?: unknown } | null)?.code;
         throw typeof code === "string" && isClientOnlyStoreFailure(code)
-          ? { code: "refused", id }
+          ? { ...(error as object), code: "refused", id }
           : error;
       }
       if (scope.aborted) return;

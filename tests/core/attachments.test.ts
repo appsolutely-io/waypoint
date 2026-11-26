@@ -1151,3 +1151,43 @@ it("a host's own detail survives the refusal of a file", async () => {
   expect(failure?.host).toEqual({ code: "availability" });
   client.dispose();
 });
+
+it("a navigate inside the same conversation shows the settled failure", async () => {
+  const values = new Map<string, string>();
+  const storage: StoragePort = {
+    get: async (key) => values.get(key) ?? null,
+    set: async (key, value) => {
+      values.set(key, value);
+    },
+    remove: async (key) => {
+      values.delete(key);
+    },
+  };
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const { client } = harness({
+    storage,
+    port: {
+      upload: async () => {
+        await held;
+        return { id: "file-a.txt" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  await flush();
+  // The conversation moves on while the file is on its way.
+  const switched = client.switchConversation("conversation-a");
+  await flush();
+  release();
+  await switched;
+  await flush();
+  // The row settled on the record; the view follows it instead of reading
+  // the row as one of unknown outcome.
+  expect(client.getSnapshot().pending[0]?.failure?.code).toBe("unavailable");
+  client.dispose();
+});

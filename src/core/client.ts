@@ -2285,6 +2285,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const bound = agreement;
     const current = viewRow(id);
     if (!current) return;
+    // The upload settles its row on the conversation it started in. When
+    // that conversation is still the one on screen, the view follows the
+    // settled record instead of reading the row as one of unknown outcome.
+    const settledAbroad = async () => {
+      if (conversationId === state.conversationId) await persist();
+    };
     update({ sending: true });
     const attempt = Math.random().toString(36).slice(2);
     inFlight.add(attempt);
@@ -2339,7 +2345,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             () => report({ code: "unavailable", id: "storage-write" }),
           )
         : undefined;
-      if (scope.aborted) return;
+      if (scope.aborted) {
+        await settledAbroad();
+        return;
+      }
       try {
         await config.transport.send(
           {
@@ -2371,7 +2380,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       await persist();
       await refresh();
     } catch (error) {
-      if (scope.aborted) return;
+      if (scope.aborted) {
+        await settledAbroad();
+        return;
+      }
       const problem = asProblem(error, id);
       // A refused message stays in the outbox with its id; only an explicit
       // retry sends it again, under the replacement agreement. After an

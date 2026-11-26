@@ -110,6 +110,8 @@ describe("agreement offer and context", () => {
     await a.send();
     await b.setDraft("From b");
     await b.send();
+    // Each send resolves once its row is queued; the requests settle after.
+    await flush();
     expect(host.log.sends.map((row) => row.agreement)).toEqual([
       "agreement-1",
       "agreement-2",

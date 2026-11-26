@@ -13,7 +13,7 @@ import type {
   ManifestEntry,
   ToolCall,
 } from "../../src/protocol/generated";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 import samples from "../protocol/samples.json";
 
 async function setup(request: (call: ToolCall) => Promise<unknown>) {
@@ -281,6 +281,8 @@ it("keeps a new send's running tool when its user message is confirmed by a read
   });
   await client.setDraft("Next");
   await client.send();
+  // The queued row leaves with its delivery; its frames settle after.
+  await flush();
   expect(client.getSnapshot().toolSteps).toEqual([
     { id: "new-tool", status: "running" },
   ]);
@@ -308,6 +310,8 @@ it.each([
     original.send.mockRejectedValueOnce({ code: "refused" });
     await original.client.setDraft("Restored question");
     await original.client.send();
+    // The refusal settles after the send resolves; the reload below reads it.
+    await flush();
     const id = original.client.getSnapshot().pending[0]!.id;
     original.client.dispose();
 
@@ -368,6 +372,8 @@ it.each([
     };
     if (!repeatRetry) replace(confirmed);
     await retry();
+    // The retried row leaves with its delivery; its frames settle after.
+    await flush();
     if (repeatRetry) {
       expect(client.getSnapshot().toolSteps).toEqual(running);
       send.mockImplementationOnce(async () => {
@@ -376,6 +382,7 @@ it.each([
       });
       replace(confirmed);
       await retry();
+      await flush();
     }
     expect(client.getSnapshot().conversation?.messages.at(-2)?.id).toBe(
       "retried-user",
@@ -383,6 +390,7 @@ it.each([
     expect(client.getSnapshot().toolSteps).toEqual(running);
     if (replayConfirmed) {
       await retry();
+      await flush();
       expect(client.getSnapshot().toolSteps).toEqual(running);
       expect(request).toHaveBeenCalledOnce();
     }

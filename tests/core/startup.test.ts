@@ -724,6 +724,8 @@ describe("startup fix-diff regressions", () => {
     await flush();
     expect(client.getSnapshot().draft).toBe("Revised message");
     await client.send();
+    // The queued row leaves with its delivery; the request settles after.
+    await flush();
     expect(sent).toHaveLength(1);
     expect(sent[0]).not.toBe("saved-row");
     client.dispose();

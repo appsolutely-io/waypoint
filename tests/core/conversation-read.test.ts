@@ -5,7 +5,7 @@ import {
 } from "../../src/core/client";
 import { createHttpTransport } from "../../src/core/transports";
 import { createFormSession } from "../../src/core/form-session";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 for (const status of [404, 410, 503])
   it(`preserves a conversation-bound HTTP read failure for status ${status}`, async () => {
     const transport = createHttpTransport(async () => ({ status, body: {} }), {
@@ -422,6 +422,8 @@ for (const stage of [
     expect((await client.refresh()).kind).toBe("missing");
     release();
     await operation;
+    // The queued attempt settles after the operation resolves.
+    await flush();
     expect(send).toHaveBeenCalledTimes(pendingId ? 1 : 0);
     expect(client.getSnapshot().sending).toBe(false);
     if (stage.startsWith("storage")) {
@@ -439,6 +441,8 @@ for (const stage of [
     const row = client.getSnapshot().pending[0];
     if (row) await client.retry(row.id);
     else await client.send();
+    // The retried row leaves with its delivery; the request settles after.
+    await flush();
     expect(send).toHaveBeenCalledTimes(pendingId ? 2 : 1);
     client.dispose();
   });

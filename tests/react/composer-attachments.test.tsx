@@ -758,6 +758,20 @@ it("names every file the reading line waits on", async () => {
   client.dispose();
 });
 
+it("says a file's size in the unit a person reads", async () => {
+  const client = createWaypointClient({
+    ...config(),
+    attachments: port(),
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: { files: [file("big.txt", "x".repeat(1024 * 1024 - 1))] },
+  });
+  await waitFor(() => expect(screen.getByText("1 MB")).toBeTruthy());
+  client.dispose();
+});
+
 it("names only the files the reading line reads", async () => {
   const client = createWaypointClient({
     ...config(),

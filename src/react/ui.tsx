@@ -1239,7 +1239,8 @@ export { problemAction };
  */
 export function fileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`;
+  const kilobytes = Math.round(bytes / 1024);
+  if (kilobytes < 1024) return `${kilobytes} kB`;
   return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
 }
 

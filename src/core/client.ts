@@ -80,8 +80,7 @@ import type {
 import type { StagedFiles } from "./attachment-upload";
 import {
   attachmentWellFormed,
-  HOST_STORE_FAILURES,
-  isStoreFailure,
+  isClientOnlyStoreFailure,
   MAX_ATTACHMENTS,
 } from "./attachment-shape";
 export type {
@@ -2348,11 +2347,9 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       } catch (error) {
         // A host cannot know the client no longer holds its files; a code
         // only the client may say about them comes back as the refusal it
-        // is, the same rule the upload itself follows.
+        // is. Every other problem travels as the side that said it said it.
         const code = (error as { code?: unknown } | null)?.code;
-        throw typeof code === "string" &&
-          isStoreFailure(code) &&
-          !(HOST_STORE_FAILURES as readonly string[]).includes(code)
+        throw typeof code === "string" && isClientOnlyStoreFailure(code)
           ? { code: "refused", id }
           : error;
       }

@@ -421,6 +421,25 @@ it("keeps the host's own problem when the store refuses a file", async () => {
   client.dispose();
 });
 
+it("a file store that fails with an outcome the client cannot place leaves the message's outcome definite", async () => {
+  const { client, sent } = harness({
+    port: {
+      upload: async () => {
+        throw { code: "in-doubt", id: "store" };
+      },
+    },
+  });
+  await client.ready;
+  await client.setDraft("Here is the report");
+  await client.send([file("report.txt", "hello")]);
+  await flush();
+  expect(sent).toHaveLength(0);
+  // The message was never handed to the transport, so it was not sent:
+  // its outcome is a refusal, not an unknown one.
+  expect(client.getSnapshot().pending[0]?.failure?.code).toBe("refused");
+  client.dispose();
+});
+
 it("takes a file whose media type the host takes as a wildcard", async () => {
   const { client, stored } = harness({
     port: {

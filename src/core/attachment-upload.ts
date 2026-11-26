@@ -11,7 +11,7 @@ import type { ScopeSignal } from "./scope";
 import {
   acceptsFile,
   attachmentWellFormed,
-  HOST_STORE_FAILURES,
+  isClientOnlyStoreFailure,
   isStoreFailure,
   type StoreFailure,
 } from "./attachment-shape";
@@ -190,7 +190,8 @@ export async function upload(
         // say about its store; anything else is the row's refusal.
         const code = (error as { code?: unknown } | null)?.code;
         throw typeof code === "string" &&
-          (HOST_STORE_FAILURES as readonly string[]).includes(code)
+          isStoreFailure(code) &&
+          !isClientOnlyStoreFailure(code)
           ? error
           : { code: "refused", id: clientMessageId };
       }

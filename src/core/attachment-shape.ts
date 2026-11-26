@@ -54,7 +54,7 @@ export const STORE_FAILURES = [
 export type StoreFailure = (typeof STORE_FAILURES)[number];
 /**
  * Whether a code is one a file store can meet, whichever side said it.
- * This is the one place that widens the codes for a plain string.
+ * The codes are widened for a plain string only in this module.
  */
 export const isStoreFailure = (code: string): code is StoreFailure =>
   (STORE_FAILURES as readonly string[]).includes(code);
@@ -68,6 +68,15 @@ export const HOST_STORE_FAILURES = [
   "rate-limited",
   "unavailable",
 ] as const;
+/**
+ * Whether a code is one only the client may say about its files: a host
+ * cannot know that the client no longer holds the bytes it was asked to
+ * store. A code a host may say travels as the side that said it said it,
+ * and this one comes back as the refusal it is.
+ */
+export const isClientOnlyStoreFailure = (code: string): boolean =>
+  isStoreFailure(code) &&
+  !(HOST_STORE_FAILURES as readonly string[]).includes(code);
 /**
  * The words a row's files line follows its failure code with, one message
  * key per outcome: what the host refused, what it asked to wait for, what

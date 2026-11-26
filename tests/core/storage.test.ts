@@ -1362,6 +1362,9 @@ describe("operation preconditions", () => {
         releaseA();
         await sending;
         await b.retry(id);
+        // The retried row is queued; the request settles before the
+        // correction may go out.
+        await flush();
         await b.send();
         await flush();
         expect([...server.held]).toEqual([

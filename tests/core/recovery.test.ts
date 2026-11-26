@@ -143,6 +143,8 @@ for (const storage of [false, true])
       expect(client.getSnapshot().draft).toBe("Keep new draft");
       if (!acknowledged) {
         await client.retry(row.id);
+        // The retried row is queued; the request settles after.
+        await flush();
         expect(send.mock.calls[1]![0].clientReplyId).toBe(row.id);
         expect(client.getSnapshot().pending).toEqual([]);
       } else expect(send).toHaveBeenCalledOnce();

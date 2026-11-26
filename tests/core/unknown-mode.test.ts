@@ -599,8 +599,7 @@ for (const storage of ["none", "working", "stale", "failing"] as const)
         listener({ type: "frame", frame: { ...tool, sequence } });
       await client.send();
       await client.retry(pending[0]!.id);
-      // The retried row leaves with its delivery; the request settles
-      // after the retry resolves.
+      // The retried row is queued; the request settles after.
       await flush();
       // A send is dispatched only after its claim is committed.
       const sends = storage === "failing" ? 0 : 1;
@@ -615,6 +614,8 @@ for (const storage of ["none", "working", "stale", "failing"] as const)
       expect(client.getSnapshot().pending).toEqual(pending);
       send.mockResolvedValue({ id: "accepted" });
       await client.retry(pending[0]!.id);
+      // The retried row is queued; the request settles after.
+      await flush();
       if (storage === "failing") {
         expect(send).not.toHaveBeenCalled();
         expect(client.getSnapshot().pending).toEqual(pending);

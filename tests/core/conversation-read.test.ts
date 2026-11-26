@@ -339,6 +339,8 @@ for (const mode of ["ordinary", "form-fill"] as const)
       expect(client.getSnapshot().conversationUnavailable).toBe(false);
       if (pending) await client.retry(pending.id);
       else await client.send();
+      // The retried row is queued; the request settles after.
+      await flush();
       expect(send).toHaveBeenCalledTimes(2);
       if (mode === "form-fill")
         expect(send.mock.calls[1]?.[0]).toMatchObject({
@@ -441,7 +443,7 @@ for (const stage of [
     const row = client.getSnapshot().pending[0];
     if (row) await client.retry(row.id);
     else await client.send();
-    // The retried row leaves with its delivery; the request settles after.
+    // The retried row is queued; the request settles after.
     await flush();
     expect(send).toHaveBeenCalledTimes(pendingId ? 2 : 1);
     client.dispose();

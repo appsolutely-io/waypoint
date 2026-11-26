@@ -119,6 +119,8 @@ it("retries under the same id with the same references", async () => {
   await flush();
   expect(client.getSnapshot().pending[0]?.failure?.code).toBe("in-doubt");
   await client.retry(sent[0]!.clientReplyId);
+  // The retried row is queued; the request settles after.
+  await flush();
   expect(stored).toHaveLength(1);
   expect((sent[1] as ReplyMessage).attachments).toEqual(references);
   expect((sent[1] as ReplyMessage).clientMessageId).toBe(
@@ -220,6 +222,8 @@ it("keeps the references of a restored row and does not store them again", async
     references,
   );
   await second.client.retry(id);
+  // The retried row is queued; the request settles after.
+  await flush();
   expect(second.stored).toHaveLength(0);
   expect((sent.at(-1) as ReplyMessage).attachments).toEqual(references);
   second.client.dispose();
@@ -257,6 +261,8 @@ it("keeps each stored file on the row, so a retry sends only what is missing", a
   ]);
   expect(pending?.failure?.code).toBe("refused");
   await client.retry(pending!.id);
+  // The retried row is queued; the upload and the request settle after.
+  await flush();
   expect(uploaded).toEqual(["first.txt", "second.txt"]);
   expect((sent.at(-1) as ReplyMessage).attachments).toEqual([
     {
@@ -378,6 +384,8 @@ it("sends one message with both files after a switch away and back", async () =>
     null,
   ]);
   await client.retry(row.id);
+  // The retried row is queued; the upload and the request settle after.
+  await flush();
   expect(uploads).toEqual(["a.txt", "b.txt"]);
   expect(sent).toHaveLength(1);
   expect((sent[0] as ReplyMessage).attachments).toEqual([
@@ -580,8 +588,12 @@ it("fails a retried row whose files are no longer held", async () => {
   await flush();
   await second.client.retry(id);
   expect(sent).toHaveLength(0);
-  const failure = second.client.getSnapshot().pending[0]?.failure;
-  expect(failure?.code).toBe("attachments-lost");
+  // The retried row is queued; the upload settles the row after.
+  await vi.waitFor(() =>
+    expect(second.client.getSnapshot().pending[0]?.failure?.code).toBe(
+      "attachments-lost",
+    ),
+  );
   second.client.dispose();
 });
 

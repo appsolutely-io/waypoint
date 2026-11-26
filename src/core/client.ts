@@ -484,7 +484,17 @@ export interface WaypointClient {
     messageId: string,
     rating: FeedbackInput["rating"],
   ): Promise<boolean>;
+  /**
+   * Sends the draft, with the files it carries, and says whether the
+   * message was queued. It resolves once the row is queued; the delivery
+   * continues on its own and settles the row.
+   */
   send(attachments?: readonly AttachmentUpload[]): Promise<boolean>;
+  /**
+   * Sends a queued message again under its own id. It resolves once the
+   * attempt is queued; the delivery continues on its own and settles the
+   * row.
+   */
   retry(id: string): Promise<void>;
   withdraw(id: string): Promise<void>;
   /** Appends a withdrawn message's content to the draft; the item stays. */
@@ -2978,7 +2988,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         id,
       );
       emit({ type: "send", conversationId: state.conversationId, replyId: id });
-      await dispatch(id);
+      // The attempt is queued; it settles the row on its own.
+      void dispatch(id);
     },
     async withdraw(id) {
       if (!viewRow(id) || state.withdrawing.includes(id)) return;

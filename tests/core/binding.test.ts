@@ -374,6 +374,8 @@ describe("agreement refusal", () => {
     expect(host.log.negotiate).toHaveLength(2);
     expect(host.log.sends).toHaveLength(1);
     await client.retry(row!.id);
+    // The retried row is queued; the request settles after.
+    await flush();
     expect(host.log.sends).toEqual([
       { id: row!.id, agreement: "agreement-1" },
       { id: row!.id, agreement: "agreement-2" },

@@ -372,8 +372,9 @@ it.each([
     };
     if (!repeatRetry) replace(confirmed);
     await retry();
-    // The retried row leaves with its delivery; its frames settle after.
-    await flush();
+    // The retried row is queued; its frames and the read that follows
+    // settle after.
+    await vi.waitFor(() => expect(client.getSnapshot().sending).toBe(false));
     if (repeatRetry) {
       expect(client.getSnapshot().toolSteps).toEqual(running);
       send.mockImplementationOnce(async () => {
@@ -382,10 +383,12 @@ it.each([
       });
       replace(confirmed);
       await retry();
-      await flush();
+      await vi.waitFor(() => expect(client.getSnapshot().sending).toBe(false));
     }
-    expect(client.getSnapshot().conversation?.messages.at(-2)?.id).toBe(
-      "retried-user",
+    await vi.waitFor(() =>
+      expect(client.getSnapshot().conversation?.messages.at(-2)?.id).toBe(
+        "retried-user",
+      ),
     );
     expect(client.getSnapshot().toolSteps).toEqual(running);
     if (replayConfirmed) {

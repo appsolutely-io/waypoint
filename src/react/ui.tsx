@@ -3542,7 +3542,7 @@ function ChatBody({
                   <article key={item.id}>
                     <p>{item.content}</p>
                     {item.files?.length ? (
-                      <p>
+                      <p className="wp-attachment-line">
                         {t("chat.restoredFiles", {
                           names: new Intl.ListFormat(provider.lang).format(
                             item.files,

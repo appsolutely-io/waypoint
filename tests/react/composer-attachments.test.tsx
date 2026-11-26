@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // The composer's file picker: what it offers, what it refuses, what it
 // says and where the focus goes when a file is removed.
+import { readFileSync } from "node:fs";
 import { it, expect, afterEach, vi } from "vitest";
 import {
   act,
@@ -877,6 +878,27 @@ it("removes a file while the composer is full, which frees the pick button", asy
   client.dispose();
 });
 
+it("says a message needs text while files are picked", async () => {
+  const client = createWaypointClient({
+    ...config(),
+    attachments: port(),
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() => expect(screen.getByText("report.txt")).toBeTruthy());
+  const send = screen.getByRole("button", { name: "Send" });
+  expect((send as HTMLButtonElement).disabled).toBe(true);
+  // The send names the text it needs.
+  expect(
+    (send.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((each) => document.getElementById(each)?.textContent),
+  ).toContain("A message needs text.");
+  client.dispose();
+});
 it("clears the composer once the row is queued, while the upload waits", async () => {
   let release: () => void = () => {};
   const gate = new Promise<void>((resolve) => {
@@ -1287,6 +1309,35 @@ it("refuses a file whose host says the client-only code", async () => {
   const pending = await screen.findByRole("article", { name: "You" });
   await waitFor(() => expect(pending.textContent).toContain("Not sent"));
   expect(pending.textContent).toContain("did not accept");
+  client.dispose();
+});
+
+it("wraps the lines that name files", async () => {
+  const css = readFileSync("src/react/styles.css", "utf8");
+  // A long name wraps instead of widening the row it sits in.
+  expect(css).toMatch(
+    /\.waypoint \.wp-composer-status,\s*\.waypoint \.wp-attachment-line\s*\{\s*overflow-wrap: anywhere;/,
+  );
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    storage: seededStorage({
+      revision: 1,
+      draft: "",
+      pending: [],
+      restored: [
+        { id: "r1", content: "Here is the report", files: ["report.txt"] },
+      ],
+    }),
+    attachments: { upload: async () => ({ id: "file-1" }) },
+  });
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  await screen.findByText("Here is the report");
+  // The line that names the files to pick again carries the rule.
+  expect(screen.getByText("Pick report.txt again.").className).toBe(
+    "wp-attachment-line",
+  );
   client.dispose();
 });
 

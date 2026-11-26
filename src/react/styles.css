@@ -362,6 +362,12 @@
 .waypoint .wp-composer-status:empty {
   margin-block: 0;
 }
+/* A line that names files may be long; it wraps instead of widening the
+   row it sits in. */
+.waypoint .wp-composer-status,
+.waypoint .wp-attachment-line {
+  overflow-wrap: anywhere;
+}
 /* A fill's suggestion for an edited field reads as one aside: a small
    label over its value, its validation under it, its answers in a row. */
 .waypoint [data-suggestion] {

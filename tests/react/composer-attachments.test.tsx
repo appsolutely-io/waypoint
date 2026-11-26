@@ -1067,6 +1067,54 @@ it("says the lost-files words when the files line has nothing to name", async ()
   client.dispose();
 });
 
+it("announces the files of a row that loses them", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    storage: seededStorage({
+      revision: 1,
+      draft: "",
+      pending: [
+        {
+          id: "m1",
+          content: "Here is the report",
+          failure: { code: "unavailable", id: "m1" },
+          open: [],
+          attachments: [
+            { name: "report.txt", mediaType: "text/plain", size: 5 },
+          ],
+        },
+      ],
+    }),
+    attachments: { upload: async () => ({ id: "file-1" }) },
+    transport: {
+      ...base.transport,
+      read: async (id) => ({
+        protocol: "1.0",
+        id,
+        title: "Chat",
+        messages: [],
+      }),
+    },
+  });
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  const pending = await screen.findByRole("article", { name: "You" });
+  await waitFor(() => expect(pending.textContent).toContain("not uploaded"));
+  await act(async () => {
+    fireEvent.click(within(pending).getByRole("button", { name: "Retry" }));
+  });
+  // The row's files are gone for good: the row says so where it is
+  // announced.
+  await waitFor(() =>
+    expect(within(pending).getByRole("alert").textContent).toContain(
+      "Files not kept",
+    ),
+  );
+  expect(pending.textContent.match(/Files not kept\./g)).toHaveLength(1);
+  client.dispose();
+});
+
 it("names the files to pick again on a withdrawn message", async () => {
   const base = config();
   const client = createWaypointClient({
@@ -1168,6 +1216,45 @@ it("says a row whose files never reached the site differently", async () => {
   await waitFor(() =>
     expect(pending.textContent).toContain("report.txt not uploaded. Retry."),
   );
+  client.dispose();
+});
+
+it("offers no retry for a file the site refused", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: port({ fail: true }),
+    transport: {
+      ...base.transport,
+      send: async () => ({ id: "stored" }),
+    },
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() => expect(screen.getByText("report.txt")).toBeTruthy());
+  fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+    target: { value: "Here is the report" },
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  });
+  const pending = await screen.findByRole("article", { name: "You" });
+  await waitFor(() => expect(pending.textContent).toContain("did not accept"));
+  // The line that names the files carries the rule that wraps them.
+  expect(pending.querySelector(".wp-attachment-line")?.textContent).toContain(
+    "report.txt",
+  );
+  // The way out is to withdraw the message and pick another file.
+  expect(pending.textContent).toContain("Withdraw, then pick another file.");
+  await waitFor(() =>
+    expect(within(pending).queryByRole("button", { name: "Retry" })).toBeNull(),
+  );
+  expect(
+    within(pending).getByRole("button", { name: "Withdraw" }),
+  ).toBeTruthy();
   client.dispose();
 });
 

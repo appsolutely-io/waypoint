@@ -1098,10 +1098,14 @@ function PendingProblemText({
   text,
   restored,
   children,
+  id,
+  className,
 }: {
   text: string | undefined;
   restored: boolean;
   children: ReactNode;
+  id?: string;
+  className?: string;
 }) {
   const [current, setCurrent] = useState(() => ({
     text,
@@ -1113,6 +1117,8 @@ function PendingProblemText({
   return text === undefined ? null : (
     <p
       role={current.live ? "alert" : undefined}
+      id={id}
+      className={className}
       key={`problem-${current.revision}`}
     >
       {text}
@@ -3165,11 +3171,12 @@ function ChatBody({
                           isStoreFailure(pending.failure.code)
                             ? pending.failure.code
                             : undefined;
+                        const unstoredFiles = (
+                          pending.attachments ?? []
+                        ).filter((file) => !file.id);
                         const unstored = failureCode
                           ? new Intl.ListFormat(provider.lang).format(
-                              (pending.attachments ?? [])
-                                .filter((file) => !file.id)
-                                .map((file) => file.name),
+                              unstoredFiles.map((file) => file.name),
                             )
                           : "";
                         const filesLine =
@@ -3178,6 +3185,14 @@ function ChatBody({
                                 names: unstored,
                               })
                             : "";
+                        // A row whose files are gone says so in its own live
+                        // element: the files line is then the row's words.
+                        const filesLost =
+                          !!filesLine &&
+                          pending.failure?.code === "attachments-lost";
+                        const restored =
+                          state.pendingRestoration?.ids.includes(pending.id) ??
+                          false;
                         // The row's buttons name the status line, and the
                         // files line when it is there.
                         const describedBy = unstored
@@ -3187,11 +3202,7 @@ function ChatBody({
                         // the files line names the files. Without it the row
                         // keeps its own words, or it would say nothing.
                         const rowText =
-                          rowProblem &&
-                          !(
-                            filesLine &&
-                            pending.failure?.code === "attachments-lost"
-                          )
+                          rowProblem && !filesLost
                             ? (provider.problemText?.(rowProblem, {
                                 answeredElsewhere:
                                   rowProblem === answeredElsewhere.current,
@@ -3250,19 +3261,29 @@ function ChatBody({
                                     : "chat.pendingSending",
                               )}
                             </p>
-                            {filesLine ? (
-                              <p id={`${pendingId}-${pending.id}-files`}>
+                            {filesLine && !filesLost ? (
+                              <p
+                                id={`${pendingId}-${pending.id}-files`}
+                                className="wp-attachment-line"
+                              >
                                 {filesLine}
                               </p>
                             ) : null}
                             <PendingProblemText
                               key={`problem-${state.pendingRestoration?.visit ?? 0}`}
-                              text={rowText?.text}
-                              restored={
-                                state.pendingRestoration?.ids.includes(
-                                  pending.id,
-                                ) ?? false
+                              id={
+                                filesLost
+                                  ? `${pendingId}-${pending.id}-files`
+                                  : undefined
                               }
+                              className={
+                                filesLost ? "wp-attachment-line" : undefined
+                              }
+                              text={
+                                rowText?.text ??
+                                (filesLost ? filesLine : undefined)
+                              }
+                              restored={restored}
                             >
                               {rowText?.action ??
                                 (!provider.problemText &&
@@ -3280,7 +3301,11 @@ function ChatBody({
                                 slots={slots}
                                 data={{ pending: pendingSummary(pending) }}
                               >
-                                {pending.failure.code !== "attachments-lost" ? (
+                                {pending.failure.code !== "attachments-lost" &&
+                                !(
+                                  failureCode === "refused" &&
+                                  unstoredFiles.length
+                                ) ? (
                                   <B
                                     aria-describedby={describedBy}
                                     disabled={

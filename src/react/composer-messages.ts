@@ -10,6 +10,7 @@ export type ComposerMessageKey =
   | "composer.refusedType"
   | "composer.refusedSize"
   | "composer.tooMany"
+  | "composer.needsText"
   | "composer.notAdded";
 export type ComposerCatalogue = Readonly<Record<ComposerMessageKey, string>>;
 export const composerEnglish: ComposerCatalogue = {
@@ -23,6 +24,7 @@ export const composerEnglish: ComposerCatalogue = {
   "composer.refusedType": "The site takes {types}, not {name}.",
   "composer.refusedSize": "The site takes up to {max}, not {name}.",
   "composer.tooMany": "A message can carry at most {max} files.",
+  "composer.needsText": "A message needs text.",
   "composer.notAdded": "Not added: {name}.",
 };
 export const composerSimplifiedChinese: ComposerCatalogue = {
@@ -36,5 +38,6 @@ export const composerSimplifiedChinese: ComposerCatalogue = {
   "composer.refusedType": "本站不接受 {name}；本站接受 {types}。",
   "composer.refusedSize": "本站接受不超过 {max} 的文件，不接受 {name}。",
   "composer.tooMany": "一条消息最多携带 {max} 个文件。",
+  "composer.needsText": "消息需要文字。",
   "composer.notAdded": "未添加：{name}。",
 };

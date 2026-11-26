@@ -44,6 +44,7 @@ export function ComposerAttachments({
   describedBy,
   reasonId,
   reason,
+  needsText,
   reset,
 }: {
   client: WaypointClient;
@@ -61,8 +62,11 @@ export function ComposerAttachments({
   statusId: string;
   /** The id the picker's reason is carried by. */
   reasonId: string;
-  /** Why the composer cannot act, in words. */
+  /** Why the picker cannot be used, in words. */
   reason?: string;
+  /** Whether a message with the picked files needs text of its own. */
+  needsText?: boolean;
+
   /** The ids the pick button's description names: the news and, beside it outside the live region, why it waits. */
   describedBy: string;
   /** Counts the sends: the picker's news belongs to the message before. */
@@ -221,7 +225,7 @@ export function ComposerAttachments({
       {/* Why the composer cannot act sits beside the news, outside the live
           region, and the buttons name it. */}
       <p id={reasonId} className="wp-composer-status">
-        {reason}
+        {reason ?? (needsText ? t("composer.needsText") : null)}
       </p>
       <input
         ref={input}

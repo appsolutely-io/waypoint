@@ -30,13 +30,12 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.sending": "正在发送",
   "chat.pendingSending": "正在发送……",
   "chat.pendingUploading": "正在上传……",
-  "chat.attachmentFailed": "本站未接受 {names}。请撤回后选择其他文件。",
+  "chat.attachmentFailed": "本站未接受 {names}。请撤回后另选文件。",
   "chat.attachmentLost": "这些文件未被保留。请撤回消息后重新选择 {names}。",
   "chat.attachmentNotUploaded": "{names} 未上传，请重试。",
   "chat.attachmentNotUploadedYet": "{names} 尚未上传；请稍等再重试。",
   "chat.formFilesRemoved": "此对话以表单进行，已移除文件。",
   "chat.pendingFailed": "未发送",
-  "chat.needsText": "消息需要文字。",
   "chat.planUnavailable": "无法加载此计划的步骤。",
   "chat.arrival": "收到新回复",
   "chat.arrivalExcerpt": "收到新回复：{excerpt}",
@@ -392,6 +391,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "composer.refusedType": "本站不接受 {name}；本站接受 {types}。",
   "composer.refusedSize": "本站接受不超过 {max} 的文件，不接受 {name}。",
   "composer.tooMany": "一条消息最多携带 {max} 个文件。",
+  "composer.needsText": "消息需要文字。",
   "composer.notAdded": "未添加：{name}。",
 });
 export default messages;

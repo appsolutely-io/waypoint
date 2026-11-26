@@ -40,7 +40,6 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.formFilesRemoved":
     "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",
-  "chat.needsText": "A message needs text.",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",
   "chat.arrivalExcerpt": "New reply: {excerpt}",
@@ -441,6 +440,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "composer.refusedType": "The site takes {types}, not {name}.",
   "composer.refusedSize": "The site takes up to {max}, not {name}.",
   "composer.tooMany": "A message can carry at most {max} files.",
+  "composer.needsText": "A message needs text.",
   "composer.notAdded": "Not added: {name}.",
 });
 export default messages;

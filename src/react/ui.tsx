@@ -220,6 +220,9 @@ function ComposerAttachments(props: {
   reasonId: string;
   /** Why the picker cannot be used, in words. */
   reason?: string;
+  /** Whether a message with the picked files needs text of its own. */
+  needsText?: boolean;
+
   reset?: number;
 }) {
   const load = useChunk(composerAttachmentsChunk);
@@ -1972,9 +1975,7 @@ function ChatBody({
       ? t("chat.sending")
       : pickFull
         ? t("composer.tooMany", { max: String(MAX_ATTACHMENTS) })
-        : needsText
-          ? t("chat.needsText")
-          : undefined;
+        : undefined;
   const send = () => {
     if (!state.draft.trim() || state.sending || reading) return;
     setFormDropped(false);
@@ -3595,6 +3596,8 @@ function ChatBody({
                     describedBy={`${pickerStatusId} ${pickGone ? alertId : pickerReasonId}`}
                     reasonId={pickerReasonId}
                     reason={reason}
+                    needsText={needsText}
+
                     reset={sent}
                   />
                 </>
@@ -3640,9 +3643,11 @@ function ChatBody({
                 aria-describedby={
                   reading
                     ? pickerStatusId
-                    : needsText
-                      ? pickerReasonId
-                      : undefined
+                    : pickGone
+                      ? alertId
+                      : needsText
+                        ? pickerReasonId
+                        : undefined
                 }
                 onPress={() => {
                   send();

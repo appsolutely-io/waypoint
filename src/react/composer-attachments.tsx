@@ -15,17 +15,9 @@ import {
   composerEnglish,
   composerSimplifiedChinese,
 } from "./composer-messages";
-import { context } from "./ui";
+import { context, fileSize } from "./ui";
 
 addMessages(composerEnglish, composerSimplifiedChinese);
-
-/** A file's size, as a person reads it. */
-function size(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const kilobytes = Math.round(bytes / 1024);
-  if (kilobytes < 1024) return `${kilobytes} kB`;
-  return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
-}
 
 /**
  * A file's bytes. The file reader is the one every browser has, and the
@@ -58,7 +50,7 @@ export function ComposerAttachments({
     update: (files: readonly AttachmentUpload[]) => readonly AttachmentUpload[],
   ): void;
   /** Says whether a file is still being read; the send waits for it. */
-  onReading?(busy: boolean): void;
+  onReading?(busy: boolean, conversation?: string): void;
   /** No file can be taken or put down: the conversation is gone or a send is on its way. */
   disabled?: boolean;
   /** The message already carries all the files one message may take. */
@@ -77,8 +69,9 @@ export function ComposerAttachments({
   const picker = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
   // What the picker said last, read out where the picker is. A new
-  // conversation starts the news over, so a pick that was still reading
-  // never leaves its words behind.
+  // conversation starts the news over: a pick that settles after the
+  // switch says what it refused and what it dropped, since the file it
+  // read belongs to no conversation now.
   const [status, setStatus] = useState("");
   useEffect(() => {
     setStatus("");
@@ -88,11 +81,7 @@ export function ComposerAttachments({
   const [revision, setRevision] = useState(0);
   // The host's policy is fixed for this client: the port it was given.
   const policy = client.getSnapshot().attachmentPolicy;
-  // The picker forgets what it said when the composer sends. The count is
-  // read through a ref, so a pick that is still reading sees a send that
-  // happened while it read.
-  const sentCount = useRef(reset);
-  sentCount.current = reset;
+  // The picker forgets what it said when the composer sends.
   useEffect(() => {
     setStatus("");
   }, [reset]);
@@ -133,16 +122,13 @@ export function ComposerAttachments({
     // Files that settle after their message left, or after the
     // conversation changed, belong to neither: they are dropped.
     const conversation = client.getSnapshot().conversationId;
-    if (++picks.current === 1) onReading?.(true);
+    if (++picks.current === 1) onReading?.(true, conversation);
     try {
-      if (chosen.length)
-        say(
-          t("composer.reading", {
-            name: joined.format(chosen.map((each) => each.name)),
-          }),
-        );
       const taken: AttachmentUpload[] = [];
       const refused: string[] = [];
+      // The files the host takes are the ones that are read; the rest are
+      // refused, and the reading line names only what it waits on.
+      const readable: File[] = [];
       for (const file of chosen) {
         const mediaType = file.type || "application/octet-stream";
         if (!acceptsMediaType(policy?.accept, mediaType)) {
@@ -158,11 +144,21 @@ export function ComposerAttachments({
           refused.push(
             t("composer.refusedSize", {
               name: file.name,
-              max: size(policy?.maxBytes ?? 0),
+              max: fileSize(policy?.maxBytes ?? 0),
             }),
           );
           continue;
         }
+        readable.push(file);
+      }
+      if (readable.length)
+        say(
+          t("composer.reading", {
+            name: joined.format(readable.map((each) => each.name)),
+          }),
+        );
+      for (const file of readable) {
+        const mediaType = file.type || "application/octet-stream";
         let data: Uint8Array;
         try {
           data = await read(file);
@@ -188,10 +184,12 @@ export function ComposerAttachments({
           kept = merged.slice(current.length);
           return merged;
         });
-      // A late pick keeps each file's own refusal; only the limit's words
-      // go, because nothing was kept to count against it.
-      if (!late && taken.length > kept.length)
-        refused.push(t("composer.tooMany", { max: String(MAX_ATTACHMENTS) }));
+      // A pick that overflows names the files that did not fit; the limit
+      // itself is said once, beside the composer, where it explains the
+      // list above it.
+      if (!late)
+        for (const file of taken.slice(kept.length))
+          refused.push(t("composer.notAdded", { name: file.name }));
       const words = late
         ? [
             ...refused,
@@ -246,7 +244,7 @@ export function ComposerAttachments({
         {files.map((file) => (
           <li key={keyOf(file)}>
             <span className="wp-attachment-name">{file.name}</span>
-            <span>{size(file.data.byteLength)}</span>
+            <span>{fileSize(file.data.byteLength)}</span>
             <B
               disabled={disabled}
               aria-label={t("composer.removeNamed", { name: file.name })}

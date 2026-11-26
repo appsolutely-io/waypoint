@@ -85,9 +85,11 @@ function port(
   };
 }
 
-async function chatWith(
-  client: WaypointClient,
-): Promise<{ input: HTMLInputElement; status: () => string }> {
+async function chatWith(client: WaypointClient): Promise<{
+  input: HTMLInputElement;
+  status: () => string;
+  said: () => string;
+}> {
   render(<WaypointChat client={client} />);
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "Attach files" })).toBeTruthy(),
@@ -95,6 +97,11 @@ async function chatWith(
   return {
     input: document.querySelector<HTMLInputElement>('input[type="file"]')!,
     status: () => document.querySelector(".wp-composer-status")!.textContent!,
+    // Every word the composer says beside itself, in one text.
+    said: () =>
+      [...document.querySelectorAll(".wp-composer-status")]
+        .map((each) => each.textContent ?? "")
+        .join(" "),
   };
 }
 
@@ -684,19 +691,21 @@ it("carries the attachments in the bubble's part data", async () => {
   client.dispose();
 });
 
-it("says the too-many refusal once for a pick that overflows", async () => {
+it("names the files that did not fit and says the limit once", async () => {
   const client = createWaypointClient({
     ...config(),
     attachments: port(),
   });
   await client.ready;
-  const { input, status } = await chatWith(client);
+  const { input, status, said } = await chatWith(client);
   const many = Array.from({ length: 21 }, (_, at) =>
     file(`report-${at}.txt`, "x"),
   );
   fireEvent.change(input, { target: { files: many } });
-  await waitFor(() => expect(status()).toContain("at most"));
-  expect(status().match(/at most/g)).toHaveLength(1);
+  await waitFor(() => expect(status()).toContain("Not added: report-20.txt."));
+  // The limit is said once, beside the composer, where it explains the
+  // list above it.
+  expect(said().match(/at most/g)).toHaveLength(1);
   expect(document.querySelectorAll(".wp-composer-files > li")).toHaveLength(20);
   client.dispose();
 });
@@ -744,6 +753,26 @@ it("names every file the reading line waits on", async () => {
   client.dispose();
 });
 
+it("names only the files the reading line reads", async () => {
+  const client = createWaypointClient({
+    ...config(),
+    attachments: port({ accept: ["image/png"] }),
+  });
+  await client.ready;
+  const { input, status } = await chatWith(client);
+  const end = holdReads();
+  fireEvent.change(input, {
+    target: {
+      files: [file("shot.png", "x", "image/png"), file("report.txt", "hello")],
+    },
+  });
+  // The file the host does not take is refused before it is read, so the
+  // reading line does not wait on it.
+  await waitFor(() => expect(status()).toBe("Reading shot.png…"));
+  end();
+  client.dispose();
+});
+
 it("says to pick again a file that could not be read", async () => {
   const client = createWaypointClient({
     ...config(),
@@ -774,7 +803,7 @@ it("keeps twenty files across two picks that overlap", async () => {
     attachments: port(),
   });
   await client.ready;
-  const { input, status } = await chatWith(client);
+  const { input, status, said } = await chatWith(client);
   const end = holdReads();
   fireEvent.change(input, {
     target: {
@@ -798,8 +827,8 @@ it("keeps twenty files across two picks that overlap", async () => {
       20,
     ),
   );
-  await waitFor(() => expect(status()).toContain("at most"));
-  expect(status().match(/at most/g)).toHaveLength(1);
+  await waitFor(() => expect(status()).toContain("Not added:"));
+  expect(said().match(/at most/g)).toHaveLength(1);
   client.dispose();
 });
 

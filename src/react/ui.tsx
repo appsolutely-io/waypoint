@@ -1224,6 +1224,17 @@ function Markdown(props: {
 }
 export { problemAction };
 /**
+ * A file's size, as a person reads it. The composer's picker shows it
+ * beside each file, and takes the formatter from here so its lazy chunk
+ * stays small.
+ */
+export function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`;
+  return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
+}
+
+/**
  * The words a row's files line follows its failure code with, one message
  * key per outcome: what the host refused, what it asked to wait for, what
  * never reached it, and what is gone for good. The renderer owns these

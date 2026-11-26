@@ -74,6 +74,7 @@ function port(
     accept?: readonly string[];
     maxBytes?: number;
     fail?: boolean;
+    refuse?: boolean;
     sent?: Reply[];
   } = {},
 ): AttachmentPort {
@@ -81,6 +82,8 @@ function port(
     accept: options.accept,
     maxBytes: options.maxBytes,
     upload: async (data, context) => {
+      if (options.refuse)
+        throw { code: "refused", id: context.clientMessageId };
       if (options.fail) throw new Error("no storage");
       return { id: `file-${context.fileName}` };
     },
@@ -247,7 +250,7 @@ it("shows a failed upload on the message, not below the composer", async () => {
   const pending = await screen.findByRole("article", { name: "You" });
   await waitFor(() => expect(pending.textContent).toContain("Not sent"));
   expect(pending.textContent).toContain("report.txt");
-  expect(pending.textContent).toContain("did not accept");
+  expect(pending.textContent).toContain("not uploaded");
   // The refusal belongs to the message, so it is not said below the
   // composer as well.
   const alert = document.querySelector('[role="alert"]')!;
@@ -1245,7 +1248,7 @@ it("offers no retry for a file the site refused", async () => {
   const base = config();
   const client = createWaypointClient({
     ...base,
-    attachments: port({ fail: true }),
+    attachments: port({ refuse: true }),
     transport: {
       ...base.transport,
       send: async () => ({ id: "stored" }),
@@ -1277,6 +1280,36 @@ it("offers no retry for a file the site refused", async () => {
   expect(
     within(pending).getByRole("button", { name: "Withdraw" }),
   ).toBeTruthy();
+  client.dispose();
+});
+
+it("offers a retry when the store could not be reached", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: port({ fail: true }),
+    transport: {
+      ...base.transport,
+      send: async () => ({ id: "stored" }),
+    },
+  });
+  await client.ready;
+  const { input } = await chatWith(client);
+  fireEvent.change(input, {
+    target: { files: [file("report.txt", "hello")] },
+  });
+  await waitFor(() => expect(screen.getByText("report.txt")).toBeTruthy());
+  fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+    target: { value: "Here is the report" },
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  });
+  const pending = await screen.findByRole("article", { name: "You" });
+  await waitFor(() => expect(pending.textContent).toContain("not uploaded"));
+  // A store that could not be reached may be reachable again, so the row
+  // can be tried once more.
+  expect(within(pending).getByRole("button", { name: "Retry" })).toBeTruthy();
   client.dispose();
 });
 

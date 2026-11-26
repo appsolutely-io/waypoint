@@ -187,13 +187,20 @@ export async function upload(
         id = typeof result.id === "string" ? result.id : "";
       } catch (error) {
         // A host's own problem travels as it is when it is one a host may
-        // say about its store; anything else is the row's refusal.
+        // say about its store; a problem the host did not answer, or one
+        // only the client may say, is the row's refusal. An error with no
+        // code at all is the store being unreachable, and the row can be
+        // tried again.
         const code = (error as { code?: unknown } | null)?.code;
         throw typeof code === "string" &&
           isStoreFailure(code) &&
           !isClientOnlyStoreFailure(code)
           ? error
-          : { ...(error as object), code: "refused", id: clientMessageId };
+          : {
+              ...(error as object),
+              code: code ? "refused" : "unavailable",
+              id: clientMessageId,
+            };
       }
       if (!id) throw { code: "refused", id: clientMessageId };
       ids[index] = id;

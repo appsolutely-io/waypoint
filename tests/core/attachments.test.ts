@@ -129,7 +129,7 @@ it("retries under the same id with the same references", async () => {
   client.dispose();
 });
 
-it("fails the message itself when the host refuses the file", async () => {
+it("fails the message itself when the upload fails", async () => {
   const { client, sent } = harness({
     port: {
       upload: async () => {
@@ -143,7 +143,7 @@ it("fails the message itself when the host refuses the file", async () => {
   await flush();
   expect(sent).toHaveLength(0);
   const pending = client.getSnapshot().pending[0];
-  expect(pending?.failure?.code).toBe("refused");
+  expect(pending?.failure?.code).toBe("unavailable");
   expect(pending?.failure?.id).toBe(pending?.id);
   expect(client.getSnapshot().problem?.id).toBe(pending?.id);
   client.dispose();
@@ -259,7 +259,7 @@ it("keeps each stored file on the row, so a retry sends only what is missing", a
     "file-first.txt",
     null,
   ]);
-  expect(pending?.failure?.code).toBe("refused");
+  expect(pending?.failure?.code).toBe("unavailable");
   await client.retry(pending!.id);
   // The retried row is queued; the upload and the request settle after.
   await flush();

@@ -13,6 +13,7 @@ import {
 } from "@testing-library/react";
 import { WaypointChat } from "../../src/react/index";
 import {
+  ConversationReadError,
   createWaypointClient,
   type AttachmentPort,
   type StoragePort,
@@ -919,6 +920,49 @@ it("clears the composer once the row is queued, while the upload waits", async (
   client.dispose();
 });
 
+it("says the conversation is unavailable once", async () => {
+  const base = config();
+  const client = createWaypointClient({
+    ...base,
+    attachments: port(),
+    transport: {
+      ...base.transport,
+      read: async (id) => {
+        if (id === "conversation-b") throw new ConversationReadError(id, 404);
+        return {
+          protocol: "1.0",
+          id,
+          title: "Chat",
+          messages: [],
+        };
+      },
+    },
+  });
+  await client.ready;
+  render(<WaypointChat client={client} />);
+  await act(async () => {
+    await client.switchConversation("conversation-b");
+  });
+  await waitFor(() =>
+    expect(document.body.textContent).toContain(
+      "This conversation is unavailable",
+    ),
+  );
+  // The sentence is said once, by the alert that carries the reload.
+  expect(
+    document.body.textContent?.match(/This conversation is unavailable/g),
+  ).toHaveLength(1);
+  // The picker names it, so its own reason does not say it again.
+  const pick = await screen.findByRole("button", { name: "Attach files" });
+  expect(
+    (pick.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((each) => document.getElementById(each)?.textContent ?? "")
+      .join(" "),
+  ).toContain("This conversation is unavailable");
+  client.dispose();
+});
+
 it("offers no retry for a row whose files are no longer held", async () => {
   const base = config();
   const client = createWaypointClient({
@@ -1044,7 +1088,7 @@ it("names the files to pick again on a withdrawn message", async () => {
   client.dispose();
 });
 
-it("drops and says a file whose read settled after the conversation took a form", async () => {
+it("drops a file whose read settled after the conversation changed", async () => {
   let formFill = false;
   const base = config();
   const client = createWaypointClient({
@@ -1080,10 +1124,11 @@ it("drops and says a file whose read settled after the conversation took a form"
     await client.switchConversation("conversation-b");
   });
   end();
-  // The picker's own region is gone with the form; the notice that stays
-  // says the files were dropped, and none was added.
+  // The picker's own region is gone with the form; the files were
+  // dropped, and the conversation they were picked in is not the one that
+  // says so.
   expect(screen.queryByText("report.txt")).toBeNull();
-  await waitFor(() => expect(screen.getByText(/takes a form/)).toBeTruthy());
+  expect(screen.queryByText(/takes a form/)).toBeNull();
   client.dispose();
 });
 

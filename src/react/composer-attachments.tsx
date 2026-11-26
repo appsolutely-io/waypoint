@@ -42,6 +42,8 @@ export function ComposerAttachments({
   pickDisabled,
   statusId,
   describedBy,
+  reasonId,
+  reason,
   reset,
 }: {
   client: WaypointClient;
@@ -57,6 +59,10 @@ export function ComposerAttachments({
   pickDisabled?: boolean;
   /** The id the composer gives the picker's status region. */
   statusId: string;
+  /** The id the picker's reason is carried by. */
+  reasonId: string;
+  /** Why the composer cannot act, in words. */
+  reason?: string;
   /** The ids the pick button's description names: the news and, beside it outside the live region, why it waits. */
   describedBy: string;
   /** Counts the sends: the picker's news belongs to the message before. */
@@ -211,6 +217,11 @@ export function ComposerAttachments({
     <>
       <p id={statusId} role="status" className="wp-composer-status">
         {status ? <span key={revision}>{status}</span> : null}
+      </p>
+      {/* Why the composer cannot act sits beside the news, outside the live
+          region, and the buttons name it. */}
+      <p id={reasonId} className="wp-composer-status">
+        {reason}
       </p>
       <input
         ref={input}

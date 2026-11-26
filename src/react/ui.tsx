@@ -209,23 +209,23 @@ function ComposerAttachments(props: {
   onFiles(
     update: (files: readonly AttachmentUpload[]) => readonly AttachmentUpload[],
   ): void;
-  onReading?(busy: boolean): void;
+  onReading?(busy: boolean, conversation?: string): void;
   disabled?: boolean;
   pickDisabled?: boolean;
-  describedBy?: string;
-  statusId?: string;
+  /** The ids the pick button's description names. */
+  describedBy: string;
+  /** The id the picker's status region carries. */
+  statusId: string;
+  /** The id the picker's reason is carried by. */
+  reasonId: string;
+  /** Why the picker cannot be used, in words. */
+  reason?: string;
   reset?: number;
 }) {
   const load = useChunk(composerAttachmentsChunk);
   useEffect(() => composerAttachmentsChunk.request(), []);
-  const fallbackId = useDomId("picker-status");
-  return load.status === "ready" ? (
-    <load.module.ComposerAttachments
-      {...props}
-      statusId={props.statusId ?? fallbackId}
-      describedBy={props.describedBy ?? props.statusId ?? fallbackId}
-    />
-  ) : null;
+  if (load.status !== "ready") return null;
+  return <load.module.ComposerAttachments {...props} />;
 }
 // The saved requests' panel and parameter drawer, loaded with the tabs.
 const flowsChunk = lazyChunk(() => import("./flows-panel"));
@@ -1920,6 +1920,9 @@ function ChatBody({
   // said, not silently lost.
   const [formDropped, setFormDropped] = useState(false);
   const wasForm = useRef(false);
+  // The conversation a read started in: the files it reads belong to it,
+  // and a notice about them belongs to it too.
+  const [readIn, setReadIn] = useState<string | undefined>(undefined);
   // The files belong to the conversation they were picked in.
   useEffect(() => {
     filesRef.current = [];
@@ -1931,7 +1934,13 @@ function ChatBody({
   // the moment it becomes one, and says so.
   useEffect(() => {
     const form = state.conversation?.mode === "form-fill";
-    if (form && !wasForm.current && (filesRef.current.length || reading)) {
+    // A read of another conversation says nothing about this one.
+    const mine = readIn === state.conversationId;
+    if (
+      form &&
+      !wasForm.current &&
+      (filesRef.current.length || (reading && mine))
+    ) {
       filesRef.current = [];
       setFiles([]);
       setFormDropped(true);
@@ -1940,10 +1949,26 @@ function ChatBody({
     // words above files it now accepts.
     if (!form && wasForm.current) setFormDropped(false);
     wasForm.current = form;
-  }, [state.conversation?.mode, reading]);
+  }, [state.conversation?.mode, reading, readIn, state.conversationId]);
   // The message goes with the files the user picked. They leave with the
   // message that queued them; a message that never queued keeps them with
   // the draft it kept.
+  // Why the composer cannot act, read by the button, by the words beside
+  // it and by the description it carries.
+  const pickFull = files.length >= MAX_ATTACHMENTS;
+  const pickBusy = state.sending;
+  const pickGone = state.conversationUnavailable;
+  // A message with files needs text of its own.
+  const needsText = files.length > 0 && !state.draft.trim();
+  const reason = pickGone
+    ? undefined
+    : pickBusy
+      ? t("chat.sending")
+      : pickFull
+        ? t("composer.tooMany", { max: String(MAX_ATTACHMENTS) })
+        : needsText
+          ? t("chat.needsText")
+          : undefined;
   const send = () => {
     if (!state.draft.trim() || state.sending || reading) return;
     setFormDropped(false);
@@ -2005,6 +2030,7 @@ function ChatBody({
   const extraPanels = !!(slots?.extraPanels || provider.parts?.extraPanels);
   const hintId = useDomId("hint");
   const pendingId = useDomId("pending");
+  const alertId = useDomId("alert");
   const pickerStatusId = useDomId("picker-status");
   const pickerReasonId = useDomId("picker-reason");
   const enabled = (capability: Capability) =>
@@ -3534,32 +3560,18 @@ function ChatBody({
                     client={client}
                     files={files}
                     onFiles={changeFiles}
-                    onReading={setReading}
-                    disabled={state.conversationUnavailable || state.sending}
-                    pickDisabled={files.length >= MAX_ATTACHMENTS}
+                    onReading={(busy, conversation) => {
+                      setReading(busy);
+                      setReadIn(busy ? conversation : undefined);
+                    }}
+                    disabled={pickGone || pickBusy}
+                    pickDisabled={pickFull}
                     statusId={pickerStatusId}
-                    describedBy={`${pickerStatusId} ${pickerReasonId}`}
+                    describedBy={`${pickerStatusId} ${pickGone ? alertId : pickerReasonId}`}
+                    reasonId={pickerReasonId}
+                    reason={reason}
                     reset={sent}
                   />
-                  {/* Why a pick waits sits beside the picker's news,
-                      outside its live region, and the pick button names
-                      both; the limit's words explain the list above them. */}
-                  <p id={pickerReasonId} className="wp-composer-status">
-                    {state.conversationUnavailable ||
-                    state.sending ||
-                    files.length >= MAX_ATTACHMENTS
-                      ? t(
-                          state.conversationUnavailable
-                            ? "chat.conversationUnavailable"
-                            : state.sending
-                              ? "chat.sending"
-                              : "composer.tooMany",
-                          state.conversationUnavailable || state.sending
-                            ? undefined
-                            : { max: String(MAX_ATTACHMENTS) },
-                        )
-                      : undefined}
-                  </p>
                 </>
               ) : null}
               <p role="status" className="wp-composer-status">
@@ -3600,7 +3612,13 @@ function ChatBody({
                   state.sending ||
                   reading
                 }
-                aria-describedby={reading ? pickerStatusId : undefined}
+                aria-describedby={
+                  reading
+                    ? pickerStatusId
+                    : needsText
+                      ? pickerReasonId
+                      : undefined
+                }
                 onPress={() => {
                   send();
                 }}
@@ -3645,7 +3663,11 @@ function ChatBody({
             >
               {announcement}
             </div>
-            <div role="alert" data-announcement={state.announcement}>
+            <div
+              id={alertId}
+              role="alert"
+              data-announcement={state.announcement}
+            >
               {state.conversationUnavailable && (
                 <span>
                   {t("chat.conversationUnavailable")}

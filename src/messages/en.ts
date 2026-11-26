@@ -39,6 +39,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.formFilesRemoved":
     "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",
+  "chat.needsText": "A message needs text.",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",
   "chat.arrivalExcerpt": "New reply: {excerpt}",

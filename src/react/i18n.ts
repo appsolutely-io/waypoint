@@ -47,6 +47,7 @@ export const english = {
   "chat.formFilesRemoved":
     "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",
+  "chat.needsText": "A message needs text.",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",
   "chat.arrivalExcerpt": "New reply: {excerpt}",
@@ -209,6 +210,7 @@ export const simplifiedChinese: Record<keyof typeof english, string> = {
   "chat.attachmentNotUploadedYet": "{names} 尚未上传；请稍等再重试。",
   "chat.formFilesRemoved": "此对话以表单进行，已移除文件。",
   "chat.pendingFailed": "未发送",
+  "chat.needsText": "消息需要文字。",
   "chat.planUnavailable": "无法加载此计划的步骤。",
   "chat.arrival": "收到新回复",
   "chat.arrivalExcerpt": "收到新回复：{excerpt}",

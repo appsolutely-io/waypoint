@@ -17,7 +17,7 @@ export type Catalogue = Readonly<Partial<Record<MessageKey, string>>>;
 export type ComposerCatalogue = Readonly<Record<ComposerMessageKey, string>>;
 
 // @public (undocumented)
-export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany" | "composer.notAdded";
+export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany" | "composer.needsText" | "composer.notAdded";
 
 // @public (undocumented)
 export type ConfirmationCatalogue = Readonly<Record<ConfirmationMessageKey, string>>;
@@ -59,7 +59,7 @@ export const english: {
     readonly "chat.sending": "Sending";
     readonly "chat.pendingSending": "Sending…";
     readonly "chat.pendingUploading": "Uploading…";
-    readonly "chat.attachmentFailed": "The site did not accept {names}.";
+    readonly "chat.attachmentFailed": "The site did not accept {names}. Withdraw, then pick another file.";
     readonly "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.";
     readonly "chat.attachmentNotUploaded": "{names} not uploaded. Retry.";
     readonly "chat.attachmentNotUploadedYet": "{names} not uploaded yet; wait, then retry.";

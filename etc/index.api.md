@@ -2368,7 +2368,6 @@ export interface WaypointClient {
     report(problem: Problem): void;
     // (undocumented)
     resumePlan(): Promise<void>;
-    // (undocumented)
     retry(id: string): Promise<void>;
     // (undocumented)
     retryIntent(id?: string): Promise<void>;
@@ -2382,7 +2381,6 @@ export interface WaypointClient {
     selectFlowTab(tab: FlowTab): void;
     // (undocumented)
     selectVersion(messageId: string, index: number): Promise<void>;
-    // (undocumented)
     send(attachments?: readonly AttachmentUpload[]): Promise<boolean>;
     sendFeedback(messageId: string, rating: FeedbackInput["rating"]): Promise<boolean>;
     // (undocumented)

@@ -552,7 +552,7 @@ export interface ComposerContribution {
 }
 
 // @public (undocumented)
-export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany" | "composer.notAdded";
+export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany" | "composer.needsText" | "composer.notAdded";
 
 // @public (undocumented)
 export type ConfirmationCatalogue = Readonly<Record<ConfirmationMessageKey, string>>;
@@ -881,7 +881,7 @@ export const english: {
     readonly "chat.sending": "Sending";
     readonly "chat.pendingSending": "Sending…";
     readonly "chat.pendingUploading": "Uploading…";
-    readonly "chat.attachmentFailed": "The site did not accept {names}.";
+    readonly "chat.attachmentFailed": "The site did not accept {names}. Withdraw, then pick another file.";
     readonly "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.";
     readonly "chat.attachmentNotUploaded": "{names} not uploaded. Retry.";
     readonly "chat.attachmentNotUploadedYet": "{names} not uploaded yet; wait, then retry.";
@@ -3272,7 +3272,6 @@ export interface WaypointClient {
     report(problem: Problem): void;
     // (undocumented)
     resumePlan(): Promise<void>;
-    // (undocumented)
     retry(id: string): Promise<void>;
     // (undocumented)
     retryIntent(id?: string): Promise<void>;
@@ -3286,7 +3285,6 @@ export interface WaypointClient {
     selectFlowTab(tab: FlowTab): void;
     // (undocumented)
     selectVersion(messageId: string, index: number): Promise<void>;
-    // (undocumented)
     send(attachments?: readonly AttachmentUpload[]): Promise<boolean>;
     sendFeedback(messageId: string, rating: FeedbackInput["rating"]): Promise<boolean>;
     // (undocumented)

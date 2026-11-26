@@ -8,7 +8,7 @@ import {
   useWaypointSnapshot,
   visibleProblem,
 } from "../../src/hooks";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 afterEach(cleanup);
 
 it("a headless failed row falls back to its own failure when the matching problem clears", async () => {
@@ -28,6 +28,9 @@ it("a headless failed row falls back to its own failure when the matching proble
   await client.ready;
   await client.setDraft("Refused");
   await client.send();
+  // The refusal settles after the send resolves; the hook reads the
+  // settled row.
+  await flush();
   const row = client.getSnapshot().pending[0]!;
   const { result } = renderHook(() => {
     const snapshot = useWaypointSnapshot(client);
@@ -85,6 +88,9 @@ it.each([false, true])(
     await client.ready;
     await client.setDraft("Retry");
     await client.send();
+    // The refusal settles after the send resolves; an override only names
+    // a failed row.
+    await flush();
     const row = client.getSnapshot().pending[0]!;
     receive({
       type: "frame",

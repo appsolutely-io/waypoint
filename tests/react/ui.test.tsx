@@ -21,7 +21,7 @@ import {
   type TransportEvent,
 } from "../../src/core/client";
 import { createFormSession } from "../../src/core/form-session";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 import samples from "../protocol/samples.json";
 import type { ImmediateDraft } from "../../src/protocol/generated";
 afterEach(cleanup);
@@ -121,6 +121,9 @@ it("keeps recovery visible and controls disabled after another problem replaces 
   await client.ready;
   await client.setDraft("Failed row");
   await client.send();
+  // The send resolves once the row is queued; the row settles when its
+  // delivery does, and the buttons read that settled state.
+  await flush();
   await client.setDraft("Keep draft");
   for (let sequence = 1; sequence <= 128; sequence++)
     listener({
@@ -287,6 +290,9 @@ it("marks a withdrawal as pending until its commit lands, then offers the text t
   await client.ready;
   await client.setDraft("Queued text");
   await client.send();
+  // The send resolves once the row is queued; the row settles when its
+  // delivery does, and a settled refusal can be withdrawn.
+  await flush();
   render(<WaypointChat client={client} />);
   const withdraw = screen.getByRole("button", {
     name: "Withdraw",

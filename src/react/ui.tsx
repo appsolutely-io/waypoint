@@ -55,7 +55,6 @@ import {
   attachmentWellFormed,
   isStoreFailure,
   MAX_ATTACHMENTS,
-  STORE_FAILURE_TEXT,
 } from "../core/attachment-shape";
 import {
   ChatFocusContext,
@@ -1224,6 +1223,18 @@ function Markdown(props: {
   );
 }
 export { problemAction };
+/**
+ * The words a row's files line follows its failure code with, one message
+ * key per outcome: what the host refused, what it asked to wait for, what
+ * never reached it, and what is gone for good. The renderer owns these
+ * words; the core owns the codes they follow.
+ */
+const STORE_FAILURE_TEXT = {
+  refused: "chat.attachmentFailed",
+  "rate-limited": "chat.attachmentNotUploadedYet",
+  unavailable: "chat.attachmentNotUploaded",
+  "attachments-lost": "chat.attachmentLost",
+} as const;
 export function defaultProblemText(
   problem: Problem,
   format: FormatMessage,

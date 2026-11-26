@@ -78,18 +78,6 @@ export const isClientOnlyStoreFailure = (code: string): boolean =>
   isStoreFailure(code) &&
   !(HOST_STORE_FAILURES as readonly string[]).includes(code);
 /**
- * The words a row's files line follows its failure code with, one message
- * key per outcome: what the host refused, what it asked to wait for, what
- * never reached it, and what is gone for good.
- */
-export const STORE_FAILURE_TEXT = {
-  refused: "chat.attachmentFailed",
-  "rate-limited": "chat.attachmentNotUploadedYet",
-  unavailable: "chat.attachmentNotUploaded",
-  "attachments-lost": "chat.attachmentLost",
-} as const;
-
-/**
  * Whether the host takes a file of this media type. A type the host names
  * may end in "/*", which takes every type under it. Media types compare
  * without regard to case, as RFC 2045 reads them.

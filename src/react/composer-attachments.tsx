@@ -132,7 +132,8 @@ export function ComposerAttachments({
     // Files that settle after their message left, or after the
     // conversation changed, belong to neither: they are dropped.
     const conversation = client.getSnapshot().conversationId;
-    if (++picks.current === 1) onReading?.(true, conversation);
+    ++picks.current;
+    onReading?.(true, conversation);
     try {
       const taken: AttachmentUpload[] = [];
       const refused: string[] = [];

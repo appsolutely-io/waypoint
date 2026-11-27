@@ -2,6 +2,7 @@
 // browser's clamp), where layout, scroll events and ResizeObserver timing
 // are the browser's own.
 import { test, expect, type Page } from "@playwright/test";
+import { boxesOf, gapBelow } from "../boxes";
 
 // Headless Chromium hides scrollbars by default; the drag needs one.
 test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
@@ -222,9 +223,8 @@ for (const skin of ["neutral", "antd"])
       const list = page.locator("nav[data-outline] ol");
       await expect(list.locator("a")).toHaveCount(30);
       // A gap between the toggle and the list.
-      const t = (await toggle.boundingBox())!;
-      const l = (await list.boundingBox())!;
-      expect(l.y - (t.y + t.height)).toBeGreaterThanOrEqual(4);
+      const [toggleBox, listBox] = await boxesOf(page, [toggle, list]);
+      expect(gapBelow(toggleBox, listBox)).toBeGreaterThanOrEqual(4);
       // A visible edge on the scroller.
       expect(
         await list.evaluate((e) =>
@@ -534,9 +534,11 @@ for (const skin of ["neutral", "antd"]) {
     const toggle = page.getByRole("button", { name: "Message outline" });
     if (skin === "antd") await expect(toggle).toHaveClass(/ant-btn/);
     const gap = async () => {
-      const t = (await toggle.boundingBox())!;
-      const b = (await box(page).boundingBox())!;
-      return b.y - (t.y + t.height);
+      const [toggleBox, transcriptBox] = await boxesOf(page, [
+        toggle,
+        box(page),
+      ]);
+      return gapBelow(toggleBox, transcriptBox);
     };
     expect(await gap()).toBeGreaterThanOrEqual(8);
     await toggle.click();

@@ -3,6 +3,7 @@
 // reject.
 import { test, expect, type Page } from "@playwright/test";
 import { tabAround } from "./tab-around";
+import { boxesOf, gapBelow } from "../boxes";
 
 const open = async (page: Page, query: string) => {
   await page.goto(`/tests/browser/layout.html?${query}`, {
@@ -432,15 +433,13 @@ for (const skin of ["neutral", "antd"])
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await open(page, `skin=${skin}`);
-    const toggle = (await page
-      .getByRole("button", { name: "Conversations" })
-      .boundingBox())!;
-    const title = (await page
-      .locator('[data-part="topBar"] h2')
-      .boundingBox())!;
-    expect(title.y).toBeLessThan(toggle.y + toggle.height);
-    expect(toggle.y).toBeLessThan(title.y + title.height);
-    expect(title.x).toBeGreaterThanOrEqual(toggle.x + toggle.width);
+    const [toggleBox, titleBox] = await boxesOf(page, [
+      page.getByRole("button", { name: "Conversations" }),
+      page.locator('[data-part="topBar"] h2'),
+    ]);
+    expect(titleBox.y).toBeLessThan(toggleBox.y + toggleBox.height);
+    expect(toggleBox.y).toBeLessThan(titleBox.y + titleBox.height);
+    expect(titleBox.x).toBeGreaterThanOrEqual(toggleBox.x + toggleBox.width);
   });
 for (const skin of ["neutral", "antd"])
   test(`R4 table columns stay apart: ${skin}`, async ({ page }) => {
@@ -526,11 +525,11 @@ for (const skin of ["neutral", "antd"])
     }) => {
       await page.setViewportSize({ width, height });
       await open(page, `skin=${skin}`);
-      const bar = (await page.locator('[data-part="topBar"]').boundingBox())!;
-      const toggle = (await page
-        .getByRole("button", { name: "Message outline" })
-        .boundingBox())!;
-      expect(toggle.y - (bar.y + bar.height)).toBeGreaterThanOrEqual(4);
+      const [bar, toggle] = await boxesOf(page, [
+        page.locator('[data-part="topBar"]'),
+        page.getByRole("button", { name: "Message outline" }),
+      ]);
+      expect(gapBelow(bar, toggle)).toBeGreaterThanOrEqual(4);
     });
 for (const skin of ["neutral", "antd"])
   test(`R4 a Retry that wraps lines up with its sentence: ${skin}`, async ({
@@ -576,10 +575,10 @@ for (const skin of ["neutral", "antd"])
     await expect(dialog).toBeFocused();
     // Past antd's opening slide, which starts off the edge.
     await expect
-      .poll(
-        async () =>
-          (await dialog.boundingBox())!.x + (await dialog.boundingBox())!.width,
-      )
+      .poll(async () => {
+        const [dialogBox] = await boxesOf(page, [dialog]);
+        return dialogBox.x + dialogBox.width;
+      })
       .toBeLessThanOrEqual(390);
     const ring = await dialog.evaluate((element) => {
       const style = getComputedStyle(element);

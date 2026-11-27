@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { pageErrors } from "./page-errors";
+import { boxesOf, gapBelow } from "../boxes";
 import { problemStates } from "../../playground/state";
 
 // Every state a reply can be in is one URL away, so it can be looked at and
@@ -231,10 +232,10 @@ test.describe("on a phone", () => {
     const message = page.locator('article[data-role="pending"]');
     const refresh = message.getByRole("alert").locator("button");
     await expect(refresh).toBeVisible();
-    const bubble = (await message
-      .locator('[data-part="bubble"]')
-      .boundingBox())!;
-    const box = (await refresh.boundingBox())!;
+    const [bubble, box] = await boxesOf(page, [
+      message.locator('[data-part="bubble"]'),
+      refresh,
+    ]);
     expect(
       Math.abs(box.x + box.width - (bubble.x + bubble.width)),
     ).toBeLessThan(1);
@@ -248,10 +249,10 @@ test.describe("on a phone", () => {
       .locator('[data-part="failedSendControls"] button')
       .last();
     await expect(last).toBeVisible();
-    const bubble = (await message
-      .locator('[data-part="bubble"]')
-      .boundingBox())!;
-    const box = (await last.boundingBox())!;
+    const [bubble, box] = await boxesOf(page, [
+      message.locator('[data-part="bubble"]'),
+      last,
+    ]);
     expect(
       Math.abs(box.x + box.width - (bubble.x + bubble.width)),
     ).toBeLessThan(1);
@@ -267,10 +268,10 @@ test.describe("on a phone", () => {
         .locator('[data-part="messageActions"] button')
         .last();
       await expect(last).toBeVisible();
-      const bubble = (await message
-        .locator('[data-part="bubble"]')
-        .boundingBox())!;
-      const box = (await last.boundingBox())!;
+      const [bubble, box] = await boxesOf(page, [
+        message.locator('[data-part="bubble"]'),
+        last,
+      ]);
       expect(
         Math.abs(box.x + box.width - (bubble.x + bubble.width)),
       ).toBeLessThan(1);
@@ -290,9 +291,8 @@ test.describe("on a phone", () => {
       name: "Message",
       exact: true,
     });
-    expect((await error.boundingBox())!.y).toBeLessThan(
-      (await composer.boundingBox())!.y,
-    );
+    const [errorBox, composerBox] = await boxesOf(page, [error, composer]);
+    expect(errorBox.y).toBeLessThan(composerBox.y);
     await expect(page.locator("[data-problem-details]")).toHaveCount(1);
     await expect(page.locator("[data-announcement]")).toHaveText("");
     // Opening the details moves nothing: the words "Details" stay at the
@@ -318,24 +318,29 @@ test.describe("on a phone", () => {
     await page.goto("/?state=sources");
     const cite = reply(page).locator("a[data-wp-cite]").first();
     await expect(cite).toBeVisible();
-    const box = (await cite.boundingBox())!;
-    // The link itself stays inline text, as tall as the line.
-    expect(box.height).toBeLessThan(30);
-    const hits = await cite.evaluate((link) => {
+    // The link's height and the hits on it are read together: the page's
+    // layout can change between two round-trips, and the target then sits
+    // where it was read, not where it is.
+    const measured = await cite.evaluate((link) => {
       const rect = link.getBoundingClientRect();
       const x = rect.left + rect.width / 2;
       const y = rect.top + rect.height / 2;
-      return [
-        [x - 21, y],
-        [x + 21, y],
-        [x, y - 21],
-        [x, y + 21],
-      ].map(([px, py]) => {
-        const hit = document.elementFromPoint(px!, py!);
-        return !!hit && (hit === link || link.contains(hit));
-      });
+      return {
+        height: rect.height,
+        hits: [
+          [x - 21, y],
+          [x + 21, y],
+          [x, y - 21],
+          [x, y + 21],
+        ].map(([px, py]) => {
+          const hit = document.elementFromPoint(px!, py!);
+          return !!hit && (hit === link || link.contains(hit));
+        }),
+      };
     });
-    expect(hits).toEqual([true, true, true, true]);
+    // The link itself stays inline text, as tall as the line.
+    expect(measured.height).toBeLessThan(30);
+    expect(measured.hits).toEqual([true, true, true, true]);
   });
   for (const skin of ["neutral", "antd"])
     test(`every control of a reply's form is 44 by 44: ${skin}`, async ({
@@ -375,10 +380,8 @@ test("the reply row's buttons keep a gap from what follows", async ({
   const retry = page.getByRole("button", { name: "Retry", exact: true });
   await expect(retry).toBeVisible();
   const below = page.locator('[data-part="flowTabs"] [role="tab"]').first();
-  const gap =
-    (await below.boundingBox())!.y -
-    ((await retry.boundingBox())!.y + (await retry.boundingBox())!.height);
-  expect(gap).toBeGreaterThanOrEqual(4);
+  const [retryBox, belowBox] = await boxesOf(page, [retry, below]);
+  expect(gapBelow(retryBox, belowBox)).toBeGreaterThanOrEqual(4);
 });
 
 // The chat's spacing token (`space`, 0.75rem) between what ends a message
@@ -398,10 +401,47 @@ for (const skin of ["neutral", "antd"])
       const end = page.locator(last).last();
       await expect(end).toBeVisible();
       const tab = page.locator('[data-part="flowTabs"] [role="tab"]').first();
-      const above = (await end.boundingBox())!;
-      const gap = (await tab.boundingBox())!.y - (above.y + above.height);
+      const [endBox, tabBox] = await boxesOf(page, [end, tab]);
+      const gap = gapBelow(endBox, tabBox);
       expect(gap).toBeGreaterThanOrEqual(11.5);
     });
+
+// The gap between two boxes is read from one layout. A page's layout can
+// change between two round-trips — a message's lazy part lands and the
+// message above the tabs grows or shrinks — and a gap read across that
+// change belongs to no layout: it can read as an overlap where the reader
+// sees the chat's spacing.
+test("a gap is read from one layout, not across a change", async ({
+  page,
+}) => {
+  await page.goto("/?state=details&skin=antd");
+  const end = page
+    .locator(
+      'article[data-role="assistant"] [data-part="messageActions"] [role="group"]',
+    )
+    .last();
+  await expect(end).toBeVisible();
+  const tab = page.locator('[data-part="flowTabs"] [role="tab"]').first();
+  const [endBox, tabBox] = await boxesOf(page, [end, tab]);
+  const gap = gapBelow(endBox, tabBox);
+  expect(gap).toBeGreaterThanOrEqual(11.5);
+  // The message changes its height: what ends it moves, and the tabs move
+  // with it.
+  const before = (await end.boundingBox())!;
+  await page.evaluate(() => {
+    const bubble = document.querySelector(
+      'article[data-role="assistant"] [data-part="bubble"]',
+    );
+    if (bubble instanceof HTMLElement) bubble.style.display = "none";
+  });
+  const after = (await tab.boundingBox())!;
+  // Two reads with the change in between: the numbers come from different
+  // layouts, and the gap they make says nothing about the spacing.
+  expect(gapBelow(before, after)).toBeLessThan(gap);
+  // Read in one step, the same two elements keep the spacing they have.
+  const [movedEnd, movedTab] = await boxesOf(page, [end, tab]);
+  expect(gapBelow(movedEnd, movedTab)).toBeGreaterThanOrEqual(11.5);
+});
 
 test("a user's message keeps the chat's spacing from the reply after it", async ({
   page,
@@ -413,9 +453,9 @@ test("a user's message keeps the chat's spacing from the reply after it", async 
   const button = copy.getByRole("button", { name: "Copy" });
   await expect(button).toBeVisible();
   await expect(reply(page)).not.toHaveAttribute("aria-busy", "true");
-  const box = (await button.boundingBox())!;
-  const next = (await reply(page)
-    .locator('[data-part="bubble"]')
-    .boundingBox())!;
-  expect(next.y - (box.y + box.height)).toBeGreaterThanOrEqual(11.5);
+  const [box, next] = await boxesOf(page, [
+    button,
+    reply(page).locator('[data-part="bubble"]'),
+  ]);
+  expect(gapBelow(box, next)).toBeGreaterThanOrEqual(11.5);
 });

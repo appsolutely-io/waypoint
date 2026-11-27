@@ -411,9 +411,7 @@ for (const skin of ["neutral", "antd"])
 // message above the tabs grows or shrinks — and a gap read across that
 // change belongs to no layout: it can read as an overlap where the reader
 // sees the chat's spacing.
-test("a gap is read from one layout, not across a change", async ({
-  page,
-}) => {
+test("a gap is read from one layout, not across a change", async ({ page }) => {
   await page.goto("/?state=details&skin=antd");
   const end = page
     .locator(

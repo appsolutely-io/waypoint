@@ -65,6 +65,7 @@ import type {
   Flow,
   Conversation,
   ConversationPage,
+  MessageAttachment,
   OutlineMessage,
   Frame,
   Message,
@@ -76,6 +77,12 @@ import type {
   ManifestEntry,
   ToolCall,
 } from "../protocol/generated";
+import type { StagedFiles } from "./attachment-upload";
+import {
+  attachmentWellFormed,
+  isClientOnlyStoreFailure,
+  MAX_ATTACHMENTS,
+} from "./attachment-shape";
 export type {
   IntentAlert,
   IntentFailure,
@@ -280,11 +287,30 @@ export interface FlowSummary {
   runCount?: number;
   lastRunAt?: number;
 }
+/** A file the user attached to a message, before the host stores it. */
+export interface AttachmentUpload {
+  /** The name the file goes by. */
+  name: string;
+  /** The file's media type. */
+  mediaType: string;
+  /** The file's bytes. */
+  data: Uint8Array;
+}
+/**
+ * A file a message carries, as the host stored it. The host's id is
+ * absent until the host has stored the file.
+ */
+export type PendingAttachment = Omit<MessageAttachment, "id" | "url"> & {
+  /** The host's id for the stored file; absent until it is stored. */
+  id?: string;
+};
 export interface PendingSend {
   id: string;
   content: string;
   failure: Problem | null;
   extensions?: Record<string, unknown>;
+  /** The files the message carries, as the host stored them. */
+  attachments?: readonly PendingAttachment[];
 }
 export type ReplyState =
   | "none"
@@ -320,6 +346,11 @@ export interface ClientSnapshot {
   flowTabs: readonly FlowTab[];
   hints: readonly string[];
   sending: boolean;
+  /**
+   * What the host takes as attachments: the media types and the size it
+   * allows. Absent when the host gave the client no upload port.
+   */
+  attachmentPolicy?: { accept?: readonly string[]; maxBytes?: number };
   /** The stream gave up after its bounded reopen attempts; `refresh()` retries. */
   streamUnavailable: boolean;
   /**
@@ -359,6 +390,8 @@ export interface ToolStep {
 export interface RestoredMessage {
   id: string;
   content: string;
+  /** The files the withdrawn message carried, by name. */
+  files?: readonly string[];
 }
 export interface ReadPorts {
   manifest: readonly ManifestEntry[];
@@ -388,6 +421,11 @@ export interface ClientConfig {
   storage?: StoragePort;
   beforeSend?: (reply: Reply) => MaybePromise<Reply | false | void>;
   contributions?: readonly ComposerContribution[];
+  /**
+   * Where the host stores the files a message carries. Without it the
+   * composer offers no files and a message carries none.
+   */
+  attachments?: AttachmentPort;
   flowSource?: FlowSource;
   flowOperations?: readonly string[];
   tabs?: readonly FlowTab[];
@@ -446,7 +484,17 @@ export interface WaypointClient {
     messageId: string,
     rating: FeedbackInput["rating"],
   ): Promise<boolean>;
-  send(): Promise<void>;
+  /**
+   * Sends the draft, with the files it carries, and says whether the
+   * message was queued. It resolves once the row is queued; the delivery
+   * continues on its own and settles the row.
+   */
+  send(attachments?: readonly AttachmentUpload[]): Promise<boolean>;
+  /**
+   * Sends a queued message again under its own id. It resolves once the
+   * attempt is queued; the delivery continues on its own and settles the
+   * row.
+   */
   retry(id: string): Promise<void>;
   withdraw(id: string): Promise<void>;
   /** Appends a withdrawn message's content to the draft; the item stays. */
@@ -654,6 +702,10 @@ function negotiatedCapabilities(
   );
 }
 export function createWaypointClient(config: ClientConfig): WaypointClient {
+  // The files a message will carry, until the host has stored them. Kept
+  // here, not in the chunk, so they belong to this client alone and go when
+  // it goes.
+  const stagedFiles = new Map<string, StagedFiles>();
   const tabIds = new Set<string>();
   for (const tab of config.tabs ?? DEFAULT_FLOW_TABS) {
     const id = flowTabId(tab);
@@ -688,6 +740,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     flowTabs: config.tabs ?? DEFAULT_FLOW_TABS,
     hints: [],
     sending: false,
+    attachmentPolicy: config.attachments && {
+      accept: config.attachments.accept,
+      maxBytes: config.attachments.maxBytes,
+    },
     withdrawing: [],
     restored: [],
     toolSteps: [],
@@ -921,7 +977,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     | { kind: "finish"; id: string; attempt: string; failure: Problem }
     | { kind: "withdraw"; id: string; restoredId: string }
     | { kind: "discard"; id: string }
-    | { kind: "remove"; id: string };
+    | { kind: "remove"; id: string }
+    | { kind: "attach"; id: string; attachments: readonly PendingAttachment[] };
   const empty: Outbox = {
     revision: 0,
     draft: "",
@@ -980,7 +1037,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             pending: without,
             restored: [
               ...record.restored,
-              { id: operation.restoredId, content: current.content },
+              {
+                id: operation.restoredId,
+                content: current.content,
+                // The bytes are not kept; the item names what to pick again.
+                files: current.attachments?.map((file) => file.name),
+              },
             ],
           }
         : record;
@@ -992,13 +1054,20 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             open: [...current.open, operation.attempt],
             failure: null,
           }
-        : {
-            ...current,
-            open: definite(operation.failure)
-              ? current.open.filter((attempt) => attempt !== operation.attempt)
-              : current.open,
-            failure: operation.failure,
-          };
+        : operation.kind === "attach"
+          ? // The files a message carries are the host's references; the row
+            // keeps them, so a message that is sent twice carries the same
+            // ones.
+            { ...current, attachments: operation.attachments }
+          : {
+              ...current,
+              open: definite(operation.failure)
+                ? current.open.filter(
+                    (attempt) => attempt !== operation.attempt,
+                  )
+                : current.open,
+              failure: operation.failure,
+            };
     return {
       ...record,
       pending: record.pending.map((row) => (row === current ? next : row)),
@@ -1015,18 +1084,35 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       .filter(isPending)
       .map((row) => {
         const open = (row as Partial<OutboxRow>).open;
+        const files = (row as Partial<OutboxRow>).attachments;
         return {
           ...row,
           open: Array.isArray(open)
             ? open.filter((a): a is string => typeof a === "string")
             : [],
+          // A restored row keeps only the files the protocol allows.
+          attachments: Array.isArray(files)
+            ? files.length <= MAX_ATTACHMENTS
+              ? files.filter((file) => attachmentWellFormed(file, false))
+              : undefined
+            : undefined,
         };
       }),
-    restored: (Array.isArray(value?.restored) ? value.restored : []).filter(
-      (item): item is RestoredMessage =>
-        typeof (item as RestoredMessage | null)?.id === "string" &&
-        typeof (item as RestoredMessage).content === "string",
-    ),
+    restored: (Array.isArray(value?.restored) ? value.restored : [])
+      .filter(
+        (item): item is RestoredMessage =>
+          typeof (item as RestoredMessage | null)?.id === "string" &&
+          typeof (item as RestoredMessage).content === "string",
+      )
+      .map((item) => {
+        const files = (item as Partial<RestoredMessage>).files;
+        return {
+          ...item,
+          files: Array.isArray(files)
+            ? files.filter((name): name is string => !!name)
+            : undefined,
+        };
+      }),
   });
   let stored = empty;
   let storedKey = key(config.conversationId);
@@ -1050,8 +1136,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       )?.messages.some((message) => message.clientMessageId === row.id),
     );
     if (acknowledged.length) {
-      for (const row of acknowledged)
-        queued.push({ kind: "remove", id: row.id });
+      for (const row of acknowledged) remove(row.id);
       view = queued.reduce(applyOperation, stored);
       void persist();
     }
@@ -1071,11 +1156,27 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             ? row.failure
             : { code: "in-doubt", id: row.id },
         ...(row.extensions ? { extensions: row.extensions } : {}),
+        attachments: row.attachments,
       })),
     });
   };
+  // The bytes a message's files hold are released through this one point,
+  // whichever way the row goes: acknowledged by the transcript, withdrawn,
+  // discarded, or never queued at all.
+  const release = (id: string) => {
+    stagedFiles.delete(id);
+  };
+  const remove = (id: string) => {
+    release(id);
+    queued.push({ kind: "remove", id });
+  };
   const record = (operation: Operation) => {
-    if (operation.kind === "add") livePendingIds.add(operation.row.id);
+    if (
+      operation.kind === "remove" ||
+      operation.kind === "withdraw" ||
+      operation.kind === "discard"
+    )
+      release(operation.id);
     queued.push(operation);
     derive();
   };
@@ -1363,7 +1464,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const held = new Set(candidate.held);
     for (const message of candidate.conversation.messages)
       if (message.clientMessageId) held.add(message.clientMessageId);
-    for (const id of held) if (viewRow(id)) queued.push({ kind: "remove", id });
+    for (const id of held) if (viewRow(id)) remove(id);
   };
   const readConversation = async (
     owner?: ScopeSignal,
@@ -1444,7 +1545,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       else
         for (const message of conversation.messages)
           if (message.clientMessageId && viewRow(message.clientMessageId))
-            queued.push({ kind: "remove", id: message.clientMessageId });
+            remove(message.clientMessageId);
       const result: Extract<ConversationReadResult, { kind: "loaded" }> = {
         kind: "loaded",
         conversationId: id,
@@ -2184,6 +2285,12 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
     const bound = agreement;
     const current = viewRow(id);
     if (!current) return;
+    // The upload settles its row on the conversation it started in. When
+    // that conversation is still the one on screen, the view follows the
+    // settled record instead of reading the row as one of unknown outcome.
+    const settledAbroad = async () => {
+      if (conversationId === state.conversationId) await persist();
+    };
     update({ sending: true });
     const attempt = Math.random().toString(36).slice(2);
     inFlight.add(attempt);
@@ -2215,18 +2322,56 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         await finish({ code: "unavailable", id });
         return;
       }
-      await config.transport.send(
-        {
-          kind: "message",
-          protocol: state.protocol!,
-          clientReplyId: id,
-          clientMessageId: id,
-          content: row.content,
-          ...(row.extensions ? { extensions: row.extensions } : {}),
-        },
-        conversationId,
-        requestContext(bound),
-      );
+      // The files the message carries are stored before it is sent: a store
+      // that fails fails the message itself, not the conversation. A
+      // conversation that changes while they upload does not get the
+      // message: the chunk settles the attempt it opened on the row's own
+      // conversation, so it does not hang open.
+      const references = row.attachments?.length
+        ? await (
+            await import("./attachment-upload")
+          ).upload(
+            row.attachments,
+            stagedFiles.get(id),
+            config.attachments,
+            conversationId,
+            id,
+            attempt,
+            record,
+            persist,
+            scope,
+            config.storage,
+            key(conversationId),
+            () => report({ code: "unavailable", id: "storage-write" }),
+          )
+        : undefined;
+      if (scope.aborted) {
+        await settledAbroad();
+        return;
+      }
+      try {
+        await config.transport.send(
+          {
+            kind: "message",
+            protocol: state.protocol!,
+            clientReplyId: id,
+            clientMessageId: id,
+            content: row.content,
+            ...(row.extensions ? { extensions: row.extensions } : {}),
+            ...(references ? { attachments: references } : {}),
+          },
+          conversationId,
+          requestContext(bound),
+        );
+      } catch (error) {
+        // A host cannot know the client no longer holds its files; a code
+        // only the client may say about them comes back as the refusal it
+        // is. Every other problem travels as the side that said it said it.
+        const code = (error as { code?: unknown } | null)?.code;
+        throw typeof code === "string" && isClientOnlyStoreFailure(code)
+          ? { ...(error as object), code: "refused", id }
+          : error;
+      }
       if (scope.aborted) return;
       boundResponse(bound);
       inFlight.delete(attempt);
@@ -2235,7 +2380,10 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       await persist();
       await refresh();
     } catch (error) {
-      if (scope.aborted) return;
+      if (scope.aborted) {
+        await settledAbroad();
+        return;
+      }
       const problem = asProblem(error, id);
       // A refused message stays in the outbox with its id; only an explicit
       // retry sends it again, under the replacement agreement. After an
@@ -2693,7 +2841,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
       await ready;
       await persist();
     },
-    async send() {
+    async send(attachments?: readonly AttachmentUpload[]): Promise<boolean> {
       await ready;
       if (
         !negotiated ||
@@ -2702,13 +2850,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         state.sending ||
         !state.draft.trim()
       )
-        return;
+        return false;
       const scope = conversationScope.signal;
       const draft = state.draft;
       if (formMode()) {
         if (!config.formSession) {
           report({ code: "refused", id: "form-session" });
-          return;
+          return false;
         }
         update({ sending: true });
         try {
@@ -2736,13 +2884,14 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         } finally {
           if (!scope.aborted) update({ sending: false });
         }
-        return;
+        return true;
       }
       replySteps.begin(
         state.conversation?.messages ?? [],
         state.history?.outline,
       );
       update({ sending: true });
+      let handed = false;
       try {
         const extensions: Record<string, unknown> = {};
         const hints: string[] = [];
@@ -2758,8 +2907,13 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             extensions[contribution.id] = result.payload;
         }
         update({ hints });
-        if (held || scope.aborted || state.conversationUnavailable) return;
+        if (held || scope.aborted || state.conversationUnavailable)
+          return false;
         const id = config.platform.ids();
+        if (attachments && attachments.length > MAX_ATTACHMENTS) {
+          report({ code: "refused", id });
+          return false;
+        }
         replySteps.bind(id);
         let outgoing: Reply = {
           kind: "message",
@@ -2774,7 +2928,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           scope.aborted ||
           state.conversationUnavailable
         )
-          return;
+          return false;
         if (transformed) outgoing = transformed;
         if (
           outgoing.kind !== "message" ||
@@ -2782,6 +2936,20 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           outgoing.clientMessageId !== id
         )
           throw new Error("Invalid middleware reply");
+        // The files the message carries are kept until the host stores them.
+        const staged = attachments?.length
+          ? await (
+              await import("./attachment-upload")
+            ).stage(id, attachments, stagedFiles)
+          : undefined;
+        // A conversation that changed while the files were being staged
+        // does not get the message: it belongs to the conversation before,
+        // and no row keeps the bytes.
+        if (scope.aborted) {
+          release(id);
+          return false;
+        }
+        livePendingIds.add(id);
         record({
           kind: "add",
           row: {
@@ -2790,6 +2958,7 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
             failure: null,
             extensions,
             open: [],
+            attachments: staged,
           },
         });
         record({
@@ -2802,11 +2971,16 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
           conversationId: state.conversationId,
           replyId: id,
         });
-        await dispatch(id);
+        // The row is queued: the composer is cleared now, and the delivery
+        // keeps the sending state until it settles.
+        handed = true;
+        void dispatch(id);
+        return true;
       } catch {
         report({ code: "refused", id: "before-send" });
+        return false;
       } finally {
-        if (!scope.aborted) update({ sending: false });
+        if (!handed && !scope.aborted) update({ sending: false });
       }
     },
     async retry(id) {
@@ -2826,7 +3000,8 @@ export function createWaypointClient(config: ClientConfig): WaypointClient {
         id,
       );
       emit({ type: "send", conversationId: state.conversationId, replyId: id });
-      await dispatch(id);
+      // The attempt is queued; it settles the row on its own.
+      void dispatch(id);
     },
     async withdraw(id) {
       if (!viewRow(id) || state.withdrawing.includes(id)) return;
@@ -3817,6 +3992,7 @@ const PROBLEM_CODES: readonly Problem["code"][] = [
   "stopped",
   "plan-changed",
   "agreement-expired",
+  "attachments-lost",
 ];
 export function replyRow(input: ReplyDecisionInput): ReplyState {
   return replyDecision(input).state;
@@ -3849,9 +4025,25 @@ export function versionWalk(message: {
 }
 
 export interface AttachmentPort {
+  /**
+   * Stores one file and returns the host's id for it. The client calls it
+   * once per file, with the message's `clientMessageId`, so the host can
+   * store the file once for a message it may receive twice.
+   */
   upload(
     data: Uint8Array,
-    context: { conversationId: string; fileName: string; contentType: string },
+    context: {
+      conversationId: string;
+      /** The message the file belongs to; the same on every attempt. */
+      clientMessageId: string;
+      /** The file's place in the message, counting from zero. */
+      index: number;
+      fileName: string;
+      contentType: string;
+    },
   ): MaybePromise<{ id: string }>;
-  remove(id: string): MaybePromise<void>;
+  /** The MIME types the host takes; the composer offers these. */
+  accept?: readonly string[];
+  /** The largest file the host takes, in bytes. */
+  maxBytes?: number;
 }

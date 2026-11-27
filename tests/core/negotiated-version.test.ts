@@ -7,7 +7,7 @@ import {
   createWaypointClient,
   type TransportEvent,
 } from "../../src/core/client";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 it("frames and outgoing replies use the selected protocol version", async () => {
   const base = config();
   let listener!: (event: TransportEvent) => void;
@@ -40,6 +40,9 @@ it("frames and outgoing replies use the selected protocol version", async () => 
   expect(client.getSnapshot().problem?.code).toBe("refused");
   await client.setDraft("Hello");
   await client.send();
+  // The queued row leaves with the negotiated protocol; the request
+  // settles after.
+  await flush();
   expect(protocols).toEqual(["1.1"]);
   client.dispose();
 });

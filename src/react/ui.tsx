@@ -28,6 +28,7 @@ import {
 import type {
   Block,
   Message,
+  MessageAttachment,
   OutlineMessage,
   Problem,
   ReplyFailure,
@@ -46,8 +47,15 @@ import {
   type ReplyState,
   type ReplyFailureRecord,
   type WaypointClient,
+  type AttachmentUpload,
+  type PendingAttachment,
 } from "../core/client";
 import type { Capability } from "../protocol/index";
+import {
+  attachmentWellFormed,
+  isStoreFailure,
+  MAX_ATTACHMENTS,
+} from "../core/attachment-shape";
 import {
   ChatFocusContext,
   focusFor,
@@ -190,6 +198,38 @@ function MessageActions(props: { client: WaypointClient; message: Message }) {
     <load.module.MessageActions {...props} />
   ) : null;
 }
+// The composer's file picker, loaded when a client that can attach files
+// shows its composer.
+const composerAttachmentsChunk = lazyChunk(
+  () => import("./composer-attachments"),
+);
+function ComposerAttachments(props: {
+  client: WaypointClient;
+  files: readonly AttachmentUpload[];
+  onFiles(
+    update: (files: readonly AttachmentUpload[]) => readonly AttachmentUpload[],
+  ): void;
+  onReading?(busy: boolean, conversation?: string): void;
+  disabled?: boolean;
+  pickDisabled?: boolean;
+  /** The ids the pick button's description names. */
+  describedBy: string;
+  /** The id the picker's status region carries. */
+  statusId: string;
+  /** The id the picker's reason is carried by. */
+  reasonId: string;
+  /** Why the picker cannot be used, in words. */
+  reason?: string;
+  /** Whether a message with the picked files needs text of its own. */
+  needsText?: boolean;
+
+  reset?: number;
+}) {
+  const load = useChunk(composerAttachmentsChunk);
+  useEffect(() => composerAttachmentsChunk.request(), []);
+  if (load.status !== "ready") return null;
+  return <load.module.ComposerAttachments {...props} />;
+}
 // The saved requests' panel and parameter drawer, loaded with the tabs.
 const flowsChunk = lazyChunk(() => import("./flows-panel"));
 function useBlocks() {
@@ -242,6 +282,8 @@ export type PartName =
   | "recoveryPanel"
   | "stepStatusRow"
   | "recoveryActions";
+/** A file a message carries, as a part sees it. */
+export type PartAttachment = PendingAttachment & Pick<MessageAttachment, "url">;
 /** A message as a bubble or its actions see it. */
 export interface PartMessage {
   id: string;
@@ -250,6 +292,7 @@ export interface PartMessage {
   status?: Message["status"];
   versionIndex?: number;
   versionCount?: number;
+  attachments?: readonly PartAttachment[];
 }
 /** A message still being sent, or not sent. */
 export interface PartPending {
@@ -260,6 +303,7 @@ export interface PartPending {
     id?: string;
     host?: Problem["host"];
   } | null;
+  attachments?: readonly PartAttachment[];
 }
 /** A plan step as its row sees it. */
 export type PartStep = Pick<
@@ -1011,14 +1055,34 @@ export function RecoveryPanel(props: {
 function blockSummary(block: Block): BlockSummary {
   return { id: block.id, type: block.type, answered: Boolean(block.answered) };
 }
+// The files a message carries, as the protocol allows them: a stored file
+// names the id the host gave it, a file that is not stored yet has none.
+function attachmentsOf(
+  files: readonly PartAttachment[] | undefined,
+  stored: boolean,
+): readonly PartAttachment[] {
+  return Array.isArray(files)
+    ? files.filter((file) => attachmentWellFormed(file, stored))
+    : [];
+}
 function pendingSummary(pending: {
   id: string;
   content: string;
   failure: Problem | null;
+  attachments?: readonly PendingAttachment[];
 }) {
   return {
     id: pending.id,
     content: pending.content,
+    ...(pending.attachments
+      ? {
+          attachments: attachmentsOf(pending.attachments, false).map(
+            (file) => ({
+              ...file,
+            }),
+          ),
+        }
+      : {}),
     failure: pending.failure
       ? {
           code: pending.failure.code,
@@ -1037,10 +1101,14 @@ function PendingProblemText({
   text,
   restored,
   children,
+  id,
+  className,
 }: {
   text: string | undefined;
   restored: boolean;
   children: ReactNode;
+  id?: string;
+  className?: string;
 }) {
   const [current, setCurrent] = useState(() => ({
     text,
@@ -1052,6 +1120,8 @@ function PendingProblemText({
   return text === undefined ? null : (
     <p
       role={current.live ? "alert" : undefined}
+      id={id}
+      className={className}
       key={`problem-${current.revision}`}
     >
       {text}
@@ -1162,6 +1232,30 @@ function Markdown(props: {
   );
 }
 export { problemAction };
+/**
+ * A file's size, as a person reads it. The composer's picker shows it
+ * beside each file, and takes the formatter from here so its lazy chunk
+ * stays small.
+ */
+export function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kilobytes = Math.round(bytes / 1024);
+  if (kilobytes < 1024) return `${kilobytes} kB`;
+  return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
+}
+
+/**
+ * The words a row's files line follows its failure code with, one message
+ * key per outcome: what the host refused, what it asked to wait for, what
+ * never reached it, and what is gone for good. The renderer owns these
+ * words; the core owns the codes they follow.
+ */
+const STORE_FAILURE_TEXT = {
+  refused: "chat.attachmentFailed",
+  "rate-limited": "chat.attachmentNotUploadedYet",
+  unavailable: "chat.attachmentNotUploaded",
+  "attachments-lost": "chat.attachmentLost",
+} as const;
 export function defaultProblemText(
   problem: Problem,
   format: FormatMessage,
@@ -1703,6 +1797,13 @@ const MessageRow = memo(function MessageRow({
             versionIndex: message.versionIndex,
             versionCount: message.versionCount,
             blocks: message.blocks.map(blockSummary),
+            ...(message.attachments
+              ? {
+                  attachments: attachmentsOf(message.attachments, true).map(
+                    (file) => ({ ...file }),
+                  ),
+                }
+              : {}),
           },
         }}
       >
@@ -1724,6 +1825,21 @@ const MessageRow = memo(function MessageRow({
             />
           </ParseOf.Provider>
         </BodyOf.Provider>
+        {attachmentsOf(message.attachments, true).length ? (
+          <ul className="wp-attachments">
+            {attachmentsOf(message.attachments, true).map((file, index) => (
+              <li key={`${file.id ?? file.name}-${index}`}>
+                {isSafeUrl(file.url, extraUrlSchemes) ? (
+                  <a className="wp-attachment-name" href={file.url}>
+                    {file.name}
+                  </a>
+                ) : (
+                  <span className="wp-attachment-name">{file.name}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {/* Seen in the bubble; said once, by the reply row. */}
         {failure ? null : writing ? (
           <span data-writing="" aria-hidden="true">
@@ -1793,6 +1909,92 @@ function ChatBody({
   const state = useWaypointSnapshot();
   const root = useRef<HTMLElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
+  // The files the user picked for the next message. Nothing is uploaded
+  // until it is sent, and the message that carries them keeps them. The
+  // mirror lets the picker read, in the same tick, what its change kept.
+  const [files, setFiles] = useState<readonly AttachmentUpload[]>([]);
+  const filesRef = useRef<readonly AttachmentUpload[]>([]);
+  const changeFiles = (
+    update: (
+      current: readonly AttachmentUpload[],
+    ) => readonly AttachmentUpload[],
+  ) => {
+    filesRef.current = update(filesRef.current);
+    setFiles(filesRef.current);
+  };
+  // A file is still being read: the composer's send waits for it.
+  const [reading, setReading] = useState(false);
+  // The picker forgets what it said when the composer sends.
+  const [sent, setSent] = useState(0);
+  // Files dropped because the conversation turned out to take a form are
+  // said, not silently lost.
+  const [formDropped, setFormDropped] = useState(false);
+  const wasForm = useRef(false);
+  // The conversation a read started in: the files it reads belong to it,
+  // and a notice about them belongs to it too.
+  const [readIn, setReadIn] = useState<string | undefined>(undefined);
+  // The files belong to the conversation they were picked in.
+  useEffect(() => {
+    filesRef.current = [];
+    setFiles([]);
+    setFormDropped(false);
+    wasForm.current = false;
+  }, [state.conversationId]);
+  // A conversation that turns out to take a form drops the picked files
+  // the moment it becomes one, and says so.
+  useEffect(() => {
+    const form = state.conversation?.mode === "form-fill";
+    // A read of another conversation says nothing about this one.
+    const mine = readIn === state.conversationId;
+    if (
+      form &&
+      !wasForm.current &&
+      (filesRef.current.length || (reading && mine))
+    ) {
+      filesRef.current = [];
+      setFiles([]);
+      setFormDropped(true);
+    }
+    // A conversation that stops taking a form never keeps the form's
+    // words above files it now accepts.
+    if (!form && wasForm.current) setFormDropped(false);
+    wasForm.current = form;
+  }, [state.conversation?.mode, reading, readIn, state.conversationId]);
+  // The message goes with the files the user picked. They leave with the
+  // message that queued them; a message that never queued keeps them with
+  // the draft it kept.
+  // Why the composer cannot act, read by the button, by the words beside
+  // it and by the description it carries.
+  const pickFull = files.length >= MAX_ATTACHMENTS;
+  const pickBusy = state.sending;
+  const pickGone = state.conversationUnavailable;
+  // A message with files needs text of its own.
+  const needsText = files.length > 0 && !state.draft.trim();
+  const reason = pickGone
+    ? undefined
+    : pickBusy
+      ? t("chat.sending")
+      : pickFull
+        ? t("composer.tooMany", { max: String(MAX_ATTACHMENTS) })
+        : undefined;
+  const send = () => {
+    if (!state.draft.trim() || state.sending || reading) return;
+    setFormDropped(false);
+    if (state.conversation?.mode === "form-fill") {
+      void client.send();
+      return;
+    }
+    const chosen = files;
+    void client.send(chosen).then((queued) => {
+      if (!queued) return;
+      // Only the files this message took leave: ones picked while it was
+      // on its way stay for the next message.
+      changeFiles((current) =>
+        current.filter((kept) => !chosen.includes(kept)),
+      );
+      setSent((count) => count + 1);
+    });
+  };
   const transcript = useRef<HTMLDivElement>(null);
   const transcriptContent = useRef<HTMLDivElement>(null);
   // Message bodies whose stock rendering failed, said once below. Kept in
@@ -1836,6 +2038,9 @@ function ChatBody({
   const extraPanels = !!(slots?.extraPanels || provider.parts?.extraPanels);
   const hintId = useDomId("hint");
   const pendingId = useDomId("pending");
+  const alertId = useDomId("alert");
+  const pickerStatusId = useDomId("picker-status");
+  const pickerReasonId = useDomId("picker-reason");
   const enabled = (capability: Capability) =>
     (state.conversation?.mode !== "form-fill" ||
       capability === "form-fill" ||
@@ -2955,12 +3160,56 @@ function ChatBody({
                           pending,
                           shownProblem,
                         );
-                        const rowText = rowProblem
-                          ? (provider.problemText?.(rowProblem, {
-                              answeredElsewhere:
-                                rowProblem === answeredElsewhere.current,
-                            }) ?? defaultProblemText(rowProblem, t))
-                          : undefined;
+                        // A file the host has not stored yet is still on its
+                        // way to the host.
+                        const uploading = (pending.attachments ?? []).some(
+                          (file) => !file.id,
+                        );
+                        // The store met these files: a failure that never
+                        // reached them does not name them. The words follow
+                        // the outcome, one text per code.
+                        const failureCode =
+                          pending.failure &&
+                          isStoreFailure(pending.failure.code)
+                            ? pending.failure.code
+                            : undefined;
+                        const unstoredFiles = (
+                          pending.attachments ?? []
+                        ).filter((file) => !file.id);
+                        const unstored = failureCode
+                          ? new Intl.ListFormat(provider.lang).format(
+                              unstoredFiles.map((file) => file.name),
+                            )
+                          : "";
+                        const filesLine =
+                          unstored && failureCode
+                            ? t(STORE_FAILURE_TEXT[failureCode], {
+                                names: unstored,
+                              })
+                            : "";
+                        // A row whose files are gone says so in its own live
+                        // element: the files line is then the row's words.
+                        const filesLost =
+                          !!filesLine &&
+                          pending.failure?.code === "attachments-lost";
+                        const restored =
+                          state.pendingRestoration?.ids.includes(pending.id) ??
+                          false;
+                        // The row's buttons name the status line, and the
+                        // files line when it is there.
+                        const describedBy = unstored
+                          ? `${pendingId}-${pending.id} ${pendingId}-${pending.id}-files`
+                          : `${pendingId}-${pending.id}`;
+                        // A row whose files are gone for good says it once:
+                        // the files line names the files. Without it the row
+                        // keeps its own words, or it would say nothing.
+                        const rowText =
+                          rowProblem && !filesLost
+                            ? (provider.problemText?.(rowProblem, {
+                                answeredElsewhere:
+                                  rowProblem === answeredElsewhere.current,
+                              }) ?? defaultProblemText(rowProblem, t))
+                            : undefined;
                         return (
                           <article
                             key={pending.id}
@@ -2982,27 +3231,61 @@ function ChatBody({
                                 {t("chat.roleUser")}
                               </span>
                               <p>{pending.content}</p>
+                              {pending.attachments?.length ? (
+                                <ul className="wp-attachments">
+                                  {pending.attachments.map((file, index) => (
+                                    <li
+                                      key={`${file.id ?? file.name}-${index}`}
+                                    >
+                                      <span className="wp-attachment-name">
+                                        {file.name}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
                             </Part>
                             <p
                               id={`${pendingId}-${pending.id}`}
                               data-pending-status={
-                                pending.failure ? "failed" : "sending"
+                                pending.failure
+                                  ? "failed"
+                                  : uploading
+                                    ? "uploading"
+                                    : "sending"
                               }
                             >
                               {t(
                                 pending.failure
                                   ? "chat.pendingFailed"
-                                  : "chat.pendingSending",
+                                  : uploading
+                                    ? "chat.pendingUploading"
+                                    : "chat.pendingSending",
                               )}
                             </p>
+                            {filesLine && !filesLost ? (
+                              <p
+                                id={`${pendingId}-${pending.id}-files`}
+                                className="wp-attachment-line"
+                              >
+                                {filesLine}
+                              </p>
+                            ) : null}
                             <PendingProblemText
                               key={`problem-${state.pendingRestoration?.visit ?? 0}`}
-                              text={rowText?.text}
-                              restored={
-                                state.pendingRestoration?.ids.includes(
-                                  pending.id,
-                                ) ?? false
+                              id={
+                                filesLost
+                                  ? `${pendingId}-${pending.id}-files`
+                                  : undefined
                               }
+                              className={
+                                filesLost ? "wp-attachment-line" : undefined
+                              }
+                              text={
+                                rowText?.text ??
+                                (filesLost ? filesLine : undefined)
+                              }
+                              restored={restored}
                             >
                               {rowText?.action ??
                                 (!provider.problemText &&
@@ -3020,20 +3303,26 @@ function ChatBody({
                                 slots={slots}
                                 data={{ pending: pendingSummary(pending) }}
                               >
+                                {pending.failure.code !== "attachments-lost" &&
+                                !(
+                                  failureCode === "refused" &&
+                                  unstoredFiles.length
+                                ) ? (
+                                  <B
+                                    aria-describedby={describedBy}
+                                    disabled={
+                                      state.conversationUnavailable ||
+                                      state.sending
+                                    }
+                                    onPress={() => {
+                                      void client.retry(pending.id);
+                                    }}
+                                  >
+                                    {t("chat.retry")}
+                                  </B>
+                                ) : null}
                                 <B
-                                  aria-describedby={`${pendingId}-${pending.id}`}
-                                  disabled={
-                                    state.conversationUnavailable ||
-                                    state.sending
-                                  }
-                                  onPress={() => {
-                                    void client.retry(pending.id);
-                                  }}
-                                >
-                                  {t("chat.retry")}
-                                </B>
-                                <B
-                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  aria-describedby={describedBy}
                                   disabled={state.withdrawing.includes(
                                     pending.id,
                                   )}
@@ -3044,7 +3333,7 @@ function ChatBody({
                                   {t("chat.withdraw")}
                                 </B>
                                 <B
-                                  aria-describedby={`${pendingId}-${pending.id}`}
+                                  aria-describedby={describedBy}
                                   onPress={() => {
                                     void client.dismiss(pending.id);
                                   }}
@@ -3254,6 +3543,15 @@ function ChatBody({
                 {state.restored.map((item) => (
                   <article key={item.id}>
                     <p>{item.content}</p>
+                    {item.files?.length ? (
+                      <p className="wp-attachment-line">
+                        {t("chat.restoredFiles", {
+                          names: new Intl.ListFormat(provider.lang).format(
+                            item.files,
+                          ),
+                        })}
+                      </p>
+                    ) : null}
                     <B
                       onPress={() => {
                         void client.editRestored(item.id);
@@ -3282,6 +3580,32 @@ function ChatBody({
                 void client.setDraft(value);
               }}
             >
+              {state.attachmentPolicy &&
+              state.conversation?.mode !== "form-fill" ? (
+                <>
+                  <ComposerAttachments
+                    client={client}
+                    files={files}
+                    onFiles={changeFiles}
+                    onReading={(busy, conversation) => {
+                      setReading(busy);
+                      setReadIn(busy ? conversation : undefined);
+                    }}
+                    disabled={pickGone || pickBusy}
+                    pickDisabled={pickFull}
+                    statusId={pickerStatusId}
+                    describedBy={`${pickerStatusId} ${pickGone ? alertId : pickerReasonId}`}
+                    reasonId={pickerReasonId}
+                    reason={reason}
+                    needsText={needsText}
+
+                    reset={sent}
+                  />
+                </>
+              ) : null}
+              <p role="status" className="wp-composer-status">
+                {formDropped ? t("chat.formFilesRemoved") : ""}
+              </p>
               <T
                 inputRef={field}
                 disabled={state.conversationUnavailable}
@@ -3306,7 +3630,7 @@ function ChatBody({
                     event.keyCode !== 229
                   ) {
                     event.preventDefault();
-                    void client.send();
+                    send();
                   }
                 }}
               />
@@ -3314,10 +3638,20 @@ function ChatBody({
                 disabled={
                   state.conversationUnavailable ||
                   !state.draft.trim() ||
-                  state.sending
+                  state.sending ||
+                  reading
+                }
+                aria-describedby={
+                  reading
+                    ? pickerStatusId
+                    : pickGone
+                      ? alertId
+                      : needsText
+                        ? pickerReasonId
+                        : undefined
                 }
                 onPress={() => {
-                  void client.send();
+                  send();
                 }}
               >
                 {t(state.sending ? "chat.sending" : "chat.send")}
@@ -3360,7 +3694,11 @@ function ChatBody({
             >
               {announcement}
             </div>
-            <div role="alert" data-announcement={state.announcement}>
+            <div
+              id={alertId}
+              role="alert"
+              data-announcement={state.announcement}
+            >
               {state.conversationUnavailable && (
                 <span>
                   {t("chat.conversationUnavailable")}

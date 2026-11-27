@@ -14,6 +14,12 @@ export type BlockMessageKey = "chat.block.required" | "chat.block.requiredMissin
 export type Catalogue = Readonly<Partial<Record<MessageKey, string>>>;
 
 // @public (undocumented)
+export type ComposerCatalogue = Readonly<Record<ComposerMessageKey, string>>;
+
+// @public (undocumented)
+export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany" | "composer.needsText" | "composer.notAdded";
+
+// @public (undocumented)
 export type ConfirmationCatalogue = Readonly<Record<ConfirmationMessageKey, string>>;
 
 // @public (undocumented)
@@ -52,6 +58,12 @@ export const english: {
     readonly "chat.send": "Send";
     readonly "chat.sending": "Sending";
     readonly "chat.pendingSending": "Sending…";
+    readonly "chat.pendingUploading": "Uploading…";
+    readonly "chat.attachmentFailed": "The site did not accept {names}. Withdraw, then pick another file.";
+    readonly "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.";
+    readonly "chat.attachmentNotUploaded": "{names} not uploaded. Retry.";
+    readonly "chat.attachmentNotUploadedYet": "{names} not uploaded yet; wait, then retry.";
+    readonly "chat.formFilesRemoved": "This conversation takes a form; the files were removed.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";
     readonly "chat.arrival": "New reply";
@@ -87,6 +99,7 @@ export const english: {
     readonly "chat.restored": "Withdrawn messages";
     readonly "chat.restoredEdit": "Edit";
     readonly "chat.restoredDiscard": "Discard";
+    readonly "chat.restoredFiles": "Pick {names} again.";
     readonly "chat.dismiss": "Dismiss";
     readonly "chat.historyOlder": "Load older messages";
     readonly "chat.historyLoading": "Loading older messages…";
@@ -156,7 +169,7 @@ export type FormCatalogue = Readonly<Record<FormMessageKey, string>>;
 export type FormMessageKey = "form.generating" | "form.ready" | "form.attention" | "form.reverted" | "form.revert" | "form.revertWait" | "form.suggested" | "form.replaceIt" | "form.keepMine" | "form.attach" | "form.remove" | "form.uploading" | "form.attached" | "form.attachFailed" | "form.removeFailed" | "form.onlyImages" | "form.busy" | "form.unusable";
 
 // @public (undocumented)
-export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue;
+export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue | keyof ComposerCatalogue;
 
 // @public (undocumented)
 export type MessageValues = Record<string, string | number | boolean>;
@@ -173,7 +186,7 @@ export interface PlanLabels {
 export type ProblemCatalogue = Readonly<Record<ProblemMessageKey, string>>;
 
 // @public (undocumented)
-export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered" | "chat.problem.details" | "chat.problem.code" | "chat.problem.reference" | "chat.problem.refresh";
+export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.attachmentsLost" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered" | "chat.problem.details" | "chat.problem.code" | "chat.problem.reference" | "chat.problem.refresh";
 
 // @public (undocumented)
 export type RecoveryCatalogue = Readonly<Record<RecoveryMessageKey, string>>;

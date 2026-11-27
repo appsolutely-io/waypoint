@@ -6,6 +6,7 @@ import type { ConfirmationCatalogue } from "./confirmation-messages";
 import type { ProblemCatalogue } from "./problem-messages";
 import type { ReplyCatalogue } from "./reply-messages";
 import type { FormCatalogue } from "./form-messages";
+import type { ComposerCatalogue } from "./composer-messages";
 export const english = {
   "form.valid": "Valid",
   "form.invalid": "Invalid",
@@ -37,6 +38,15 @@ export const english = {
   "chat.send": "Send",
   "chat.sending": "Sending",
   "chat.pendingSending": "Sending…",
+  "chat.pendingUploading": "Uploading…",
+  "chat.attachmentFailed":
+    "The site did not accept {names}. Withdraw, then pick another file.",
+  "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.",
+  "chat.attachmentNotUploaded": "{names} not uploaded. Retry.",
+  "chat.attachmentNotUploadedYet":
+    "{names} not uploaded yet; wait, then retry.",
+  "chat.formFilesRemoved":
+    "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",
@@ -75,6 +85,7 @@ export const english = {
   "chat.restored": "Withdrawn messages",
   "chat.restoredEdit": "Edit",
   "chat.restoredDiscard": "Discard",
+  "chat.restoredFiles": "Pick {names} again.",
   "chat.dismiss": "Dismiss",
   "chat.historyOlder": "Load older messages",
   "chat.historyLoading": "Loading older messages…",
@@ -147,7 +158,8 @@ export type MessageKey =
   | keyof BlockCatalogue
   | keyof ProblemCatalogue
   | keyof ReplyCatalogue
-  | keyof FormCatalogue;
+  | keyof FormCatalogue
+  | keyof ComposerCatalogue;
 const added: { en: Record<string, string>; zh: Record<string, string> } = {
   en: {},
   zh: {},
@@ -191,6 +203,12 @@ export const simplifiedChinese: Record<keyof typeof english, string> = {
   "chat.send": "发送",
   "chat.sending": "正在发送",
   "chat.pendingSending": "正在发送……",
+  "chat.pendingUploading": "正在上传……",
+  "chat.attachmentFailed": "本站未接受 {names}。请撤回后另选文件。",
+  "chat.attachmentLost": "这些文件未被保留。请撤回消息后重新选择 {names}。",
+  "chat.attachmentNotUploaded": "{names} 未上传，请重试。",
+  "chat.attachmentNotUploadedYet": "{names} 尚未上传；请稍等再重试。",
+  "chat.formFilesRemoved": "此对话以表单进行，已移除文件。",
   "chat.pendingFailed": "未发送",
   "chat.planUnavailable": "无法加载此计划的步骤。",
   "chat.arrival": "收到新回复",
@@ -227,6 +245,7 @@ export const simplifiedChinese: Record<keyof typeof english, string> = {
   "chat.restored": "已撤回的消息",
   "chat.restoredEdit": "编辑",
   "chat.restoredDiscard": "丢弃",
+  "chat.restoredFiles": "请重新选择 {names}。",
   "chat.dismiss": "关闭",
   "chat.historyOlder": "加载更早的消息",
   "chat.historyLoading": "正在加载更早的消息…",

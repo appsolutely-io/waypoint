@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 // A problem is said in plain words; its code and reference sit behind a
 // disclosure, outside the alert, for whoever needs them.
-import { it, expect, afterEach } from "vitest";
+import { it, expect, afterEach, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { WaypointChat } from "../../src/react/index";
 import {
   createMemoryStorage,
   createWaypointClient,
 } from "../../src/core/client";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 afterEach(cleanup);
 
 for (const [locale, summary, code, reference] of [
@@ -118,6 +118,8 @@ it("a message not sent because the chat was replaced keeps the problem's Refresh
   render(<WaypointChat client={client} />);
   await client.setDraft("Hello");
   await client.send();
+  // The replacement settles after the send resolves; the alert reads it.
+  await flush();
   const alert = await waitFor(() => {
     const element = document.querySelector(
       'article[data-role="pending"] [role="alert"]',
@@ -260,7 +262,12 @@ it("restoring an outbox with several failed rows announces nothing", async () =>
   for (const content of ["First", "Second", "Third"]) {
     await original.setDraft(content);
     await original.send();
+    // A send resolves once its row is queued and the delivery keeps the
+    // sending state; the next send waits for the delivery to settle.
+    await vi.waitFor(() => expect(original.getSnapshot().sending).toBe(false));
   }
+  // The refusals settled with the sending state; the storage holds them.
+  await flush();
   original.dispose();
   const client = createWaypointClient({ ...base, transport });
   const observed: Element[] = [];
@@ -322,6 +329,9 @@ it("a refusal after a later send succeeded stays on its own request", async () =
   await other.ready;
   await other.setDraft("Second");
   await other.send();
+  // The acknowledged row leaves with its delivery; the outbox settles
+  // after the send resolves.
+  await flush();
   const acknowledged = other.getSnapshot().pending;
   expect(acknowledged.map((row) => row.content)).not.toContain("Second");
   await act(async () => {

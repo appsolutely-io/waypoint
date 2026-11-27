@@ -7,6 +7,7 @@ import type {
 import type { ConversationPageInput, ReaderRequestContext } from "./client";
 import { createScope, onAbort, type Scope, type ScopeSignal } from "./scope";
 import { normalizeSender } from "./message-sender";
+import { attachmentWellFormed, MAX_ATTACHMENTS } from "./attachment-shape";
 
 type Page = Exclude<ConversationPage, { stale: true }>;
 interface Boundary {
@@ -64,6 +65,12 @@ function validMessage(value: Message): boolean {
             typeof source.id === "string" &&
             typeof source.title === "string" &&
             typeof source.url === "string",
+        ))) &&
+    (value.attachments === undefined ||
+      (Array.isArray(value.attachments) &&
+        value.attachments.length <= MAX_ATTACHMENTS &&
+        value.attachments.every((attachment) =>
+          attachmentWellFormed(attachment, true),
         ))),
   );
 }

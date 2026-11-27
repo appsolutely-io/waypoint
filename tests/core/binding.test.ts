@@ -110,6 +110,8 @@ describe("agreement offer and context", () => {
     await a.send();
     await b.setDraft("From b");
     await b.send();
+    // Each send resolves once its row is queued; the requests settle after.
+    await flush();
     expect(host.log.sends.map((row) => row.agreement)).toEqual([
       "agreement-1",
       "agreement-2",
@@ -372,6 +374,8 @@ describe("agreement refusal", () => {
     expect(host.log.negotiate).toHaveLength(2);
     expect(host.log.sends).toHaveLength(1);
     await client.retry(row!.id);
+    // The retried row is queued; the request settles after.
+    await flush();
     expect(host.log.sends).toEqual([
       { id: row!.id, agreement: "agreement-1" },
       { id: row!.id, agreement: "agreement-2" },

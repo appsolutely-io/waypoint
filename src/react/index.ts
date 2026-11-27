@@ -24,6 +24,7 @@ export type {
   PartData,
   PartDataMap,
   PartMessage,
+  PartAttachment,
   PartPending,
   PartStep,
   InputProps,
@@ -73,6 +74,10 @@ export type { ProblemCatalogue, ProblemMessageKey } from "./problem-messages";
 export type { BlockCatalogue, BlockMessageKey } from "./block-messages";
 export type { ReplyCatalogue, ReplyMessageKey } from "./reply-messages";
 export type { FormCatalogue, FormMessageKey } from "./form-messages";
+export type {
+  ComposerCatalogue,
+  ComposerMessageKey,
+} from "./composer-messages";
 export * from "./i18n";
 export { lightTheme, darkTheme, themeProperties } from "../tokens/index";
 export type {

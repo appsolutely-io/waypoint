@@ -3,6 +3,16 @@ import { compile } from "json-schema-to-typescript";
 import { openEnums } from "./open-enums.mjs";
 const schema = JSON.parse(await readFile("src/protocol/schema.json", "utf8"));
 openEnums(schema);
+// An array whose maxItems is at or below the generator's threshold becomes a
+// fixed tuple union, which a host building one dynamically cannot assign.
+// The attachments' wire limit sits one above this on purpose, so their type
+// stays a plain array while schema.json still declares the limit.
+const { tsImport } = await import("tsx/esm/api");
+const { MAX_ATTACHMENTS } = await tsImport(
+  "../src/core/attachment-shape.ts",
+  import.meta.url,
+);
+const TUPLE_LIMIT = MAX_ATTACHMENTS - 1;
 const all = {
   ...schema,
   oneOf: Object.keys(schema.$defs).map((name) => ({ $ref: `#/$defs/${name}` })),
@@ -10,6 +20,7 @@ const all = {
 const types = await compile(all, "Protocol", {
   bannerComment: "/* Generated from schema.json. */",
   additionalProperties: false,
+  maxItems: TUPLE_LIMIT,
   style: { singleQuote: true },
   unreachableDefinitions: true,
 });
@@ -24,19 +35,18 @@ if (process.argv.includes("--check")) {
 // message actions, as one frozen object per language, generated from the
 // catalogues the web chat loads, so a host imports only its own language. Form-fill text is not included: the
 // renderer-neutral hooks return no form keys.
-const { tsImport } = await import("tsx/esm/api");
 const { format } = await import("prettier");
 const load = (path) => tsImport(path, import.meta.url);
-const [core, recovery, confirmation, block, problem, reply] = await Promise.all(
-  [
+const [core, recovery, confirmation, block, problem, reply, composer] =
+  await Promise.all([
     load("../src/react/i18n.ts"),
     load("../src/react/recovery-messages.ts"),
     load("../src/react/confirmation-messages.ts"),
     load("../src/react/block-messages.ts"),
     load("../src/react/problem-messages.ts"),
     load("../src/react/reply-messages.ts"),
-  ],
-);
+    load("../src/react/composer-messages.ts"),
+  ]);
 const locales = {
   en: [
     core.english,
@@ -45,6 +55,7 @@ const locales = {
     block.blockEnglish,
     problem.problemEnglish,
     reply.replyEnglish,
+    composer.composerEnglish,
   ],
   "zh-Hans": [
     core.simplifiedChinese,
@@ -53,6 +64,7 @@ const locales = {
     block.blockSimplifiedChinese,
     problem.problemSimplifiedChinese,
     reply.replySimplifiedChinese,
+    composer.composerSimplifiedChinese,
   ],
 };
 for (const [locale, catalogues] of Object.entries(locales)) {

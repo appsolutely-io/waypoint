@@ -1,5 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { pageErrors } from "./page-errors";
+import { boxesOf } from "../boxes";
 
 const test = base.extend<{ localPage: void; expectedConsoleError: string }>({
   expectedConsoleError: ["", { option: true }],
@@ -291,8 +292,7 @@ for (const skin of ["neutral", "antd"])
         exact: true,
       });
       await expect(action).toBeVisible();
-      const field = (await input.boundingBox())!;
-      const button = (await action.boundingBox())!;
+      const [field, button] = await boxesOf(page, [input, action]);
       expect(
         field.x + field.width <= button.x || button.x + button.width <= field.x,
       ).toBe(true);

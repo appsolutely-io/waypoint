@@ -67,6 +67,48 @@ describe("a card's applied answer", () => {
       expect(block({ ...card, answer })).toBe(false);
   });
 });
+describe("a message's attachments", () => {
+  const ajv = new Ajv2020({ strict: false });
+  ajv.addSchema(schema);
+  const message = ajv.getSchema(
+    "https://waypoint.example/schema#/$defs/Message",
+  )!;
+  const reply = ajv.getSchema(
+    "https://waypoint.example/schema#/$defs/ReplyMessage",
+  )!;
+  it("carries the files a host stored, with an optional link", () => {
+    expect(
+      message({
+        ...samples.Message,
+        attachments: [samples.MessageAttachment],
+      }),
+      JSON.stringify(message.errors),
+    ).toBe(true);
+    expect(
+      reply({
+        ...samples.ReplyMessage,
+        attachments: [samples.MessageAttachment],
+      }),
+      JSON.stringify(reply.errors),
+    ).toBe(true);
+  });
+  it("refuses a malformed attachment", () => {
+    for (const broken of [
+      { ...samples.MessageAttachment, id: "" },
+      { ...samples.MessageAttachment, name: "" },
+      { ...samples.MessageAttachment, mediaType: "" },
+      { ...samples.MessageAttachment, size: -1 },
+    ])
+      expect(
+        message({ ...samples.Message, attachments: [broken] }),
+        JSON.stringify(message.errors),
+      ).toBe(false);
+  });
+  it("keeps a message without attachments valid", () =>
+    expect(message(samples.Message), JSON.stringify(message.errors)).toBe(
+      true,
+    ));
+});
 describe("recovery views from a newer host", () => {
   const ajv = new Ajv2020({ strict: false });
   ajv.addSchema(schema);
@@ -89,4 +131,22 @@ describe("recovery views from a newer host", () => {
     expect(phase("manual-review-next")).toBe(false);
     expect(phase("readback")).toBe(true);
   });
+});
+
+it("binds the attachment limits to the schema", async () => {
+  const schema = (await import("../../src/protocol/schema.json")).default;
+  const { MAX_ATTACHMENTS, MAX_NAME_LENGTH, MAX_MEDIA_TYPE_LENGTH } =
+    await import("../../src/core/attachment-shape");
+  expect(schema.$defs.Message.properties.attachments.maxItems).toBe(
+    MAX_ATTACHMENTS,
+  );
+  expect(schema.$defs.ReplyMessage.properties.attachments.maxItems).toBe(
+    MAX_ATTACHMENTS,
+  );
+  expect(schema.$defs.MessageAttachment.properties.name.maxLength).toBe(
+    MAX_NAME_LENGTH,
+  );
+  expect(schema.$defs.MessageAttachment.properties.mediaType.maxLength).toBe(
+    MAX_MEDIA_TYPE_LENGTH,
+  );
 });

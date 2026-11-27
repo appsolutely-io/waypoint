@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { tabAround } from "./tab-around";
+import { boxesOf } from "../boxes";
 for (const skin of ["neutral", "antd"])
   test(`form draft and private reference behavior: ${skin}`, async ({
     page,
@@ -58,8 +59,7 @@ for (const skin of ["neutral", "antd"])
       exact: true,
     });
     await expect(adornment).toBeVisible();
-    const field = (await title.boundingBox())!;
-    const button = (await adornment.boundingBox())!;
+    const [field, button] = await boxesOf(page, [title, adornment]);
     const overlaps =
       button.x < field.x + field.width &&
       field.x < button.x + button.width &&
@@ -104,13 +104,16 @@ for (const skin of ["neutral", "antd"])
       { waitUntil: "domcontentloaded" },
     );
     const title = page.getByRole("textbox", { name: "Title", exact: true });
-    const label = page.locator("label", { has: title });
-    const labelText = await label.evaluate((element) => {
+    const labelText = await title.evaluate((element) => {
+      const label = element.closest("label");
       const range = document.createRange();
-      range.selectNodeContents(element.firstChild!);
-      return range.getBoundingClientRect().bottom;
+      range.selectNodeContents(label?.firstChild ?? element);
+      return {
+        bottom: range.getBoundingClientRect().bottom,
+        top: element.getBoundingClientRect().y,
+      };
     });
-    expect(labelText).toBeLessThanOrEqual((await title.boundingBox())!.y + 1);
+    expect(labelText.bottom).toBeLessThanOrEqual(labelText.top + 1);
     await title.focus();
     await page
       .getByRole("button", { name: "Regenerate Title", exact: true })

@@ -31,16 +31,24 @@ export function asProblem(error: unknown, id: string): Problem;
 
 // @public (undocumented)
 export interface AttachmentPort {
-    // (undocumented)
-    remove(id: string): MaybePromise<void>;
-    // (undocumented)
+    accept?: readonly string[];
+    maxBytes?: number;
     upload(data: Uint8Array, context: {
         conversationId: string;
+        clientMessageId: string;
+        index: number;
         fileName: string;
         contentType: string;
     }): MaybePromise<{
         id: string;
     }>;
+}
+
+// @public
+export interface AttachmentUpload {
+    data: Uint8Array;
+    mediaType: string;
+    name: string;
 }
 
 // @public (undocumented)
@@ -345,6 +353,7 @@ export function cardReplyId(conversationId: string, messageId: string, blockId: 
 export interface ClientConfig {
     // (undocumented)
     accountId: string;
+    attachments?: AttachmentPort;
     // (undocumented)
     beforeSend?: (reply: Reply) => MaybePromise<Reply | false | void>;
     // (undocumented)
@@ -384,6 +393,10 @@ export interface ClientConfig {
 export interface ClientSnapshot {
     // (undocumented)
     announcement: number;
+    attachmentPolicy?: {
+        accept?: readonly string[];
+        maxBytes?: number;
+    };
     // (undocumented)
     capabilities: readonly Capability[];
     confirmationRefusal?: {
@@ -445,6 +458,9 @@ export interface ClientSnapshot {
 }
 
 // @public (undocumented)
+export type ComposerCatalogue = Readonly<Record<ComposerMessageKey, string>>;
+
+// @public (undocumented)
 export interface ComposerContribution {
     // (undocumented)
     evaluate(context: {
@@ -458,6 +474,9 @@ export interface ComposerContribution {
     // (undocumented)
     id: string;
 }
+
+// @public (undocumented)
+export type ComposerMessageKey = "composer.attach" | "composer.remove" | "composer.removeNamed" | "composer.added" | "composer.removed" | "composer.reading" | "composer.readFailed" | "composer.refusedType" | "composer.refusedSize" | "composer.tooMany" | "composer.needsText" | "composer.notAdded";
 
 // @public (undocumented)
 export type ConfirmationCatalogue = Readonly<Record<ConfirmationMessageKey, string>>;
@@ -695,6 +714,12 @@ export const english: {
     readonly "chat.send": "Send";
     readonly "chat.sending": "Sending";
     readonly "chat.pendingSending": "Sending…";
+    readonly "chat.pendingUploading": "Uploading…";
+    readonly "chat.attachmentFailed": "The site did not accept {names}. Withdraw, then pick another file.";
+    readonly "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.";
+    readonly "chat.attachmentNotUploaded": "{names} not uploaded. Retry.";
+    readonly "chat.attachmentNotUploadedYet": "{names} not uploaded yet; wait, then retry.";
+    readonly "chat.formFilesRemoved": "This conversation takes a form; the files were removed.";
     readonly "chat.pendingFailed": "Not sent";
     readonly "chat.planUnavailable": "The plan's steps could not be loaded.";
     readonly "chat.arrival": "New reply";
@@ -730,6 +755,7 @@ export const english: {
     readonly "chat.restored": "Withdrawn messages";
     readonly "chat.restoredEdit": "Edit";
     readonly "chat.restoredDiscard": "Discard";
+    readonly "chat.restoredFiles": "Pick {names} again.";
     readonly "chat.dismiss": "Dismiss";
     readonly "chat.historyOlder": "Load older messages";
     readonly "chat.historyLoading": "Loading older messages…";
@@ -1505,6 +1531,7 @@ export type MaybePromise<T> = T | Promise<T>;
 
 // @public (undocumented)
 export interface Message {
+    attachments?: MessageAttachment[];
     // (undocumented)
     blocks: Block[];
     // (undocumented)
@@ -1531,7 +1558,21 @@ export interface Message {
 }
 
 // @public (undocumented)
-export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue;
+export interface MessageAttachment {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    mediaType: string;
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    size: number;
+    // (undocumented)
+    url?: string;
+}
+
+// @public (undocumented)
+export type MessageKey = keyof typeof english | keyof RecoveryCatalogue | keyof ConfirmationCatalogue | keyof BlockCatalogue | keyof ProblemCatalogue | keyof ReplyCatalogue | keyof FormCatalogue | keyof ComposerCatalogue;
 
 // @public (undocumented)
 export interface MessageSender {
@@ -1645,10 +1686,16 @@ export interface PatchFlow {
 }
 
 // @public
+export type PendingAttachment = Omit<MessageAttachment, "id" | "url"> & {
+    id?: string;
+};
+
+// @public
 export function pendingProblem(row: Pick<PendingSend, "id" | "failure">, eligibleProblem: Problem | undefined): Problem | null;
 
 // @public (undocumented)
 export interface PendingSend {
+    attachments?: readonly PendingAttachment[];
     // (undocumented)
     content: string;
     // (undocumented)
@@ -1871,7 +1918,7 @@ export interface PlatformPorts {
 // @public (undocumented)
 export interface Problem {
     // (undocumented)
-    code: 'update-required' | 'in-doubt' | 'replaced' | 'retryable' | 'refused' | 'closed' | 'full' | 'declined' | 'unavailable' | 'sign-in' | 'rate-limited' | 'step-up-cancelled' | 'mismatch' | 'invalid-read' | 'invalid-plan' | 'needs-attention' | 'stopped' | 'plan-changed' | 'agreement-expired';
+    code: 'update-required' | 'in-doubt' | 'replaced' | 'retryable' | 'refused' | 'closed' | 'full' | 'declined' | 'unavailable' | 'sign-in' | 'rate-limited' | 'step-up-cancelled' | 'mismatch' | 'invalid-read' | 'invalid-plan' | 'needs-attention' | 'stopped' | 'plan-changed' | 'agreement-expired' | 'attachments-lost';
     confirmation?: {
         reason: 'expired' | 'used' | 'stale' | 'mismatch' | 'missing';
     };
@@ -1900,7 +1947,7 @@ export interface ProblemDisplayOptions {
 }
 
 // @public (undocumented)
-export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered" | "chat.problem.details" | "chat.problem.code" | "chat.problem.reference" | "chat.problem.refresh";
+export type ProblemMessageKey = "chat.problem.signIn" | "chat.problem.retryable" | "chat.problem.rateLimited" | "chat.problem.refused" | "chat.problem.closed" | "chat.problem.full" | "chat.problem.declined" | "chat.problem.unavailable" | "chat.problem.stepUp" | "chat.problem.invalid" | "chat.problem.mismatch" | "chat.problem.agreement" | "chat.problem.attachmentsLost" | "chat.problem.inDoubt" | "chat.problem.replaced" | "chat.problem.needsAttention" | "chat.problem.answered" | "chat.problem.details" | "chat.problem.code" | "chat.problem.reference" | "chat.problem.refresh";
 
 // @public (undocumented)
 export interface ProblemView {
@@ -2168,6 +2215,7 @@ export type ReplyInput = Reply extends infer R ? R extends {
 
 // @public (undocumented)
 export interface ReplyMessage {
+    attachments?: MessageAttachment[];
     // (undocumented)
     clientMessageId: string;
     // (undocumented)
@@ -2321,6 +2369,7 @@ export interface ReplyToolResult {
 export interface RestoredMessage {
     // (undocumented)
     content: string;
+    files?: readonly string[];
     // (undocumented)
     id: string;
 }
@@ -2621,7 +2670,6 @@ export interface WaypointClient {
     report(problem: Problem): void;
     // (undocumented)
     resumePlan(): Promise<void>;
-    // (undocumented)
     retry(id: string): Promise<void>;
     // (undocumented)
     retryIntent(id?: string): Promise<void>;
@@ -2635,8 +2683,7 @@ export interface WaypointClient {
     selectFlowTab(tab: FlowTab): void;
     // (undocumented)
     selectVersion(messageId: string, index: number): Promise<void>;
-    // (undocumented)
-    send(): Promise<void>;
+    send(attachments?: readonly AttachmentUpload[]): Promise<boolean>;
     sendFeedback(messageId: string, rating: FeedbackInput["rating"]): Promise<boolean>;
     // (undocumented)
     setDraft(value: string): Promise<void>;
@@ -2672,7 +2719,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | ReplyStep | FrameStep | Message | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory | OutlineMessage | ConversationPage;
+export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | ReplyStep | FrameStep | Message | MessageAttachment | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory | OutlineMessage | ConversationPage;
 
 // @public (undocumented)
 export type WinnerKind = 'stop' | 'cancel-initial' | 'cancel-review' | 'leave' | 'keep';

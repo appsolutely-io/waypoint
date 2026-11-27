@@ -58,6 +58,10 @@ export type {
 } from "../react/problem-messages";
 export type { FormCatalogue, FormMessageKey } from "../react/form-messages";
 export type {
+  ComposerCatalogue,
+  ComposerMessageKey,
+} from "../react/composer-messages";
+export type {
   Capability,
   CAPABILITIES,
   NegotiationOffer,

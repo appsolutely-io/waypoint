@@ -30,6 +30,15 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.send": "Send",
   "chat.sending": "Sending",
   "chat.pendingSending": "Sending…",
+  "chat.pendingUploading": "Uploading…",
+  "chat.attachmentFailed":
+    "The site did not accept {names}. Withdraw, then pick another file.",
+  "chat.attachmentLost": "Files not kept. Withdraw, then pick {names} again.",
+  "chat.attachmentNotUploaded": "{names} not uploaded. Retry.",
+  "chat.attachmentNotUploadedYet":
+    "{names} not uploaded yet; wait, then retry.",
+  "chat.formFilesRemoved":
+    "This conversation takes a form; the files were removed.",
   "chat.pendingFailed": "Not sent",
   "chat.planUnavailable": "The plan's steps could not be loaded.",
   "chat.arrival": "New reply",
@@ -68,6 +77,7 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.restored": "Withdrawn messages",
   "chat.restoredEdit": "Edit",
   "chat.restoredDiscard": "Discard",
+  "chat.restoredFiles": "Pick {names} again.",
   "chat.dismiss": "Dismiss",
   "chat.historyOlder": "Load older messages",
   "chat.historyLoading": "Loading older messages…",
@@ -387,6 +397,8 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
     "Something changed since this plan was made. Review the current values.",
   "chat.problem.agreement":
     "The connection could not be renewed. Retry to check the current status.",
+  "chat.problem.attachmentsLost":
+    "Files not kept. Withdraw, then pick them again.",
   "chat.problem.inDoubt":
     "We couldn't confirm what happened. Check the current status before trying again.",
   "chat.problem.replaced": "A newer version replaced this. Refresh to see it.",
@@ -418,5 +430,17 @@ const messages: Readonly<Record<string, string>> = Object.freeze({
   "chat.message.previous": "Previous version",
   "chat.message.next": "Next version",
   "chat.message.version": "Version {index} of {count}",
+  "composer.attach": "Attach files",
+  "composer.remove": "Remove",
+  "composer.removeNamed": "Remove {name}",
+  "composer.added": "Added {name}.",
+  "composer.removed": "Removed {name}.",
+  "composer.reading": "Reading {name}…",
+  "composer.readFailed": "Not read: {name}; pick it again.",
+  "composer.refusedType": "The site takes {types}, not {name}.",
+  "composer.refusedSize": "The site takes up to {max}, not {name}.",
+  "composer.tooMany": "A message can carry at most {max} files.",
+  "composer.needsText": "A message needs text.",
+  "composer.notAdded": "Not added: {name}.",
 });
 export default messages;

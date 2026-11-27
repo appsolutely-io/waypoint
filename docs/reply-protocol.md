@@ -28,6 +28,23 @@ A message MAY carry `sources`, what the reply drew on: each has an `id`, a `titl
 - A host SHOULD cite each source it lists at least once.
 - A source's `url` MUST be one the user may open. The chat links only addresses its URL policy allows (`isSafeUrl`, with `extraUrlSchemes`); any other source is named without a link.
 
+## Attachments
+
+A message MAY carry `attachments`, the files it brings: each has an `id`, a `name`, a `mediaType`, a `size` in bytes and optionally a `url`. The chat shows each file by its name, linked when its URL is one the user may open.
+
+A client sends files only to a host that gave it an upload port (`ClientConfig.attachments`). The port owns the policy: the media types it takes (`accept`) and the size it allows (`maxBytes`).
+
+The client checks that policy when a person picks the files, so the picker can say why it refused one. That check is for the picker only: a host MUST validate the type and the size of every file it receives, and MUST NOT trust the `contentType` or the `fileName` the client sends. A host SHOULD serve the stored files as attachments, or from an origin separate from the one that serves the chat.
+
+- A client MUST send attachments only to a host that injected an upload port, and MUST NOT put the files' bytes on the wire: it sends the references the host gave.
+- A client MUST send the references under the same `clientMessageId` as the message's text, so a message that is sent twice carries the same files.
+- The client calls the port once per file per attempt, with the message's `clientMessageId` and the file's `index` in that message (counting from zero), until the host returns the file's id, so a host tells the files of one message apart and stores each once.
+- A host MUST give every stored file an id, MUST keep that id for the same `clientMessageId` and the file's `index` in that message, and MUST return the references in its read.
+- A host MAY add a `url` to a stored file. The chat links it only when its URL policy allows it (`isSafeUrl`, with `extraUrlSchemes`).
+- A host MUST ignore an `attachments` field it does not know, so a host that stores no files keeps working.
+- A file the host refuses, a file it cannot store and a client without an upload port fail the message itself: the message stays in the transcript marked "Not sent" with its problem under it, and the problem is not repeated below the composer.
+- A message whose files the client no longer holds after a reload fails with the problem code `attachments-lost`. That code is client-only: a host MUST NOT send it, and a host that reports its own store failure sends `refused`, `rate-limited` or `unavailable` instead. The row keeps no retry, because retrying cannot bring the bytes back.
+
 ## Collapsing supporting detail
 
 A `details` block holds what supports the answer but is not the answer: how it was worked out, the rows it read, the caveats. Its body has a `summary`, the words on the disclosure (at most 200 characters), and `blocks`, shown inside it. The chat draws it closed, below the answer, as a native disclosure the user opens and closes.

@@ -9,16 +9,24 @@ export function asProblem(error: unknown, id: string): Problem;
 
 // @public (undocumented)
 export interface AttachmentPort {
-    // (undocumented)
-    remove(id: string): MaybePromise<void>;
-    // (undocumented)
+    accept?: readonly string[];
+    maxBytes?: number;
     upload(data: Uint8Array, context: {
         conversationId: string;
+        clientMessageId: string;
+        index: number;
         fileName: string;
         contentType: string;
     }): MaybePromise<{
         id: string;
     }>;
+}
+
+// @public
+export interface AttachmentUpload {
+    data: Uint8Array;
+    mediaType: string;
+    name: string;
 }
 
 // @public (undocumented)
@@ -321,6 +329,7 @@ export type CardAnswer = {
 export interface ClientConfig {
     // (undocumented)
     accountId: string;
+    attachments?: AttachmentPort;
     // (undocumented)
     beforeSend?: (reply: Reply) => MaybePromise<Reply | false | void>;
     // (undocumented)
@@ -360,6 +369,10 @@ export interface ClientConfig {
 export interface ClientSnapshot {
     // (undocumented)
     announcement: number;
+    attachmentPolicy?: {
+        accept?: readonly string[];
+        maxBytes?: number;
+    };
     // (undocumented)
     capabilities: readonly Capability[];
     confirmationRefusal?: {
@@ -1397,6 +1410,7 @@ export type MaybePromise<T> = T | Promise<T>;
 
 // @public (undocumented)
 export interface Message {
+    attachments?: MessageAttachment[];
     // (undocumented)
     blocks: Block[];
     // (undocumented)
@@ -1420,6 +1434,20 @@ export interface Message {
     versionCount?: number;
     // (undocumented)
     versionIndex?: number;
+}
+
+// @public (undocumented)
+export interface MessageAttachment {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    mediaType: string;
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    size: number;
+    // (undocumented)
+    url?: string;
 }
 
 // @public (undocumented)
@@ -1539,8 +1567,14 @@ export interface PatchFlow {
     title: string;
 }
 
+// @public
+export type PendingAttachment = Omit<MessageAttachment, "id" | "url"> & {
+    id?: string;
+};
+
 // @public (undocumented)
 export interface PendingSend {
+    attachments?: readonly PendingAttachment[];
     // (undocumented)
     content: string;
     // (undocumented)
@@ -1673,7 +1707,7 @@ export interface PlatformPorts {
 // @public (undocumented)
 export interface Problem {
     // (undocumented)
-    code: 'update-required' | 'in-doubt' | 'replaced' | 'retryable' | 'refused' | 'closed' | 'full' | 'declined' | 'unavailable' | 'sign-in' | 'rate-limited' | 'step-up-cancelled' | 'mismatch' | 'invalid-read' | 'invalid-plan' | 'needs-attention' | 'stopped' | 'plan-changed' | 'agreement-expired';
+    code: 'update-required' | 'in-doubt' | 'replaced' | 'retryable' | 'refused' | 'closed' | 'full' | 'declined' | 'unavailable' | 'sign-in' | 'rate-limited' | 'step-up-cancelled' | 'mismatch' | 'invalid-read' | 'invalid-plan' | 'needs-attention' | 'stopped' | 'plan-changed' | 'agreement-expired' | 'attachments-lost';
     confirmation?: {
         reason: 'expired' | 'used' | 'stale' | 'mismatch' | 'missing';
     };
@@ -1938,6 +1972,7 @@ export type ReplyInput = Reply extends infer R ? R extends {
 
 // @public (undocumented)
 export interface ReplyMessage {
+    attachments?: MessageAttachment[];
     // (undocumented)
     clientMessageId: string;
     // (undocumented)
@@ -2050,6 +2085,7 @@ export interface ReplyToolResult {
 export interface RestoredMessage {
     // (undocumented)
     content: string;
+    files?: readonly string[];
     // (undocumented)
     id: string;
 }
@@ -2332,7 +2368,6 @@ export interface WaypointClient {
     report(problem: Problem): void;
     // (undocumented)
     resumePlan(): Promise<void>;
-    // (undocumented)
     retry(id: string): Promise<void>;
     // (undocumented)
     retryIntent(id?: string): Promise<void>;
@@ -2346,8 +2381,7 @@ export interface WaypointClient {
     selectFlowTab(tab: FlowTab): void;
     // (undocumented)
     selectVersion(messageId: string, index: number): Promise<void>;
-    // (undocumented)
-    send(): Promise<void>;
+    send(attachments?: readonly AttachmentUpload[]): Promise<boolean>;
     sendFeedback(messageId: string, rating: FeedbackInput["rating"]): Promise<boolean>;
     // (undocumented)
     setDraft(value: string): Promise<void>;
@@ -2383,7 +2417,7 @@ export type WaypointEvent = {
 };
 
 // @public (undocumented)
-export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | ReplyStep | FrameStep | Message | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory | OutlineMessage | ConversationPage;
+export type WaypointProtocol = HostProblemDetail | Problem | Negotiation | NegotiationOfferWire | Negotiated | CanonicalRequest | ReadTemplate | Step | ImmediateDraft | ImmediatePlan | TimedPlan | Plan | PlanState | Outcome | ConfirmationItem | ConfirmationSchedule | ConfirmationRecord | PlanRecord | RecoveryPhase | IntentKind | WinnerKind | IntentCause | IntentWinner | RecoveryView | IntentTarget | IntentRequest | PlanIntentReply | ExecutionAcceptance | ReplyDecline | CardAnswer | BlockMarkdown | BlockCard | BlockDetails | BlockList | BlockTable | BlockForm | BlockChoice | BlockButtons | BlockDiff | BlockPlan | BlockRouteLink | BlockNotice | ExtensionBlock | Block | MessageSender | ReplyStep | FrameStep | Message | MessageAttachment | Source | ReplyFailure | Conversation | ReplyMessage | ReplyConfirm | ReplyForm | ReplyAction | ReplyToolResult | ReplyPlanValues | Reply | ReplyStop | ManifestEntry | ToolCall | FrameMessageStart | FrameTextDelta | FrameBlock | FramePlanDraft | FramePlanFinal | FramePlanStep | FrameToolCall | FramePlanningRead | FrameMessageEnd | FrameStale | FrameProblem | Frame | FlowParameter | Flow | CreateConversation | PlanCommand | RunFlow | PatchFlow | FormSubject | FormValidation | FormFillValue | FormFillField | FormFillRequest | BlockFormFill | ReplyFormFill | LeaveAcknowledgment | DecisionVersions | KeptFact | FinalHistory | OutlineMessage | ConversationPage;
 
 // @public (undocumented)
 export type WinnerKind = 'stop' | 'cancel-initial' | 'cancel-review' | 'leave' | 'keep';

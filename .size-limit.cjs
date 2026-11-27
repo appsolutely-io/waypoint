@@ -6,10 +6,11 @@ const budgets = [
   {
     name: "core with lazy recovery",
     path: "dist/index.js",
-    // Reachable reply recovery and frame reconciliation remain covered by the deduplicated aggregate guard.
-    // Node 22 maximum across lockfile/lowest peers: 25,730 B;
-    // add 5% and round up to 100 B.
-    limit: "27.1 KB",
+    // Reachable reply recovery and frame reconciliation remain covered by the deduplicated aggregate guard, which also counts the
+    // attachments' lazy upload chunk — the upload of a message's files, and the settle it leaves on the conversation it started in
+    // when that conversation moves on — and the reply steps a host runs.
+    // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
+    limit: "28 KB",
     gzip: true,
     brotli: false,
     ignore: [
@@ -26,10 +27,13 @@ const budgets = [
   {
     name: "core",
     path: "dist/index.js",
-    // Synchronous reply state, recovery eligibility, frame reconciliation and cancellation ownership belong to every core consumer.
-    // Node 22 maximum across lockfile/lowest peers: 19,577 B;
-    // add 5% and round up to 100 B.
-    limit: "20.6 KB",
+    // Synchronous reply state, recovery eligibility, frame reconciliation, cancellation ownership, the host-run reply steps and the
+    // composer attachments — the row's references, the upload at send time, the pick-time policy, the shape rule a restored row is
+    // validated with, the guards around the upload and the release of the staged bytes — belong to every core consumer, as does the
+    // send that settles where it started: it resolves once its row is queued, refuses an over-limit message under its own id before
+    // the middleware runs, and leaves a withdrawn message's file names on its restored item.
+    // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
+    limit: "21.1 KB",
     gzip: true,
     brotli: false,
     ignore: [
@@ -49,6 +53,8 @@ const budgets = [
       "./stream-reads-*",
       "./storage-commit.js",
       "./storage-commit-*",
+      "./attachment-upload.js",
+      "./attachment-upload-*",
       "./frame-decoder.js",
       "./frame-decoder-*",
     ],
@@ -91,6 +97,19 @@ const budgets = [
     limit: "1 KB",
     gzip: true,
     brotli: false,
+  },
+  {
+    name: "lazy attachment upload",
+    path: "dist/attachment-upload.js",
+    // The chunk carries the upload of a message's files and the settle an
+    // abandoned upload leaves on its own conversation, which goes through
+    // the shared committed write and reports a write that failed; the
+    // commit code it loads on demand is measured by its own budget and
+    // left out here, as every other lazy chunk leaves out such pieces.
+    limit: "1.2 KB",
+    gzip: true,
+    brotli: false,
+    ignore: ["./storage-commit.js", "./storage-commit-*", "./chunk-*"],
   },
   {
     name: "lazy conformance runners",
@@ -142,6 +161,8 @@ const budgets = [
       "./blocks-*",
       "../form-extras-*",
       "./form-extras-*",
+      "../composer-attachments-*",
+      "./composer-attachments-*",
       "../flows-panel-*",
       "./flows-panel-*",
       "../reply-controls-*",
@@ -173,20 +194,21 @@ const budgets = [
   {
     name: "messages en",
     path: "dist/messages/en/index.js",
-    // English reply recovery, host activity and named-sender/notice text is available to renderer-neutral hosts.
-    // Node 22 maximum across lockfile/lowest peers: 5,427 B;
-    // add 5% and round up to 100 B.
-    limit: "5.7 KB",
+    // English reply recovery, host activity and named-sender/notice text is available to renderer-neutral hosts,
+    // and its messages carry one text per outcome for a message's files: what the site asked to wait for, what never
+    // reached it, what is gone for good, and the step after a failed read.
+    // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
+    limit: "5.75 KB",
     gzip: true,
     brotli: false,
   },
   {
     name: "messages zh-Hans",
     path: "dist/messages/zh-Hans/index.js",
-    // Simplified Chinese reply recovery, host activity and named-sender/notice text matches the English catalogue.
-    // Node 22 maximum across lockfile/lowest peers: 6,341 B;
-    // add 5% and round up to 100 B.
-    limit: "6.7 KB",
+    // Simplified Chinese reply recovery, host activity and named-sender/notice text matches the English catalogue, and its
+    // composer adds the words for a file that arrived too late and for the files a withdrawn message names to pick again.
+    // Measured across lockfile and lowest peers with Node 22's zlib, as CI measures it.
+    limit: "6.8 KB",
     gzip: true,
     brotli: false,
   },
@@ -209,6 +231,17 @@ const budgets = [
     // their messages ship in this chunk, not the entry. Measured with Node
     // 22's zlib: 2.22 kB. The limit is 10% above an earlier 2.64 kB.
     limit: "2.9 KB",
+    gzip: true,
+    brotli: false,
+    ignore: ["react", "react-dom", "./chunk-*"],
+  },
+  {
+    name: "lazy composer attachments",
+    path: "dist/composer-attachments-*.js",
+    // A pick that settles after the conversation changed says only what it
+    // dropped, a form under a read counts as gone, and the attach button's
+    // state is described by the picker's status region.
+    limit: "2.2 KB",
     gzip: true,
     brotli: false,
     ignore: ["react", "react-dom", "./chunk-*"],
@@ -338,6 +371,8 @@ const budgets = [
       "./blocks-*",
       "../form-extras-*",
       "./form-extras-*",
+      "../composer-attachments-*",
+      "./composer-attachments-*",
       "../flows-panel-*",
       "./flows-panel-*",
       "../reply-controls-*",

@@ -8,6 +8,7 @@ import {
 } from "../../src/testing/index";
 import { WaypointChat } from "../../src/react/index";
 import { createWaypointClient } from "../../src/core/client";
+import { flush } from "../support/client";
 afterEach(cleanup);
 it("scripted blocks reach real registry replacements through renderWithWaypoint", async () => {
   const fixture = createScriptedTransport();
@@ -30,6 +31,9 @@ it("scripted blocks reach real registry replacements through renderWithWaypoint"
   await client.ready;
   await client.setDraft("Send");
   await client.send();
+  // The queued row leaves with its delivery; the scripted reply and its
+  // replacement settle after.
+  await flush();
   renderWithWaypoint(<WaypointChat />, {
     client,
     skin: {

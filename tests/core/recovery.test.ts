@@ -5,7 +5,7 @@ import {
   versionWalk,
   replyRow,
 } from "../../src/core/client";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 it("withdrawing a known refusal restores it apart from the draft and the next send is a new message", async () => {
   const ids: string[] = [];
   const base = config();
@@ -23,6 +23,8 @@ it("withdrawing a known refusal restores it apart from the draft and the next se
   await client.ready;
   await client.setDraft("Before");
   await client.send();
+  // The refusal settles after the send resolves; the withdrawal needs it.
+  await flush();
   await client.withdraw(ids[0]!);
   expect(client.getSnapshot().pending).toEqual([]);
   expect(client.getSnapshot().draft).toBe("");
@@ -31,6 +33,8 @@ it("withdrawing a known refusal restores it apart from the draft and the next se
   ]);
   await client.setDraft("Edited");
   await client.send();
+  // The second request settles after the send resolves.
+  await flush();
   expect(ids[1]).not.toBe(ids[0]);
   client.dispose();
 });
@@ -74,6 +78,8 @@ for (const asynchronous of [false, true])
     await a.ready;
     await a.setDraft("First");
     await a.send();
+    // The refusal settles after the send resolves; the withdrawal needs it.
+    await flush();
     await a.withdraw(ids[0]!);
     a.dispose();
     const b = createWaypointClient({ ...base, storage, transport });
@@ -137,6 +143,8 @@ for (const storage of [false, true])
       expect(client.getSnapshot().draft).toBe("Keep new draft");
       if (!acknowledged) {
         await client.retry(row.id);
+        // The retried row is queued; the request settles after.
+        await flush();
         expect(send.mock.calls[1]![0].clientReplyId).toBe(row.id);
         expect(client.getSnapshot().pending).toEqual([]);
       } else expect(send).toHaveBeenCalledOnce();

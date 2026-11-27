@@ -3,7 +3,7 @@ import {
   createWaypointClient,
   createMemoryStorage,
 } from "../../src/core/client";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 for (const asynchronous of [false, true])
   describe(`storage async=${asynchronous}`, () => {
     it("keeps drafts and unsettled sends isolated and reloads them", async () => {
@@ -43,8 +43,11 @@ for (const asynchronous of [false, true])
       await client.ready;
       await client.setDraft("Keep");
       await client.send();
+      // The send resolves once the row is queued; its failure settles after.
+      await flush();
       expect(client.getSnapshot().pending[0]?.failure?.code).toBe("in-doubt");
       await client.retry(ids[0]!);
+      await flush();
       expect(ids[1]).toBe(ids[0]);
       client.dispose();
     });
@@ -82,6 +85,9 @@ it("veto preserves draft; contributions hold then augment; events contain only i
   expect(client.getSnapshot().draft).toBe("Private field value");
   hold = false;
   await client.send();
+  // The queued row leaves with the delivery; its request and its event
+  // settle after the send resolves.
+  await flush();
   expect(received).toHaveLength(1);
   expect((received[0] as { extensions: unknown }).extensions).toEqual({
     fixture: { fixture: "field value" },
@@ -133,6 +139,8 @@ it("observe-only listeners cannot veto a send by throwing", async () => {
   });
   await client.setDraft("Keep");
   await client.send();
+  // The queued row leaves with the delivery; the request settles after.
+  await flush();
   expect(sent).toBe(1);
   expect(client.getSnapshot().draft).toBe("");
   client.dispose();

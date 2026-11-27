@@ -11,7 +11,7 @@ import type {
   PlanRecord,
   ToolCall,
 } from "../../src/protocol/generated";
-import { config } from "../support/client";
+import { config, flush } from "../support/client";
 import samples from "../protocol/samples.json";
 function deferred() {
   let resolve!: () => void;
@@ -589,6 +589,9 @@ for (const storage of ["none", "working", "stale", "failing"] as const)
       await client.ready;
       await client.setDraft("Failed row");
       await client.send();
+      // The row's refusal settles after the send resolves; the reload
+      // below compares against the settled row.
+      await flush();
       const pending = client.getSnapshot().pending;
       expect(pending).toHaveLength(1);
       await client.setDraft("Keep edit");
@@ -596,6 +599,8 @@ for (const storage of ["none", "working", "stale", "failing"] as const)
         listener({ type: "frame", frame: { ...tool, sequence } });
       await client.send();
       await client.retry(pending[0]!.id);
+      // The retried row is queued; the request settles after.
+      await flush();
       // A send is dispatched only after its claim is committed.
       const sends = storage === "failing" ? 0 : 1;
       expect(send).toHaveBeenCalledTimes(sends);
@@ -609,6 +614,8 @@ for (const storage of ["none", "working", "stale", "failing"] as const)
       expect(client.getSnapshot().pending).toEqual(pending);
       send.mockResolvedValue({ id: "accepted" });
       await client.retry(pending[0]!.id);
+      // The retried row is queued; the request settles after.
+      await flush();
       if (storage === "failing") {
         expect(send).not.toHaveBeenCalled();
         expect(client.getSnapshot().pending).toEqual(pending);
